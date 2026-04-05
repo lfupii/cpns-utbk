@@ -124,7 +124,7 @@ jobs:
           set net:timeout 20
           set ftp:passive-mode true
           open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
-          mirror -R --verbose=2 --parallel=2 frontend/dist public_html
+          mirror -R --verbose=2 --parallel=2 frontend/dist .
           bye
           "
 
@@ -140,6 +140,6 @@ jobs:
           set net:timeout 20
           set ftp:passive-mode true
           open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
-          mirror -R --verbose=2 --parallel=2 .deploy/backend public_html/api
+          mirror -R --verbose=2 --parallel=2 .deploy/backend api
           bye
           "

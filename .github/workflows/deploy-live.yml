@@ -1,0 +1,145 @@
+name: Deploy Live
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/deploy-live.yml'
+      - 'docs/AUTO-DEPLOY-GITHUB.md'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-live
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_IS_PRODUCTION: 'true'
+          VITE_MIDTRANS_CLIENT_KEY: ${{ secrets.VITE_MIDTRANS_CLIENT_KEY }}
+        run: npm run build
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+
+      - name: Prepare backend package
+        env:
+          DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          DB_USER: ${{ secrets.PROD_DB_USER }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          DB_NAME: ${{ secrets.PROD_DB_NAME }}
+          DB_PORT: ${{ secrets.PROD_DB_PORT }}
+          API_URL: ${{ secrets.PROD_API_URL }}
+          FRONTEND_URL: ${{ secrets.PROD_FRONTEND_URL }}
+          CORS_ALLOWED_ORIGINS: ${{ secrets.PROD_CORS_ALLOWED_ORIGINS }}
+          JWT_SECRET_KEY: ${{ secrets.PROD_JWT_SECRET_KEY }}
+          TOKEN_EXPIRY: ${{ secrets.PROD_TOKEN_EXPIRY }}
+          MIDTRANS_IS_PRODUCTION: ${{ secrets.PROD_MIDTRANS_IS_PRODUCTION }}
+          MIDTRANS_SERVER_KEY: ${{ secrets.PROD_MIDTRANS_SERVER_KEY }}
+          MIDTRANS_CLIENT_KEY: ${{ secrets.PROD_MIDTRANS_CLIENT_KEY }}
+          MERCHANT_ID: ${{ secrets.PROD_MERCHANT_ID }}
+          SMTP_HOST: ${{ secrets.PROD_SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.PROD_SMTP_PORT }}
+          SMTP_USER: ${{ secrets.PROD_SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.PROD_SMTP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.PROD_FROM_EMAIL }}
+          FROM_NAME: ${{ secrets.PROD_FROM_NAME }}
+        run: |
+          rm -rf .deploy
+          mkdir -p .deploy/backend
+          rsync -av --delete \
+            --exclude='.env' \
+            --exclude='backend-production.zip' \
+            backend/ .deploy/backend/
+
+          cat > .deploy/backend/.env <<EOF
+          DB_HOST=${DB_HOST}
+          DB_USER=${DB_USER}
+          DB_PASSWORD=${DB_PASSWORD}
+          DB_NAME=${DB_NAME}
+          DB_PORT=${DB_PORT}
+
+          API_URL=${API_URL}
+          FRONTEND_URL=${FRONTEND_URL}
+          CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+
+          JWT_SECRET_KEY=${JWT_SECRET_KEY}
+          TOKEN_EXPIRY=${TOKEN_EXPIRY}
+
+          MIDTRANS_IS_PRODUCTION=${MIDTRANS_IS_PRODUCTION}
+          MIDTRANS_SERVER_KEY=${MIDTRANS_SERVER_KEY}
+          MIDTRANS_CLIENT_KEY=${MIDTRANS_CLIENT_KEY}
+          MERCHANT_ID=${MERCHANT_ID}
+
+          SMTP_HOST=${SMTP_HOST}
+          SMTP_PORT=${SMTP_PORT}
+          SMTP_USER=${SMTP_USER}
+          SMTP_PASSWORD=${SMTP_PASSWORD}
+          FROM_EMAIL=${FROM_EMAIL}
+          FROM_NAME=${FROM_NAME}
+          EOF
+
+      - name: Install FTP client
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Deploy frontend to public_html
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          lftp -e "
+          set net:max-retries 2
+          set net:timeout 20
+          set ftp:passive-mode true
+          open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
+          mirror -R --verbose=2 --parallel=2 frontend/dist public_html
+          bye
+          "
+
+      - name: Deploy backend to public_html/api
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          lftp -e "
+          set net:max-retries 2
+          set net:timeout 20
+          set ftp:passive-mode true
+          open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
+          mirror -R --verbose=2 --parallel=2 .deploy/backend public_html/api
+          bye
+          "

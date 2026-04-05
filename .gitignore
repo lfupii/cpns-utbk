@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+vendor/
+backend/vendor/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+/dist
+/build
+frontend/dist/
+backend/*.zip
+frontend/*.zip
+frontend/dist/*.zip
+*.min.js
+*.min.css
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.VS
+.sublime-project
+.sublime-workspace
+
+# OS
+Thumbs.db
+.AppleDouble
+.AppleDB
+._*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Database
+*.sql.bak
+.mysql_history
+
+# Misc
+.cache/
+.parcel-cache
+.tern-port

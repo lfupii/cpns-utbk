@@ -1,18 +1,78 @@
 # Auto Deploy GitHub ke Website Live
 
-File workflow untuk auto deploy sudah disiapkan di:
+Dokumen ini sudah disesuaikan dengan setup final yang saat ini berjalan untuk project ini:
+- frontend live di `https://tocpnsutbk.com`
+- backend live di `https://api.tocpnsutbk.com`
+- deploy otomatis via GitHub Actions
+- upload ke hosting Rumahweb via FTP account khusus deploy
+
+Workflow yang dipakai:
 - [.github/workflows/deploy-live.yml](/Users/luthfifadhlurrohman/Documents/cpns-utbk/.github/workflows/deploy-live.yml)
 
-Workflow ini bekerja seperti ini:
-- setiap ada `push` ke branch `main`, GitHub Actions build frontend React
+## Ringkasan cara kerja
+
+Setiap ada `push` ke branch `main`:
+- GitHub Actions build frontend React/Vite
 - GitHub Actions install dependency backend PHP
-- GitHub Actions membuat file `.env` production backend dari GitHub Secrets
-- hasil frontend diupload ke `public_html`
-- backend diupload ke `public_html/api`
+- GitHub Actions membuat file `.env` backend dari GitHub Secrets
+- frontend diupload ke root FTP account
+- backend diupload ke folder `api` pada root FTP account
 
-## Secrets yang wajib dibuat di GitHub
+Catatan penting:
+- akun FTP deploy yang dipakai sekarang diarahkan ke `public_html`
+- karena root FTP sudah `public_html`, workflow mengupload frontend ke `.` dan backend ke `api`
+- kalau nanti akun FTP diganti dengan root yang berbeda, path deploy di workflow harus ikut disesuaikan
 
-Buka `GitHub repo > Settings > Secrets and variables > Actions > New repository secret`, lalu isi:
+## Struktur hosting yang diasumsikan
+
+Di server, hasil akhirnya seperti ini:
+
+```text
+public_html/
+├── index.html
+├── assets/
+├── favicon.svg
+├── .htaccess
+└── api/
+    ├── index.php
+    ├── .htaccess
+    ├── .env
+    ├── composer.json
+    ├── composer.lock
+    ├── vendor/
+    ├── config/
+    ├── controllers/
+    ├── middleware/
+    └── utils/
+```
+
+## Repository dan branch
+
+Repo GitHub yang dipakai:
+- `lfupii/cpns-utbk`
+
+Branch deploy:
+- `main`
+
+Alur harian:
+
+```bash
+cd /Users/luthfifadhlurrohman/Documents/cpns-utbk
+git add .
+git commit -m "Pesan perubahan"
+git push origin main
+```
+
+Setelah push:
+- buka tab `Actions`
+- tunggu workflow `Deploy Live` selesai hijau
+
+## GitHub Secrets yang dipakai
+
+Buka:
+- `GitHub repo > Settings > Secrets and variables > Actions`
+
+Lalu isi repository secrets berikut.
 
 ### FTP / Hosting
 
@@ -21,16 +81,19 @@ Buka `GitHub repo > Settings > Secrets and variables > Actions > New repository 
 - `FTP_USERNAME`
 - `FTP_PASSWORD`
 
-Contoh umum Rumahweb:
-- `FTP_HOST`: hostname FTP hosting atau domain FTP yang diberikan cPanel
-- `FTP_PORT`: `21` untuk FTP atau `22` kalau nanti kamu ubah ke SFTP/SSH workflow lain
+Setup yang terbukti jalan di hosting ini:
+- `FTP_HOST` memakai hostname server FTP, bukan domain website
+- contoh hostname server Rumahweb yang sempat dipakai: `dempo.iixcp.rumahweb.net`
+- `FTP_PORT` umumnya `21`
+- `FTP_USERNAME` sebaiknya memakai akun FTP khusus deploy
+- akun FTP deploy sebaiknya diarahkan ke folder `public_html`
 
 ### Frontend
 
 - `VITE_API_URL`
 - `VITE_MIDTRANS_CLIENT_KEY`
 
-Contoh production:
+Nilai tetap untuk project ini:
 - `VITE_API_URL=https://api.tocpnsutbk.com`
 
 ### Backend Database
@@ -41,6 +104,10 @@ Contoh production:
 - `PROD_DB_NAME`
 - `PROD_DB_PORT`
 
+Nilai umum di cPanel:
+- `PROD_DB_HOST=localhost`
+- `PROD_DB_PORT=3306`
+
 ### Backend App
 
 - `PROD_API_URL`
@@ -49,7 +116,7 @@ Contoh production:
 - `PROD_JWT_SECRET_KEY`
 - `PROD_TOKEN_EXPIRY`
 
-Contoh:
+Nilai tetap untuk project ini:
 - `PROD_API_URL=https://api.tocpnsutbk.com`
 - `PROD_FRONTEND_URL=https://tocpnsutbk.com`
 - `PROD_CORS_ALLOWED_ORIGINS=https://tocpnsutbk.com,https://www.tocpnsutbk.com`
@@ -62,9 +129,6 @@ Contoh:
 - `PROD_MIDTRANS_CLIENT_KEY`
 - `PROD_MERCHANT_ID`
 
-Contoh:
-- `PROD_MIDTRANS_IS_PRODUCTION=true`
-
 ### Email
 
 - `PROD_SMTP_HOST`
@@ -74,81 +138,21 @@ Contoh:
 - `PROD_FROM_EMAIL`
 - `PROD_FROM_NAME`
 
-## Langkah 1. Commit workflow ke repo GitHub yang benar
-
-File yang harus ikut ke GitHub:
-- [.github/workflows/deploy-live.yml](/Users/luthfifadhlurrohman/Documents/cpns-utbk/.github/workflows/deploy-live.yml)
-- [docs/AUTO-DEPLOY-GITHUB.md](/Users/luthfifadhlurrohman/Documents/cpns-utbk/docs/AUTO-DEPLOY-GITHUB.md)
-- [backend/composer.lock](/Users/luthfifadhlurrohman/Documents/cpns-utbk/backend/composer.lock)
-- [.gitignore](/Users/luthfifadhlurrohman/Documents/cpns-utbk/.gitignore)
-
-Urutannya:
-1. Pastikan file workflow berada di root repo GitHub, yaitu path `.github/workflows/deploy-live.yml`.
-2. Pastikan branch production yang akan memicu deploy adalah `main`.
-3. Commit perubahan file di atas.
-4. Push ke GitHub.
-
 Catatan:
-- Di mesin lokal ini, folder `cpns-utbk` bukan git root. Jadi kalau repo GitHub kamu root-nya ada di folder lain, file workflow harus ikut dipindahkan ke root repo itu saat commit.
-- Jangan commit file `.env` production ke GitHub. Semua nilai sensitif tetap lewat GitHub Secrets.
+- value seperti `TO CPNS UTBK` yang mengandung spasi aman dipakai, karena workflow sekarang sudah meng-quote semua value saat membuat `.env`
 
-## Langkah 2. Isi GitHub Secrets satu per satu
+## Template secrets
 
-Masuk ke:
-- `GitHub repo > Settings > Secrets and variables > Actions`
-
-Lalu buat repository secret sesuai daftar berikut.
-
-### Daftar final secrets untuk domain dan hosting ini
-
-Nilai yang sudah bisa dipastikan dari project ini:
-
-| Secret Name | Isi Value |
-| --- | --- |
-| `VITE_API_URL` | `https://api.tocpnsutbk.com` |
-| `PROD_API_URL` | `https://api.tocpnsutbk.com` |
-| `PROD_FRONTEND_URL` | `https://tocpnsutbk.com` |
-| `PROD_CORS_ALLOWED_ORIGINS` | `https://tocpnsutbk.com,https://www.tocpnsutbk.com` |
-| `PROD_TOKEN_EXPIRY` | `86400` |
-| `PROD_MIDTRANS_IS_PRODUCTION` | `true` |
-| `PROD_FROM_EMAIL` | `noreply@tocpnsutbk.com` |
-| `PROD_FROM_NAME` | `TO CPNS UTBK` |
-
-Nilai yang harus kamu ambil dari hosting Rumahweb / cPanel / Midtrans:
-
-| Secret Name | Ambil dari mana |
-| --- | --- |
-| `FTP_HOST` | hostname FTP dari Rumahweb atau server hostname cPanel |
-| `FTP_PORT` | biasanya `21` |
-| `FTP_USERNAME` | username FTP / cPanel |
-| `FTP_PASSWORD` | password FTP / cPanel |
-| `VITE_MIDTRANS_CLIENT_KEY` | Midtrans production client key |
-| `PROD_DB_HOST` | host database production, biasanya `localhost` |
-| `PROD_DB_USER` | user database production |
-| `PROD_DB_PASSWORD` | password database production |
-| `PROD_DB_NAME` | nama database production |
-| `PROD_DB_PORT` | biasanya `3306` |
-| `PROD_JWT_SECRET_KEY` | string acak panjang untuk JWT production |
-| `PROD_MIDTRANS_SERVER_KEY` | Midtrans production server key |
-| `PROD_MIDTRANS_CLIENT_KEY` | Midtrans production client key |
-| `PROD_MERCHANT_ID` | merchant ID production Midtrans |
-| `PROD_SMTP_HOST` | host SMTP email |
-| `PROD_SMTP_PORT` | port SMTP, biasanya `587` |
-| `PROD_SMTP_USER` | username SMTP |
-| `PROD_SMTP_PASSWORD` | password SMTP / app password |
-
-### Template final yang bisa langsung kamu isi
-
-Copy daftar ini saat membuat secrets:
+Template umum:
 
 ```text
-FTP_HOST=ISI_DARI_RUMAHWEB
+FTP_HOST=ISI_HOST_SERVER_FTP
 FTP_PORT=21
 FTP_USERNAME=ISI_USERNAME_FTP
 FTP_PASSWORD=ISI_PASSWORD_FTP
 
 VITE_API_URL=https://api.tocpnsutbk.com
-VITE_MIDTRANS_CLIENT_KEY=ISI_MIDTRANS_CLIENT_KEY_PRODUCTION
+VITE_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY
 
 PROD_DB_HOST=localhost
 PROD_DB_USER=ISI_DB_USER
@@ -159,82 +163,142 @@ PROD_DB_PORT=3306
 PROD_API_URL=https://api.tocpnsutbk.com
 PROD_FRONTEND_URL=https://tocpnsutbk.com
 PROD_CORS_ALLOWED_ORIGINS=https://tocpnsutbk.com,https://www.tocpnsutbk.com
-PROD_JWT_SECRET_KEY=ISI_RANDOM_SECRET_PANJANG
+PROD_JWT_SECRET_KEY=ISI_SECRET_JWT
 PROD_TOKEN_EXPIRY=86400
 
-PROD_MIDTRANS_IS_PRODUCTION=true
-PROD_MIDTRANS_SERVER_KEY=ISI_MIDTRANS_SERVER_KEY_PRODUCTION
-PROD_MIDTRANS_CLIENT_KEY=ISI_MIDTRANS_CLIENT_KEY_PRODUCTION
-PROD_MERCHANT_ID=ISI_MERCHANT_ID_PRODUCTION
+PROD_MIDTRANS_IS_PRODUCTION=false
+PROD_MIDTRANS_SERVER_KEY=ISI_SERVER_KEY
+PROD_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY
+PROD_MERCHANT_ID=ISI_MERCHANT_ID
 
-PROD_SMTP_HOST=smtp.gmail.com
+PROD_SMTP_HOST=ISI_SMTP_HOST
 PROD_SMTP_PORT=587
-PROD_SMTP_USER=ISI_EMAIL_SMTP
-PROD_SMTP_PASSWORD=ISI_APP_PASSWORD_SMTP
-PROD_FROM_EMAIL=noreply@tocpnsutbk.com
+PROD_SMTP_USER=ISI_SMTP_USER
+PROD_SMTP_PASSWORD=ISI_SMTP_PASSWORD
+PROD_FROM_EMAIL=ISI_FROM_EMAIL
 PROD_FROM_NAME=TO CPNS UTBK
 ```
 
-### Kalau mau uji coba pakai Midtrans Sandbox dulu
+## Mode Midtrans
 
-Kalau akun Midtrans Production masih diverifikasi, kamu tetap bisa deploy dan uji alur payment sendiri dengan sandbox.
+### 1. Sandbox untuk uji coba pribadi
 
-Isi secrets Midtrans seperti ini:
+Kalau Midtrans Production belum selesai verifikasi, isi:
 
 ```text
 PROD_MIDTRANS_IS_PRODUCTION=false
-VITE_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY_SANDBOX
-PROD_MIDTRANS_SERVER_KEY=ISI_SERVER_KEY_SANDBOX
-PROD_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY_SANDBOX
-PROD_MERCHANT_ID=ISI_MERCHANT_ID_SANDBOX
+VITE_MIDTRANS_CLIENT_KEY=CLIENT_KEY_SANDBOX
+PROD_MIDTRANS_SERVER_KEY=SERVER_KEY_SANDBOX
+PROD_MIDTRANS_CLIENT_KEY=CLIENT_KEY_SANDBOX
+PROD_MERCHANT_ID=MERCHANT_ID_SANDBOX
 ```
 
-Catatan:
-- workflow deploy membaca `PROD_MIDTRANS_IS_PRODUCTION` untuk backend dan frontend
-- kalau nilainya `false`, frontend akan memuat Snap sandbox dan backend akan memakai endpoint sandbox
-- mode ini aman untuk uji coba pribadi, tapi jangan dianggap sebagai payment live
+Efeknya:
+- frontend memuat Snap sandbox
+- backend memakai endpoint sandbox
+- aman untuk testing alur pembayaran sendiri
+- jangan dianggap sebagai payment live
 
-### Cara mencari nilai yang belum pasti
+### 2. Production saat verifikasi Midtrans selesai
 
-Untuk Rumahweb / cPanel:
-- `FTP_HOST`: cek email aktivasi hosting, menu `FTP Accounts`, atau `General Information` di cPanel.
-- `FTP_USERNAME` dan `FTP_PASSWORD`: pakai akun FTP yang punya akses ke `public_html`.
-- `PROD_DB_HOST`, `PROD_DB_NAME`, `PROD_DB_USER`, `PROD_DB_PASSWORD`: cek di menu `MySQL Databases`.
+Ganti jadi:
 
-Untuk Midtrans:
-- buka dashboard Midtrans production
-- ambil `Server Key`, `Client Key`, dan `Merchant ID`
+```text
+PROD_MIDTRANS_IS_PRODUCTION=true
+VITE_MIDTRANS_CLIENT_KEY=CLIENT_KEY_PRODUCTION
+PROD_MIDTRANS_SERVER_KEY=SERVER_KEY_PRODUCTION
+PROD_MIDTRANS_CLIENT_KEY=CLIENT_KEY_PRODUCTION
+PROD_MERCHANT_ID=MERCHANT_ID_PRODUCTION
+```
 
-Untuk JWT:
-- buat string random panjang, minimal 32 karakter
-- contoh format aman: gabungan huruf besar, huruf kecil, angka, dan simbol
+## Cara deploy
 
-Untuk SMTP:
-- kalau pakai Gmail, gunakan `smtp.gmail.com`, port `587`, dan `App Password`
+1. Ubah code lokal.
+2. Commit perubahan.
+3. Push ke `main`.
+4. Tunggu `Deploy Live` di GitHub Actions selesai hijau.
+5. Cek website live.
 
-## Langkah 3. Jalankan deploy pertama dan tes
+Contoh:
 
-Setelah semua secrets terisi:
-1. Push perubahan kecil ke branch `main`.
-2. Buka tab `Actions` di GitHub.
-3. Pilih workflow `Deploy Live`.
-4. Pastikan semua step sukses.
-5. Tes website live:
-   - `https://tocpnsutbk.com`
-   - `https://api.tocpnsutbk.com/api/questions/packages`
-6. Tes login.
-7. Tes panel admin.
-8. Tes payment flow kalau Midtrans production sudah aktif.
+```bash
+cd /Users/luthfifadhlurrohman/Documents/cpns-utbk
+git add .
+git commit -m "Update landing page"
+git push origin main
+```
 
-Kalau job gagal:
-- cek step yang merah di GitHub Actions
-- paling sering masalah ada di `FTP_HOST`, `FTP_USERNAME`, `FTP_PASSWORD`, atau secret yang belum terisi
-- kalau frontend sukses tapi backend gagal, biasanya masalah ada di credential FTP atau file `.env` production
+## Cara cek hasil deploy
+
+Sesudah workflow sukses, cek:
+- `https://tocpnsutbk.com`
+- `https://api.tocpnsutbk.com/api/health`
+- `https://api.tocpnsutbk.com/api/questions/packages`
+
+Kalau API sehat, `/api/health` harus mengembalikan JSON.
+
+## Troubleshooting yang paling sering
+
+### 1. Workflow hijau tapi website tidak berubah
+
+Kemungkinan:
+- browser cache
+- akun FTP diarahkan ke root yang berbeda
+
+Cek:
+- hard refresh browser dengan `Cmd+Shift+R`
+- pastikan akun FTP deploy memang root-nya `public_html`
+
+### 2. FTP login gagal
+
+Gejala:
+- `530 Login authentication failed`
+
+Solusi:
+- buat akun FTP deploy baru di cPanel
+- arahkan akun FTP itu ke `public_html`
+- update `FTP_USERNAME` dan `FTP_PASSWORD` di GitHub Secrets
+
+### 3. FTP certificate mismatch
+
+Gejala:
+- certificate common name tidak cocok
+
+Solusi:
+- pakai `FTP_HOST` berupa hostname server Rumahweb
+- jangan pakai domain website kalau sertifikat FTP-nya tidak cocok
+
+### 4. API 500 setelah deploy
+
+Cek:
+- `https://api.tocpnsutbk.com/api/health`
+
+Penyebab umum:
+- database secret salah
+- privilege user database belum benar
+- `.env` production rusak
+- PHP extension yang dibutuhkan belum aktif
+
+### 5. Error CORS
+
+Kalau frontend tampil tapi data paket gagal dimuat:
+- cek respons `https://api.tocpnsutbk.com/api/health`
+- cek apakah backend benar-benar hidup
+- pastikan `PROD_CORS_ALLOWED_ORIGINS` berisi:
+  `https://tocpnsutbk.com,https://www.tocpnsutbk.com`
 
 ## Catatan penting
 
-- Workflow ini mengasumsikan frontend live ada di `public_html` dan backend live ada di `public_html/api`.
-- Workflow ini belum menjalankan migrasi database otomatis. Kalau ada perubahan schema database, update database production tetap perlu dilakukan terpisah.
-- Workflow ini memakai deploy FTP langsung ke hosting, jadi perubahan code akan live setelah job sukses.
-- Karena deploy frontend diarahkan ke `public_html`, workflow ini sengaja tidak melakukan delete sinkron penuh supaya folder `api/` tidak ikut terhapus.
-- Secara lokal, folder ini bukan git root. Kalau repo GitHub kamu root-nya berbeda, file workflow harus berada di root repo GitHub tersebut, bukan hanya di subfolder project.
+- Workflow ini belum menjalankan migrasi database otomatis.
+- Kalau ada perubahan schema database, database production tetap harus diupdate manual.
+- Jangan commit `.env` production ke repo.
+- Setelah setup stabil, sebaiknya rotasi password yang pernah tampil di screenshot, chat, atau log:
+  - password FTP
+  - password database
+  - password SMTP
+
+## Referensi file penting
+
+- Workflow deploy: [.github/workflows/deploy-live.yml](/Users/luthfifadhlurrohman/Documents/cpns-utbk/.github/workflows/deploy-live.yml)
+- Panduan Rumahweb manual: [docs/DEPLOY-RUMAHWEB.md](/Users/luthfifadhlurrohman/Documents/cpns-utbk/docs/DEPLOY-RUMAHWEB.md)
+- Schema database: [database/schema.sql](/Users/luthfifadhlurrohman/Documents/cpns-utbk/database/schema.sql)

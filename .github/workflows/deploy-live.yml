@@ -75,6 +75,10 @@ jobs:
           FROM_EMAIL: ${{ secrets.PROD_FROM_EMAIL }}
           FROM_NAME: ${{ secrets.PROD_FROM_NAME }}
         run: |
+          dotenv_escape() {
+            printf '%s' "$1" | sed 's/[\\"]/\\&/g'
+          }
+
           rm -rf .deploy
           mkdir -p .deploy/backend
           rsync -av --delete \
@@ -83,30 +87,30 @@ jobs:
             backend/ .deploy/backend/
 
           cat > .deploy/backend/.env <<EOF
-          DB_HOST=${DB_HOST}
-          DB_USER=${DB_USER}
-          DB_PASSWORD=${DB_PASSWORD}
-          DB_NAME=${DB_NAME}
-          DB_PORT=${DB_PORT}
+          DB_HOST="$(dotenv_escape "${DB_HOST}")"
+          DB_USER="$(dotenv_escape "${DB_USER}")"
+          DB_PASSWORD="$(dotenv_escape "${DB_PASSWORD}")"
+          DB_NAME="$(dotenv_escape "${DB_NAME}")"
+          DB_PORT="$(dotenv_escape "${DB_PORT}")"
 
-          API_URL=${API_URL}
-          FRONTEND_URL=${FRONTEND_URL}
-          CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+          API_URL="$(dotenv_escape "${API_URL}")"
+          FRONTEND_URL="$(dotenv_escape "${FRONTEND_URL}")"
+          CORS_ALLOWED_ORIGINS="$(dotenv_escape "${CORS_ALLOWED_ORIGINS}")"
 
-          JWT_SECRET_KEY=${JWT_SECRET_KEY}
-          TOKEN_EXPIRY=${TOKEN_EXPIRY}
+          JWT_SECRET_KEY="$(dotenv_escape "${JWT_SECRET_KEY}")"
+          TOKEN_EXPIRY="$(dotenv_escape "${TOKEN_EXPIRY}")"
 
-          MIDTRANS_IS_PRODUCTION=${MIDTRANS_IS_PRODUCTION}
-          MIDTRANS_SERVER_KEY=${MIDTRANS_SERVER_KEY}
-          MIDTRANS_CLIENT_KEY=${MIDTRANS_CLIENT_KEY}
-          MERCHANT_ID=${MERCHANT_ID}
+          MIDTRANS_IS_PRODUCTION="$(dotenv_escape "${MIDTRANS_IS_PRODUCTION}")"
+          MIDTRANS_SERVER_KEY="$(dotenv_escape "${MIDTRANS_SERVER_KEY}")"
+          MIDTRANS_CLIENT_KEY="$(dotenv_escape "${MIDTRANS_CLIENT_KEY}")"
+          MERCHANT_ID="$(dotenv_escape "${MERCHANT_ID}")"
 
-          SMTP_HOST=${SMTP_HOST}
-          SMTP_PORT=${SMTP_PORT}
-          SMTP_USER=${SMTP_USER}
-          SMTP_PASSWORD=${SMTP_PASSWORD}
-          FROM_EMAIL=${FROM_EMAIL}
-          FROM_NAME=${FROM_NAME}
+          SMTP_HOST="$(dotenv_escape "${SMTP_HOST}")"
+          SMTP_PORT="$(dotenv_escape "${SMTP_PORT}")"
+          SMTP_USER="$(dotenv_escape "${SMTP_USER}")"
+          SMTP_PASSWORD="$(dotenv_escape "${SMTP_PASSWORD}")"
+          FROM_EMAIL="$(dotenv_escape "${FROM_EMAIL}")"
+          FROM_NAME="$(dotenv_escape "${FROM_NAME}")"
           EOF
 
       - name: Install FTP client

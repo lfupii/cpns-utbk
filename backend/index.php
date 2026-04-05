@@ -1,4 +1,47 @@
 <?php
+error_reporting(E_ALL);
+
+set_exception_handler(function (Throwable $exception): void {
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+    }
+
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Unhandled exception on production API',
+        'exception' => $exception->getMessage(),
+        'file' => basename($exception->getFile()),
+        'line' => $exception->getLine(),
+    ]);
+    exit();
+});
+
+register_shutdown_function(function (): void {
+    $error = error_get_last();
+    if (!$error) {
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array($error['type'], $fatalTypes, true)) {
+        return;
+    }
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+    }
+
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Fatal error on production API',
+        'error' => $error['message'],
+        'file' => basename($error['file']),
+        'line' => $error['line'],
+    ]);
+});
+
 // Load environment variables first
 if (file_exists(__DIR__ . '/vendor/autoload.php')) {
     require_once __DIR__ . '/vendor/autoload.php';

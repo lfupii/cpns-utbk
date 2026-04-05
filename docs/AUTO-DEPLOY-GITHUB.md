@@ -175,6 +175,25 @@ PROD_FROM_EMAIL=noreply@tocpnsutbk.com
 PROD_FROM_NAME=TO CPNS UTBK
 ```
 
+### Kalau mau uji coba pakai Midtrans Sandbox dulu
+
+Kalau akun Midtrans Production masih diverifikasi, kamu tetap bisa deploy dan uji alur payment sendiri dengan sandbox.
+
+Isi secrets Midtrans seperti ini:
+
+```text
+PROD_MIDTRANS_IS_PRODUCTION=false
+VITE_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY_SANDBOX
+PROD_MIDTRANS_SERVER_KEY=ISI_SERVER_KEY_SANDBOX
+PROD_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY_SANDBOX
+PROD_MERCHANT_ID=ISI_MERCHANT_ID_SANDBOX
+```
+
+Catatan:
+- workflow deploy membaca `PROD_MIDTRANS_IS_PRODUCTION` untuk backend dan frontend
+- kalau nilainya `false`, frontend akan memuat Snap sandbox dan backend akan memakai endpoint sandbox
+- mode ini aman untuk uji coba pribadi, tapi jangan dianggap sebagai payment live
+
 ### Cara mencari nilai yang belum pasti
 
 Untuk Rumahweb / cPanel:

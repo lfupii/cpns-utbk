@@ -44,7 +44,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
-          VITE_IS_PRODUCTION: 'true'
+          VITE_IS_PRODUCTION: ${{ secrets.PROD_MIDTRANS_IS_PRODUCTION }}
           VITE_MIDTRANS_CLIENT_KEY: ${{ secrets.VITE_MIDTRANS_CLIENT_KEY }}
         run: npm run build
 

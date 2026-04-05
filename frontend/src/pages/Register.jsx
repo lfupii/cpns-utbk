@@ -7,23 +7,48 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
-  const { register, loading, error: authError } = useAuth();
+  const [successMessage, setSuccessMessage] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const { register, resendVerification, loading, error: authError } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setInfoMessage('');
+    setSuccessMessage('');
 
     if (password.length < 6) {
       setError('Password harus minimal 6 karakter');
       return;
     }
 
-    const success = await register(email, password, fullName);
-    if (success) {
-      navigate('/');
+    const result = await register(email, password, fullName);
+    if (result.success) {
+      setRegisteredEmail(email.trim().toLowerCase());
+      setPassword('');
+      setSuccessMessage(result.message || 'Registrasi berhasil. Silakan cek email untuk verifikasi akun.');
     } else {
-      setError('Registrasi gagal.');
+      setRegisteredEmail(result.data?.email || email.trim().toLowerCase());
+      setError(result.message || 'Registrasi gagal.');
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const targetEmail = (registeredEmail || email).trim().toLowerCase();
+    if (!targetEmail) {
+      setError('Masukkan email terlebih dahulu.');
+      return;
+    }
+
+    setError('');
+    setInfoMessage('');
+    const result = await resendVerification(targetEmail);
+    if (result.success) {
+      setInfoMessage(result.message || 'Email verifikasi berhasil dikirim ulang.');
+    } else {
+      setError(result.message || 'Gagal mengirim ulang email verifikasi.');
     }
   };
 
@@ -34,6 +59,18 @@ export default function Register() {
           <h1 className="text-3xl font-bold text-blue-600">CPNS UTBK</h1>
           <p className="text-gray-600 mt-2">Daftar Akun Baru</p>
         </div>
+
+        {successMessage && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+            {successMessage}
+          </div>
+        )}
+
+        {infoMessage && (
+          <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4">
+            {infoMessage}
+          </div>
+        )}
 
         {(error || authError) && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -84,9 +121,33 @@ export default function Register() {
             disabled={loading}
             className="w-full btn-primary mb-4 disabled:opacity-50"
           >
-            {loading ? 'Registering...' : 'Daftar'}
+            {loading ? 'Memproses...' : 'Daftar'}
           </button>
         </form>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
+          <p className="text-sm text-slate-700">
+            Setelah daftar, akun belum langsung aktif. Cek inbox email Anda lalu klik link verifikasi sebelum login.
+          </p>
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={loading}
+            className="w-full btn btn-outline mt-3 disabled:opacity-50"
+          >
+            Kirim ulang email verifikasi
+          </button>
+        </div>
+
+        {successMessage && (
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            className="w-full btn btn-outline mb-4"
+          >
+            Lanjut ke Login
+          </button>
+        )}
 
         <div className="text-center">
           <p className="text-gray-600">Sudah punya akun?{' '}

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/Database.php';
+require_once __DIR__ . '/../utils/UserNotificationService.php';
 require_once __DIR__ . '/../middleware/Response.php';
 
 class TestController {
@@ -7,6 +8,50 @@ class TestController {
 
     public function __construct($mysqli) {
         $this->mysqli = $mysqli;
+    }
+
+    private function sendTryoutResultNotification(int $attemptId): array {
+        $query = "SELECT
+                    u.email,
+                    u.full_name,
+                    tr.total_questions,
+                    tr.correct_answers,
+                    tr.score,
+                    tr.percentage,
+                    tr.time_taken,
+                    DATE_FORMAT(tr.created_at, '%d-%m-%Y %H:%i:%s') AS completed_at,
+                    tp.name AS package_name,
+                    tc.name AS category_name
+                  FROM test_results tr
+                  JOIN users u ON u.id = tr.user_id
+                  JOIN test_packages tp ON tp.id = tr.package_id
+                  JOIN test_categories tc ON tc.id = tp.category_id
+                  WHERE tr.attempt_id = ?
+                  LIMIT 1";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $attemptId);
+        $stmt->execute();
+        $payload = $stmt->get_result()->fetch_assoc();
+
+        if (!$payload) {
+            return [
+                'success' => false,
+                'transport' => 'lookup',
+                'message' => 'Data hasil tryout untuk email tidak ditemukan.',
+            ];
+        }
+
+        try {
+            return UserNotificationService::sendTryoutResultEmail($payload);
+        } catch (Throwable $error) {
+            error_log('Tryout result email failed: ' . $error->getMessage());
+
+            return [
+                'success' => false,
+                'transport' => 'exception',
+                'message' => 'Hasil tryout tersimpan, tetapi email belum berhasil dikirim.',
+            ];
+        }
     }
 
     private function getActiveAccess(int $userId, int $packageId): array {
@@ -281,11 +326,17 @@ class TestController {
 
             $this->mysqli->commit();
 
-            sendResponse('success', 'Jawaban berhasil disimpan', [
+            $emailDelivery = $this->sendTryoutResultNotification($attemptId);
+            $responseMessage = $emailDelivery['success']
+                ? 'Jawaban berhasil disimpan dan hasil tryout telah dikirim ke email.'
+                : 'Jawaban berhasil disimpan, tetapi email hasil tryout belum berhasil dikirim.';
+
+            sendResponse('success', $responseMessage, [
                 'total_questions' => $totalQuestions,
                 'correct_answers' => $correctAnswers,
                 'percentage' => round($percentage, 2),
                 'score' => $score,
+                'email_delivery' => $emailDelivery,
             ]);
         } catch (RuntimeException $error) {
             $this->mysqli->rollback();

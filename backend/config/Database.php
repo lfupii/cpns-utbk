@@ -54,8 +54,16 @@ define('SMTP_HOST', env('SMTP_HOST', 'smtp.gmail.com'));
 define('SMTP_PORT', (int) env('SMTP_PORT', 587));
 define('SMTP_USER', env('SMTP_USER', 'your-email@gmail.com'));
 define('SMTP_PASSWORD', env('SMTP_PASSWORD', 'your-app-password'));
+define('SMTP_SECURE', env('SMTP_SECURE', SMTP_PORT === 465 ? 'ssl' : 'tls'));
 define('FROM_EMAIL', env('FROM_EMAIL', 'noreply@cpns-utbk.com'));
 define('FROM_NAME', env('FROM_NAME', 'CPNS UTBK 2026'));
+define('EMAIL_VERIFICATION_EXPIRY_HOURS', (int) env('EMAIL_VERIFICATION_EXPIRY_HOURS', 24));
+define('EMAIL_VERIFICATION_URL', env('EMAIL_VERIFICATION_URL', rtrim(API_URL, '/') . '/api/auth/verify-email'));
+define('DEFAULT_ADMIN_EMAIL', env('DEFAULT_ADMIN_EMAIL', 'fadhlurrohmanluthfi@gmail.com'));
+define('DEFAULT_ADMIN_FULL_NAME', env('DEFAULT_ADMIN_FULL_NAME', 'Admin TO CPNS UTBK'));
+define('DEFAULT_ADMIN_PASSWORD_HASH', env('DEFAULT_ADMIN_PASSWORD_HASH', '$2y$12$4.8bTUnKgsWR/Js3cW.04uaQc9aerTIew7nPSpCf7V7aB2I3KQ8S2'));
+$forceBootstrapDefaultAdmin = filter_var(env('DEFAULT_ADMIN_FORCE_BOOTSTRAP', false), FILTER_VALIDATE_BOOLEAN);
+define('DEFAULT_ADMIN_FORCE_BOOTSTRAP', $forceBootstrapDefaultAdmin);
 
 define('TOKEN_EXPIRY', (int) env('TOKEN_EXPIRY', 86400)); // 24 jam
 define('MAX_LOGIN_ATTEMPTS', (int) env('MAX_LOGIN_ATTEMPTS', 5));
@@ -94,3 +102,132 @@ if ($mysqli->connect_error) {
 }
 
 $mysqli->set_charset('utf8mb4');
+
+function databaseTableExists(mysqli $mysqli, string $tableName): bool {
+    $query = 'SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1';
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param('s', $tableName);
+    $stmt->execute();
+
+    return (bool) $stmt->get_result()->fetch_row();
+}
+
+function databaseColumnExists(mysqli $mysqli, string $tableName, string $columnName): bool {
+    $query = 'SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1';
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param('ss', $tableName, $columnName);
+    $stmt->execute();
+
+    return (bool) $stmt->get_result()->fetch_row();
+}
+
+function ensureSystemSettingsTable(mysqli $mysqli): void {
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS system_settings (
+            setting_key VARCHAR(100) PRIMARY KEY,
+            setting_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+}
+
+function getSystemSetting(mysqli $mysqli, string $settingKey): ?string {
+    ensureSystemSettingsTable($mysqli);
+    $query = 'SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1';
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param('s', $settingKey);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+
+    return $row['setting_value'] ?? null;
+}
+
+function setSystemSetting(mysqli $mysqli, string $settingKey, string $settingValue): void {
+    ensureSystemSettingsTable($mysqli);
+    $query = "INSERT INTO system_settings (setting_key, setting_value)
+              VALUES (?, ?)
+              ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)";
+    $stmt = $mysqli->prepare($query);
+    $stmt->bind_param('ss', $settingKey, $settingValue);
+    $stmt->execute();
+}
+
+function ensureEmailVerificationSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'users')) {
+        return;
+    }
+
+    if (!databaseColumnExists($mysqli, 'users', 'email_verified_at')) {
+        $mysqli->query("ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP NULL AFTER birth_date");
+    }
+
+    if (!databaseColumnExists($mysqli, 'users', 'email_verification_token')) {
+        $mysqli->query("ALTER TABLE users ADD COLUMN email_verification_token VARCHAR(64) UNIQUE DEFAULT NULL AFTER email_verified_at");
+    }
+
+    if (!databaseColumnExists($mysqli, 'users', 'email_verification_sent_at')) {
+        $mysqli->query("ALTER TABLE users ADD COLUMN email_verification_sent_at TIMESTAMP NULL AFTER email_verification_token");
+    }
+
+    if (!databaseColumnExists($mysqli, 'users', 'email_verification_expires_at')) {
+        $mysqli->query("ALTER TABLE users ADD COLUMN email_verification_expires_at TIMESTAMP NULL AFTER email_verification_sent_at");
+    }
+}
+
+function shouldBootstrapDefaultAdmin(): bool {
+    if (DEFAULT_ADMIN_FORCE_BOOTSTRAP) {
+        return true;
+    }
+
+    $frontendHost = (string) parse_url(FRONTEND_URL, PHP_URL_HOST);
+    $apiHost = (string) parse_url(API_URL, PHP_URL_HOST);
+
+    return $frontendHost === 'tocpnsutbk.com'
+        || $frontendHost === 'www.tocpnsutbk.com'
+        || $apiHost === 'api.tocpnsutbk.com';
+}
+
+function bootstrapDefaultAdmin(mysqli $mysqli): void {
+    if (!shouldBootstrapDefaultAdmin() || !databaseTableExists($mysqli, 'users')) {
+        return;
+    }
+
+    $bootstrapKey = 'default_admin_reset_v1';
+    if (getSystemSetting($mysqli, $bootstrapKey) !== null) {
+        return;
+    }
+
+    $mysqli->begin_transaction();
+
+    try {
+        $mysqli->query('DELETE FROM users');
+
+        $query = "INSERT INTO users (
+                    email,
+                    password,
+                    full_name,
+                    role,
+                    email_verified_at
+                  ) VALUES (?, ?, ?, 'admin', NOW())";
+        $stmt = $mysqli->prepare($query);
+        $adminEmail = DEFAULT_ADMIN_EMAIL;
+        $adminPasswordHash = DEFAULT_ADMIN_PASSWORD_HASH;
+        $adminFullName = DEFAULT_ADMIN_FULL_NAME;
+        $stmt->bind_param('sss', $adminEmail, $adminPasswordHash, $adminFullName);
+        $stmt->execute();
+
+        setSystemSetting($mysqli, $bootstrapKey, json_encode([
+            'email' => $adminEmail,
+            'completed_at' => date(DATE_ATOM),
+        ], JSON_UNESCAPED_SLASHES));
+
+        $mysqli->commit();
+    } catch (Throwable $error) {
+        $mysqli->rollback();
+        error_log('Default admin bootstrap failed: ' . $error->getMessage());
+    }
+}
+
+ensureEmailVerificationSchema($mysqli);
+bootstrapDefaultAdmin($mysqli);

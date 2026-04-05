@@ -62,13 +62,23 @@ export const AuthProvider = ({ children }) => {
       });
       const { token, userId, full_name, role } = response.data.data;
       persistSession({ token, userId, email, full_name, role });
-      return true;
+      return {
+        success: true,
+        message: response.data.message,
+        data: response.data.data,
+      };
     } catch (err) {
       if (err.response?.status === 401) {
         clearSession();
       }
-      setError(err.response?.data?.message || 'Login gagal');
-      return false;
+      const message = err.response?.data?.message || 'Login gagal';
+      setError(message);
+      return {
+        success: false,
+        status: err.response?.status || 0,
+        message,
+        data: err.response?.data?.data || null,
+      };
     } finally {
       setLoading(false);
     }
@@ -83,16 +93,48 @@ export const AuthProvider = ({ children }) => {
         password,
         full_name,
       });
-      const { token, userId, role } = response.data.data;
-      persistSession({ token, userId, email, full_name, role });
-      return true;
+      return {
+        success: true,
+        message: response.data.message,
+        data: response.data.data,
+      };
     } catch (err) {
-      setError(err.response?.data?.message || 'Registrasi gagal');
-      return false;
+      const message = err.response?.data?.message || 'Registrasi gagal';
+      setError(message);
+      return {
+        success: false,
+        status: err.response?.status || 0,
+        message,
+        data: err.response?.data?.data || null,
+      };
     } finally {
       setLoading(false);
     }
-  }, [persistSession]);
+  }, []);
+
+  const resendVerification = useCallback(async (email) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.post('/auth/resend-verification', { email });
+      return {
+        success: true,
+        message: response.data.message,
+        data: response.data.data,
+      };
+    } catch (err) {
+      const message = err.response?.data?.message || 'Gagal mengirim ulang email verifikasi';
+      setError(message);
+      return {
+        success: false,
+        status: err.response?.status || 0,
+        message,
+        data: err.response?.data?.data || null,
+      };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const refreshProfile = useCallback(async () => {
     if (!localStorage.getItem('token')) {
@@ -126,7 +168,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, error, login, register, refreshProfile, logout, isAuthenticated, isAdmin }}
+      value={{ user, token, loading, error, login, register, resendVerification, refreshProfile, logout, isAuthenticated, isAdmin }}
     >
       {children}
     </AuthContext.Provider>

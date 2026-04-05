@@ -31,11 +31,56 @@ Content-Type: application/json
 Response (201):
 {
   "status": "success",
-  "message": "Registrasi berhasil",
+  "message": "Registrasi berhasil. Silakan cek email untuk verifikasi akun.",
   "data": {
     "userId": 1,
     "email": "user@example.com",
-    "token": "eyJhbGci..."
+    "full_name": "John Doe",
+    "role": "user",
+    "email_verified": false,
+    "requires_email_verification": true,
+    "email_delivery": {
+      "success": true,
+      "transport": "smtp",
+      "message": "Email berhasil dikirim via SMTP."
+    }
+  }
+}
+```
+
+Setelah register, akun belum bisa login sampai email diverifikasi dari link yang dikirim ke inbox.
+
+#### Verify Email
+Endpoint ini biasanya diakses langsung dari link email verifikasi:
+
+```
+GET /auth/verify-email?token=YOUR_TOKEN
+```
+
+Response:
+- Menampilkan halaman HTML sukses/gagal verifikasi di browser.
+
+#### Resend Verification Email
+```
+POST /auth/resend-verification
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+
+Response (200):
+{
+  "status": "success",
+  "message": "Email verifikasi berhasil dikirim ulang.",
+  "data": {
+    "email": "user@example.com",
+    "email_verified": false,
+    "email_delivery": {
+      "success": true,
+      "transport": "smtp",
+      "message": "Email berhasil dikirim via SMTP."
+    }
   }
 }
 ```
@@ -58,7 +103,21 @@ Response (200):
     "userId": 1,
     "email": "user@example.com",
     "full_name": "John Doe",
+    "role": "user",
+    "email_verified": true,
     "token": "eyJhbGci..."
+  }
+}
+```
+
+Response (403) jika email belum diverifikasi:
+```json
+{
+  "status": "error",
+  "message": "Email belum diverifikasi. Silakan cek inbox email Anda terlebih dahulu.",
+  "data": {
+    "email": "user@example.com",
+    "requires_email_verification": true
   }
 }
 ```
@@ -78,6 +137,8 @@ Response (200):
     "full_name": "John Doe",
     "phone": "081234567890",
     "birth_date": "2000-01-15",
+    "email_verified_at": "2026-04-05 09:00:00",
+    "email_verified": true,
     "created_at": "2026-04-04 10:00:00"
   }
 }
@@ -306,15 +367,22 @@ Content-Type: application/json
 Response (200):
 {
   "status": "success",
-  "message": "Jawaban berhasil disimpan",
+  "message": "Jawaban berhasil disimpan dan hasil tryout telah dikirim ke email.",
   "data": {
     "total_questions": 100,
     "correct_answers": 75,
     "percentage": 75.00,
-    "score": 75
+    "score": 75,
+    "email_delivery": {
+      "success": true,
+      "transport": "smtp",
+      "message": "Email berhasil dikirim via SMTP."
+    }
   }
 }
 ```
+
+Setelah submit, backend otomatis mengirim email hasil tryout ke email user yang sudah diverifikasi. Isi email mencakup ringkasan hasil, ucapan terima kasih dari TO CPNS UTBK, dan doa sesuai jalur UTBK atau CPNS.
 
 #### Get Test Results
 ```

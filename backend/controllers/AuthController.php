@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/Database.php';
 require_once __DIR__ . '/../utils/JWTHandler.php';
+require_once __DIR__ . '/../utils/UserNotificationService.php';
 require_once __DIR__ . '/../middleware/Response.php';
 
 // AuthController untuk login dan register
@@ -11,6 +12,65 @@ class AuthController {
         $this->mysqli = $mysqli;
     }
 
+    private function normalizeEmail(string $email): string {
+        return strtolower(trim($email));
+    }
+
+    private function buildVerificationExpiryAt(): string {
+        return date('Y-m-d H:i:s', time() + (EMAIL_VERIFICATION_EXPIRY_HOURS * 3600));
+    }
+
+    private function persistVerificationToken(int $userId): string {
+        $token = UserNotificationService::generateVerificationToken();
+        $expiresAt = $this->buildVerificationExpiryAt();
+
+        $query = "UPDATE users
+                  SET email_verification_token = ?,
+                      email_verification_sent_at = NOW(),
+                      email_verification_expires_at = ?
+                  WHERE id = ?";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('ssi', $token, $expiresAt, $userId);
+        $stmt->execute();
+
+        return $token;
+    }
+
+    private function renderVerificationPage(string $title, string $message, bool $success): void {
+        http_response_code($success ? 200 : 400);
+        header('Content-Type: text/html; charset=UTF-8');
+
+        $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+        $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+        $accent = $success ? '#0f766e' : '#b91c1c';
+        $buttonColor = $success ? '#0d9488' : '#dc2626';
+        $homeUrl = htmlspecialchars(rtrim(FRONTEND_URL, '/'), ENT_QUOTES, 'UTF-8');
+
+        echo '<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' . $safeTitle . '</title>
+</head>
+<body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+    <div style="max-width:560px;margin:32px auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 18px 48px rgba(15,23,42,0.08);">
+        <div style="padding:28px 24px;background:' . $accent . ';color:#ffffff;">
+            <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;">TO CPNS UTBK</div>
+            <h1 style="margin:10px 0 0;font-size:28px;line-height:1.2;">' . $safeTitle . '</h1>
+        </div>
+        <div style="padding:28px 24px;font-size:15px;line-height:1.7;">
+            <p>' . $safeMessage . '</p>
+            <p style="margin:24px 0 0;">
+                <a href="' . $homeUrl . '" style="display:inline-block;background:' . $buttonColor . ';color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700;">Kembali ke TO CPNS UTBK</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>';
+        exit();
+    }
+
     public function register() {
         $data = json_decode(file_get_contents('php://input'), true);
 
@@ -18,37 +78,80 @@ class AuthController {
             sendResponse('error', 'Email, password, dan full_name harus diisi', null, 400);
         }
 
-        $email = $data['email'];
+        $email = $this->normalizeEmail((string) $data['email']);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            sendResponse('error', 'Format email tidak valid', null, 422);
+        }
+
         $password = password_hash($data['password'], PASSWORD_BCRYPT);
-        $full_name = $data['full_name'];
+        $full_name = trim((string) $data['full_name']);
         $phone = $data['phone'] ?? null;
         $birth_date = $data['birth_date'] ?? null;
 
         // Check if email already exists
-        $checkQuery = "SELECT id FROM users WHERE email = ?";
+        $checkQuery = "SELECT id, email_verified_at FROM users WHERE email = ?";
         $stmt = $this->mysqli->prepare($checkQuery);
         $stmt->bind_param('s', $email);
         $stmt->execute();
-        
-        if ($stmt->get_result()->num_rows > 0) {
+        $existingUser = $stmt->get_result()->fetch_assoc();
+
+        if ($existingUser) {
+            if (empty($existingUser['email_verified_at'])) {
+                sendResponse('error', 'Email sudah terdaftar tetapi belum diverifikasi. Silakan kirim ulang email verifikasi.', [
+                    'email' => $email,
+                    'requires_email_verification' => true,
+                ], 409);
+            }
+
             sendResponse('error', 'Email sudah terdaftar', null, 409);
         }
 
         // Insert new user
         $role = 'user';
-        $query = "INSERT INTO users (email, password, full_name, role, phone, birth_date) VALUES (?, ?, ?, ?, ?, ?)";
+        $verificationToken = UserNotificationService::generateVerificationToken();
+        $verificationExpiresAt = $this->buildVerificationExpiryAt();
+        $query = "INSERT INTO users (
+                    email,
+                    password,
+                    full_name,
+                    role,
+                    phone,
+                    birth_date,
+                    email_verification_token,
+                    email_verification_sent_at,
+                    email_verification_expires_at
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)";
         $stmt = $this->mysqli->prepare($query);
-        $stmt->bind_param('ssssss', $email, $password, $full_name, $role, $phone, $birth_date);
+        $stmt->bind_param('ssssssss', $email, $password, $full_name, $role, $phone, $birth_date, $verificationToken, $verificationExpiresAt);
 
         if ($stmt->execute()) {
             $userId = $stmt->insert_id;
-            $token = JWTHandler::generateToken($userId, $role);
-            sendResponse('success', 'Registrasi berhasil', [
+            try {
+                $delivery = UserNotificationService::sendVerificationEmail([
+                    'email' => $email,
+                    'full_name' => $full_name,
+                ], $verificationToken);
+            } catch (Throwable $error) {
+                error_log('Verification email send failed: ' . $error->getMessage());
+                $delivery = [
+                    'success' => false,
+                    'transport' => 'exception',
+                    'message' => 'Registrasi berhasil, tetapi email verifikasi belum berhasil dikirim.',
+                ];
+            }
+
+            $message = $delivery['success']
+                ? 'Registrasi berhasil. Silakan cek email untuk verifikasi akun.'
+                : 'Registrasi berhasil, tetapi email verifikasi belum berhasil dikirim. Silakan gunakan kirim ulang verifikasi.';
+
+            sendResponse('success', $message, [
                 'userId' => $userId,
                 'email' => $email,
                 'full_name' => $full_name,
                 'role' => $role,
-                'token' => $token
+                'email_verified' => false,
+                'requires_email_verification' => true,
+                'email_delivery' => $delivery,
             ], 201);
         } else {
             sendResponse('error', 'Gagal melakukan registrasi', null, 500);
@@ -62,10 +165,10 @@ class AuthController {
             sendResponse('error', 'Email dan password harus diisi', null, 400);
         }
 
-        $email = $data['email'];
+        $email = $this->normalizeEmail((string) $data['email']);
         $password = $data['password'];
 
-        $query = "SELECT id, password, full_name, role FROM users WHERE email = ?";
+        $query = "SELECT id, password, full_name, role, email_verified_at FROM users WHERE email = ?";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('s', $email);
         $stmt->execute();
@@ -81,12 +184,20 @@ class AuthController {
             sendResponse('error', 'Email atau password salah', null, 401);
         }
 
+        if (empty($user['email_verified_at'])) {
+            sendResponse('error', 'Email belum diverifikasi. Silakan cek inbox email Anda terlebih dahulu.', [
+                'email' => $email,
+                'requires_email_verification' => true,
+            ], 403);
+        }
+
         $token = JWTHandler::generateToken($user['id'], $user['role'] ?? 'user');
         sendResponse('success', 'Login berhasil', [
             'userId' => $user['id'],
             'email' => $email,
             'full_name' => $user['full_name'],
             'role' => $user['role'] ?? 'user',
+            'email_verified' => true,
             'token' => $token
         ]);
     }
@@ -94,7 +205,7 @@ class AuthController {
     public function getProfile() {
         $tokenData = verifyToken();
         
-        $query = "SELECT id, email, full_name, role, phone, birth_date, created_at FROM users WHERE id = ?";
+        $query = "SELECT id, email, full_name, role, phone, birth_date, email_verified_at, created_at FROM users WHERE id = ?";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('i', $tokenData['userId']);
         $stmt->execute();
@@ -105,7 +216,125 @@ class AuthController {
         }
 
         $user = $result->fetch_assoc();
+        $user['email_verified'] = !empty($user['email_verified_at']);
         sendResponse('success', 'Data profil berhasil diambil', $user);
+    }
+
+    public function resendVerificationEmail() {
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        if (!isset($data['email'])) {
+            sendResponse('error', 'Email harus diisi', null, 400);
+        }
+
+        $email = $this->normalizeEmail((string) $data['email']);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            sendResponse('error', 'Format email tidak valid', null, 422);
+        }
+
+        $query = "SELECT id, email, full_name, email_verified_at FROM users WHERE email = ?";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('s', $email);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+
+        if (!$user) {
+            sendResponse('error', 'Email belum terdaftar', null, 404);
+        }
+
+        if (!empty($user['email_verified_at'])) {
+            sendResponse('success', 'Email sudah terverifikasi. Silakan langsung login.', [
+                'email' => $email,
+                'email_verified' => true,
+            ]);
+        }
+
+        $token = $this->persistVerificationToken((int) $user['id']);
+        try {
+            $delivery = UserNotificationService::sendVerificationEmail($user, $token);
+        } catch (Throwable $error) {
+            error_log('Verification resend failed: ' . $error->getMessage());
+            $delivery = [
+                'success' => false,
+                'transport' => 'exception',
+                'message' => 'Akun ditemukan, tetapi email verifikasi belum berhasil dikirim.',
+            ];
+        }
+
+        if (!$delivery['success']) {
+            sendResponse('error', 'Akun ditemukan, tetapi email verifikasi belum berhasil dikirim.', [
+                'email' => $email,
+                'email_verified' => false,
+                'email_delivery' => $delivery,
+            ], 500);
+        }
+
+        sendResponse('success', 'Email verifikasi berhasil dikirim ulang.', [
+            'email' => $email,
+            'email_verified' => false,
+            'email_delivery' => $delivery,
+        ]);
+    }
+
+    public function verifyEmail() {
+        $token = trim((string) ($_GET['token'] ?? ''));
+
+        if ($token === '') {
+            $this->renderVerificationPage(
+                'Verifikasi gagal',
+                'Token verifikasi tidak ditemukan. Silakan minta kirim ulang email verifikasi dari halaman login atau pendaftaran.',
+                false
+            );
+        }
+
+        $query = "SELECT id, full_name, email_verified_at, email_verification_expires_at
+                  FROM users
+                  WHERE email_verification_token = ?
+                  LIMIT 1";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('s', $token);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+
+        if (!$user) {
+            $this->renderVerificationPage(
+                'Link tidak valid',
+                'Link verifikasi tidak valid atau sudah pernah digunakan. Silakan minta kirim ulang email verifikasi.',
+                false
+            );
+        }
+
+        if (!empty($user['email_verified_at'])) {
+            $this->renderVerificationPage(
+                'Email sudah aktif',
+                'Email ini sebenarnya sudah terverifikasi. Kamu bisa langsung login dan melanjutkan tryout.',
+                true
+            );
+        }
+
+        if (!empty($user['email_verification_expires_at']) && strtotime($user['email_verification_expires_at']) < time()) {
+            $this->renderVerificationPage(
+                'Link kedaluwarsa',
+                'Masa berlaku link verifikasi sudah habis. Silakan minta kirim ulang email verifikasi agar mendapatkan link baru.',
+                false
+            );
+        }
+
+        $updateQuery = "UPDATE users
+                        SET email_verified_at = NOW(),
+                            email_verification_token = NULL,
+                            email_verification_sent_at = NULL,
+                            email_verification_expires_at = NULL
+                        WHERE id = ?";
+        $stmt = $this->mysqli->prepare($updateQuery);
+        $stmt->bind_param('i', $user['id']);
+        $stmt->execute();
+
+        $this->renderVerificationPage(
+            'Email berhasil diverifikasi',
+            'Akunmu sekarang sudah aktif. Terima kasih sudah bergabung di TO CPNS UTBK. Semoga setiap latihanmu dilancarkan dan membawamu makin dekat ke target UTBK atau CPNS yang kamu perjuangkan.',
+            true
+        );
     }
 
     public function updateProfile() {
@@ -238,6 +467,10 @@ $controller = new AuthController($mysqli);
 
 if (strpos($requestPath, '/api/auth/register') !== false && $requestMethod === 'POST') {
     $controller->register();
+} elseif (strpos($requestPath, '/api/auth/verify-email') !== false && $requestMethod === 'GET') {
+    $controller->verifyEmail();
+} elseif (strpos($requestPath, '/api/auth/resend-verification') !== false && $requestMethod === 'POST') {
+    $controller->resendVerificationEmail();
 } elseif (strpos($requestPath, '/api/auth/login') !== false && $requestMethod === 'POST') {
     $controller->login();
 } elseif (strpos($requestPath, '/api/auth/active-packages') !== false && $requestMethod === 'GET') {

@@ -308,6 +308,19 @@ export default function Home() {
           </div>
         </section>
       </main>
+
+      <footer className="landing-footer-note">
+        <div className="container landing-footer-note-inner">
+          <p className="landing-footer-note-title">Informasi Kontak</p>
+          <p>
+            Butuh bantuan atau verifikasi informasi layanan? Hubungi kami di{' '}
+            <a href="mailto:support@tocpnsutbk.com">support@tocpnsutbk.com</a>.
+          </p>
+          <p>
+            Website resmi: <a href="https://tocpnsutbk.com">tocpnsutbk.com</a>
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

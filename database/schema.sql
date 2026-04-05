@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS question_options;
 DROP TABLE IF EXISTS questions;
 DROP TABLE IF EXISTS test_packages;
 DROP TABLE IF EXISTS test_categories;
+DROP TABLE IF EXISTS system_settings;
 DROP TABLE IF EXISTS users;
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -28,6 +29,17 @@ CREATE TABLE users (
   role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
   phone VARCHAR(15),
   birth_date DATE,
+  email_verified_at TIMESTAMP NULL,
+  email_verification_token VARCHAR(64) UNIQUE DEFAULT NULL,
+  email_verification_sent_at TIMESTAMP NULL,
+  email_verification_expires_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE system_settings (
+  setting_key VARCHAR(100) PRIMARY KEY,
+  setting_value TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -409,6 +421,5 @@ INSERT INTO question_options (question_id, option_letter, option_text, is_correc
 (40, 'D', 'Rp82.000', 0),
 (40, 'E', 'Rp84.000', 0);
 
-INSERT INTO users (email, password, full_name, role, phone, birth_date) VALUES
-('test@example.com', '$2y$12$B13N/2ne20cfHGiDrzI4GO.6zBG2goNXjpWvJqdb7CuBwMLFpH9wm', 'Test User', 'user', '081234567890', '2000-01-15'),
-('admin@ayocpns.test', 'REMOVED_ADMIN_PASSWORD_HASH', 'Admin AYO CPNS', 'admin', '081200000001', '1995-01-01');
+INSERT INTO users (email, password, full_name, role, email_verified_at) VALUES
+('REMOVED_ADMIN_EMAIL', 'REMOVED_ADMIN_PASSWORD_HASH', 'Admin TO CPNS UTBK', 'admin', NOW());

@@ -293,7 +293,7 @@ Setelah import, data awal yang tersedia:
 
 Setelah import `schema.sql`, akun admin default adalah:
 
-- Email: `admin@ayocpns.test`
+- Email: `REMOVED_ADMIN_EMAIL`
 - Password: `REMOVED_ADMIN_PASSWORD`
 
 Saran setelah live:

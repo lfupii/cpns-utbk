@@ -70,10 +70,17 @@ jobs:
           MERCHANT_ID: ${{ secrets.PROD_MERCHANT_ID }}
           SMTP_HOST: ${{ secrets.PROD_SMTP_HOST }}
           SMTP_PORT: ${{ secrets.PROD_SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.PROD_SMTP_SECURE }}
           SMTP_USER: ${{ secrets.PROD_SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.PROD_SMTP_PASSWORD }}
           FROM_EMAIL: ${{ secrets.PROD_FROM_EMAIL }}
           FROM_NAME: ${{ secrets.PROD_FROM_NAME }}
+          EMAIL_VERIFICATION_EXPIRY_HOURS: ${{ secrets.PROD_EMAIL_VERIFICATION_EXPIRY_HOURS }}
+          EMAIL_VERIFICATION_URL: ${{ secrets.PROD_EMAIL_VERIFICATION_URL }}
+          DEFAULT_ADMIN_EMAIL: ${{ secrets.PROD_DEFAULT_ADMIN_EMAIL }}
+          DEFAULT_ADMIN_FULL_NAME: ${{ secrets.PROD_DEFAULT_ADMIN_FULL_NAME }}
+          DEFAULT_ADMIN_PASSWORD_HASH: ${{ secrets.PROD_DEFAULT_ADMIN_PASSWORD_HASH }}
+          DEFAULT_ADMIN_FORCE_BOOTSTRAP: ${{ secrets.PROD_DEFAULT_ADMIN_FORCE_BOOTSTRAP }}
         run: |
           dotenv_escape() {
             printf '%s' "$1" | sed 's/[\\"]/\\&/g'
@@ -107,10 +114,19 @@ jobs:
 
           SMTP_HOST="$(dotenv_escape "${SMTP_HOST}")"
           SMTP_PORT="$(dotenv_escape "${SMTP_PORT}")"
+          SMTP_SECURE="$(dotenv_escape "${SMTP_SECURE}")"
           SMTP_USER="$(dotenv_escape "${SMTP_USER}")"
           SMTP_PASSWORD="$(dotenv_escape "${SMTP_PASSWORD}")"
           FROM_EMAIL="$(dotenv_escape "${FROM_EMAIL}")"
           FROM_NAME="$(dotenv_escape "${FROM_NAME}")"
+
+          EMAIL_VERIFICATION_EXPIRY_HOURS="$(dotenv_escape "${EMAIL_VERIFICATION_EXPIRY_HOURS}")"
+          EMAIL_VERIFICATION_URL="$(dotenv_escape "${EMAIL_VERIFICATION_URL}")"
+
+          DEFAULT_ADMIN_EMAIL="$(dotenv_escape "${DEFAULT_ADMIN_EMAIL}")"
+          DEFAULT_ADMIN_FULL_NAME="$(dotenv_escape "${DEFAULT_ADMIN_FULL_NAME}")"
+          DEFAULT_ADMIN_PASSWORD_HASH="$(dotenv_escape "${DEFAULT_ADMIN_PASSWORD_HASH}")"
+          DEFAULT_ADMIN_FORCE_BOOTSTRAP="$(dotenv_escape "${DEFAULT_ADMIN_FORCE_BOOTSTRAP}")"
           EOF
 
       - name: Install FTP client

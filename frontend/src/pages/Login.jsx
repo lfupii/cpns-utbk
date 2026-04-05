@@ -6,18 +6,40 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login, loading, error: authError } = useAuth();
+  const [infoMessage, setInfoMessage] = useState('');
+  const [showResendButton, setShowResendButton] = useState(false);
+  const { login, resendVerification, loading, error: authError } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setInfoMessage('');
+    setShowResendButton(false);
 
-    const success = await login(email, password);
-    if (success) {
+    const result = await login(email, password);
+    if (result.success) {
       navigate('/');
     } else {
-      setError('Login gagal. Periksa email dan password Anda.');
+      setError(result.message || 'Login gagal. Periksa email dan password Anda.');
+      setShowResendButton(Boolean(result.data?.requires_email_verification));
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const targetEmail = email.trim().toLowerCase();
+    if (!targetEmail) {
+      setError('Masukkan email terlebih dahulu.');
+      return;
+    }
+
+    setError('');
+    setInfoMessage('');
+    const result = await resendVerification(targetEmail);
+    if (result.success) {
+      setInfoMessage(result.message || 'Email verifikasi berhasil dikirim ulang.');
+    } else {
+      setError(result.message || 'Gagal mengirim ulang email verifikasi.');
     }
   };
 
@@ -28,6 +50,12 @@ export default function Login() {
           <h1 className="text-3xl font-bold text-blue-600">CPNS UTBK</h1>
           <p className="text-gray-600 mt-2">Platform Tryout CPNS & UTBK 2026</p>
         </div>
+
+        {infoMessage && (
+          <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4">
+            {infoMessage}
+          </div>
+        )}
 
         {(error || authError) && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -65,9 +93,20 @@ export default function Login() {
             disabled={loading}
             className="w-full btn-primary mb-4 disabled:opacity-50"
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Memproses...' : 'Login'}
           </button>
         </form>
+
+        {showResendButton && (
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={loading}
+            className="w-full btn btn-outline mb-4 disabled:opacity-50"
+          >
+            Kirim ulang email verifikasi
+          </button>
+        )}
 
         <div className="text-center">
           <p className="text-gray-600">Belum punya akun?{' '}
@@ -78,9 +117,9 @@ export default function Login() {
         </div>
 
         <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-sm text-gray-500 text-center">Test Account</p>
-          <p className="text-sm text-gray-700 mt-2">Email: test@example.com</p>
-          <p className="text-sm text-gray-700">Password: test1234</p>
+          <p className="text-sm text-gray-500 text-center">
+            Gunakan email yang sudah diverifikasi untuk login dan menerima hasil tryout.
+          </p>
         </div>
       </div>
     </div>

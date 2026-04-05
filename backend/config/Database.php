@@ -61,6 +61,20 @@ define('TOKEN_EXPIRY', (int) env('TOKEN_EXPIRY', 86400)); // 24 jam
 define('MAX_LOGIN_ATTEMPTS', (int) env('MAX_LOGIN_ATTEMPTS', 5));
 define('LOCK_TIME', (int) env('LOCK_TIME', 900)); // 15 menit
 
+if (!class_exists('mysqli')) {
+    http_response_code(500);
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
+
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'PHP mysqli extension is not enabled on production hosting',
+        'hint' => 'Aktifkan extension mysqli di Select PHP Version / PHP Extensions cPanel.',
+    ]);
+    exit();
+}
+
 mysqli_report(MYSQLI_REPORT_OFF);
 $mysqli = @new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT);
 

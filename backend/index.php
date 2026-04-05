@@ -18,10 +18,13 @@ $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $requestPath = str_replace('/api', '', $requestUri);
 
 if ($requestPath === '' || $requestPath === '/' || $requestPath === '/health') {
+    $midtransEnvRaw = $_ENV['MIDTRANS_IS_PRODUCTION'] ?? getenv('MIDTRANS_IS_PRODUCTION') ?? 'false';
+    $midtransEnv = filter_var($midtransEnvRaw, FILTER_VALIDATE_BOOLEAN) ? 'production' : 'sandbox';
+
     sendResponse('success', 'API aktif', [
         'service' => 'cpns-utbk-api',
         'status' => 'ok',
-        'environment' => MIDTRANS_IS_PRODUCTION ? 'production' : 'sandbox',
+        'environment' => $midtransEnv,
         'time' => date(DATE_ATOM),
     ]);
 }

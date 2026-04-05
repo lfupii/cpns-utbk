@@ -61,10 +61,22 @@ define('TOKEN_EXPIRY', (int) env('TOKEN_EXPIRY', 86400)); // 24 jam
 define('MAX_LOGIN_ATTEMPTS', (int) env('MAX_LOGIN_ATTEMPTS', 5));
 define('LOCK_TIME', (int) env('LOCK_TIME', 900)); // 15 menit
 
-$mysqli = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT);
+mysqli_report(MYSQLI_REPORT_OFF);
+$mysqli = @new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT);
 
 if ($mysqli->connect_error) {
-    die(json_encode(['status' => 'error', 'message' => 'Database connection failed: ' . $mysqli->connect_error]));
+    http_response_code(500);
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
+
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Database connection failed on production API',
+        'hint' => 'Periksa secret PROD_DB_HOST, PROD_DB_USER, PROD_DB_PASSWORD, PROD_DB_NAME, dan privilege database di hosting.',
+        'code' => $mysqli->connect_errno,
+    ]);
+    exit();
 }
 
 $mysqli->set_charset('utf8mb4');

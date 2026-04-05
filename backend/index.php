@@ -14,9 +14,6 @@ require_once __DIR__ . '/middleware/Response.php';
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
-// Load environment variables after CORS handling to avoid preflight failure
-require_once __DIR__ . '/config/Database.php';
-
 // Remove /api from the path if it exists
 $requestPath = str_replace('/api', '', $requestUri);
 
@@ -28,6 +25,9 @@ if ($requestPath === '' || $requestPath === '/' || $requestPath === '/health') {
         'time' => date(DATE_ATOM),
     ]);
 }
+
+// Database is loaded lazily inside controllers so health/CORS checks can succeed
+// even when the production DB configuration still needs adjustment.
 
 // Route requests to appropriate controllers
 if (strpos($requestPath, '/auth/') !== false) {

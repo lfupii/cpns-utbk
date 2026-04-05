@@ -500,6 +500,23 @@ button {
   padding: 0 0 3rem;
 }
 
+.landing-footer-note {
+  padding: 0 0 2.5rem;
+}
+
+.landing-footer-note-inner {
+  padding: 1.1rem 1.25rem;
+  border-top: 1px solid rgba(160, 179, 205, 0.35);
+  color: #5b677c;
+  font-size: 0.95rem;
+}
+
+.landing-footer-note-title {
+  margin-bottom: 0.35rem;
+  color: #1a2740;
+  font-weight: 700;
+}
+
 .landing-highlight-grid,
 .landing-bottom-grid,
 .landing-package-grid {

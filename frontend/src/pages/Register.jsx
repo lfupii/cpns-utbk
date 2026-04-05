@@ -125,19 +125,24 @@ export default function Register() {
           </button>
         </form>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
-          <p className="text-sm text-slate-700">
-            Setelah daftar, akun belum langsung aktif. Cek inbox email Anda lalu klik link verifikasi sebelum login.
-          </p>
-          <button
-            type="button"
-            onClick={handleResendVerification}
-            disabled={loading}
-            className="w-full btn btn-outline mt-3 disabled:opacity-50"
-          >
-            Kirim ulang email verifikasi
-          </button>
-        </div>
+        {registeredEmail && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-slate-700">
+              Setelah daftar, akun belum langsung aktif. Cek inbox email Anda lalu klik link verifikasi sebelum login.
+            </p>
+            <p className="text-sm text-slate-500 mt-2 break-all">
+              Email verifikasi akan dikirim ke: {registeredEmail}
+            </p>
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={loading}
+              className="w-full btn btn-outline mt-3 disabled:opacity-50"
+            >
+              Kirim ulang email verifikasi
+            </button>
+          </div>
+        )}
 
         {successMessage && (
           <button

@@ -58,7 +58,7 @@ define('SMTP_SECURE', env('SMTP_SECURE', SMTP_PORT === 465 ? 'ssl' : 'tls'));
 define('FROM_EMAIL', env('FROM_EMAIL', 'noreply@cpns-utbk.com'));
 define('FROM_NAME', env('FROM_NAME', 'CPNS UTBK 2026'));
 define('EMAIL_VERIFICATION_EXPIRY_HOURS', (int) env('EMAIL_VERIFICATION_EXPIRY_HOURS', 24));
-define('EMAIL_VERIFICATION_URL', env('EMAIL_VERIFICATION_URL', rtrim(API_URL, '/') . '/api/auth/verify-email'));
+define('EMAIL_VERIFICATION_URL', env('EMAIL_VERIFICATION_URL', rtrim(FRONTEND_URL, '/') . '/verify-email'));
 define('DEFAULT_ADMIN_EMAIL', env('DEFAULT_ADMIN_EMAIL', 'fadhlurrohmanluthfi@gmail.com'));
 define('DEFAULT_ADMIN_FULL_NAME', env('DEFAULT_ADMIN_FULL_NAME', 'Admin TO CPNS UTBK'));
 define('DEFAULT_ADMIN_PASSWORD_HASH', env('DEFAULT_ADMIN_PASSWORD_HASH', '$2y$12$4.8bTUnKgsWR/Js3cW.04uaQc9aerTIew7nPSpCf7V7aB2I3KQ8S2'));

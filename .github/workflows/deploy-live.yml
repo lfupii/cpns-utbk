@@ -76,7 +76,6 @@ jobs:
           FROM_EMAIL: ${{ secrets.PROD_FROM_EMAIL }}
           FROM_NAME: ${{ secrets.PROD_FROM_NAME }}
           EMAIL_VERIFICATION_EXPIRY_HOURS: ${{ secrets.PROD_EMAIL_VERIFICATION_EXPIRY_HOURS }}
-          EMAIL_VERIFICATION_URL: ${{ secrets.PROD_EMAIL_VERIFICATION_URL }}
           DEFAULT_ADMIN_EMAIL: ${{ secrets.PROD_DEFAULT_ADMIN_EMAIL }}
           DEFAULT_ADMIN_FULL_NAME: ${{ secrets.PROD_DEFAULT_ADMIN_FULL_NAME }}
           DEFAULT_ADMIN_PASSWORD_HASH: ${{ secrets.PROD_DEFAULT_ADMIN_PASSWORD_HASH }}
@@ -121,7 +120,6 @@ jobs:
           FROM_NAME="$(dotenv_escape "${FROM_NAME}")"
 
           EMAIL_VERIFICATION_EXPIRY_HOURS="$(dotenv_escape "${EMAIL_VERIFICATION_EXPIRY_HOURS}")"
-          EMAIL_VERIFICATION_URL="$(dotenv_escape "${EMAIL_VERIFICATION_URL}")"
 
           DEFAULT_ADMIN_EMAIL="$(dotenv_escape "${DEFAULT_ADMIN_EMAIL}")"
           DEFAULT_ADMIN_FULL_NAME="$(dotenv_escape "${DEFAULT_ADMIN_FULL_NAME}")"

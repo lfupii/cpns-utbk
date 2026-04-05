@@ -36,6 +36,87 @@ class AuthController {
         return $token;
     }
 
+    private function getVerificationRedirectUrl(string $token = ''): string {
+        $baseUrl = rtrim(FRONTEND_URL, '/') . '/verify-email';
+        if ($token === '') {
+            return $baseUrl;
+        }
+
+        return $baseUrl . '?token=' . rawurlencode($token);
+    }
+
+    private function findUserByVerificationToken(string $token): ?array {
+        $query = "SELECT id, email, full_name, email_verified_at, email_verification_expires_at
+                  FROM users
+                  WHERE email_verification_token = ?
+                  LIMIT 1";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('s', $token);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+
+        return $user ?: null;
+    }
+
+    private function getVerificationState(string $token): array {
+        if ($token === '') {
+            return [
+                'success' => false,
+                'code' => 'missing_token',
+                'message' => 'Token verifikasi tidak ditemukan.',
+                'http_code' => 400,
+            ];
+        }
+
+        $user = $this->findUserByVerificationToken($token);
+        if (!$user) {
+            return [
+                'success' => false,
+                'code' => 'invalid_token',
+                'message' => 'Link verifikasi tidak valid atau sudah pernah digunakan.',
+                'http_code' => 404,
+            ];
+        }
+
+        if (!empty($user['email_verified_at'])) {
+            return [
+                'success' => true,
+                'code' => 'already_verified',
+                'message' => 'Email sudah terverifikasi. Silakan langsung login.',
+                'http_code' => 200,
+                'data' => [
+                    'email' => $user['email'],
+                    'email_verified' => true,
+                ],
+            ];
+        }
+
+        if (!empty($user['email_verification_expires_at']) && strtotime($user['email_verification_expires_at']) < time()) {
+            return [
+                'success' => false,
+                'code' => 'expired_token',
+                'message' => 'Masa berlaku link verifikasi sudah habis. Silakan kirim ulang email verifikasi.',
+                'http_code' => 410,
+                'data' => [
+                    'email' => $user['email'],
+                    'email_verified' => false,
+                ],
+            ];
+        }
+
+        return [
+            'success' => true,
+            'code' => 'ready_to_verify',
+            'message' => 'Token valid. Lanjutkan verifikasi email.',
+            'http_code' => 200,
+            'data' => [
+                'email' => $user['email'],
+                'full_name' => $user['full_name'],
+                'email_verified' => false,
+            ],
+        ];
+    }
+
     private function renderVerificationPage(string $title, string $message, bool $success): void {
         http_response_code($success ? 200 : 400);
         header('Content-Type: text/html; charset=UTF-8');
@@ -276,48 +357,49 @@ class AuthController {
         ]);
     }
 
-    public function verifyEmail() {
+    public function getVerificationStatus() {
         $token = trim((string) ($_GET['token'] ?? ''));
+        $state = $this->getVerificationState($token);
 
-        if ($token === '') {
-            $this->renderVerificationPage(
-                'Verifikasi gagal',
-                'Token verifikasi tidak ditemukan. Silakan minta kirim ulang email verifikasi dari halaman login atau pendaftaran.',
-                false
-            );
+        sendResponse(
+            $state['success'] ? 'success' : 'error',
+            $state['message'],
+            [
+                'code' => $state['code'],
+                'token' => $token !== '',
+            ] + ($state['data'] ?? []),
+            $state['http_code']
+        );
+    }
+
+    public function verifyEmail() {
+        $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+        if ($requestMethod === 'GET') {
+            $token = trim((string) ($_GET['token'] ?? ''));
+            header('Location: ' . $this->getVerificationRedirectUrl($token), true, 302);
+            exit();
         }
 
-        $query = "SELECT id, full_name, email_verified_at, email_verification_expires_at
-                  FROM users
-                  WHERE email_verification_token = ?
-                  LIMIT 1";
-        $stmt = $this->mysqli->prepare($query);
-        $stmt->bind_param('s', $token);
-        $stmt->execute();
-        $user = $stmt->get_result()->fetch_assoc();
+        $data = json_decode(file_get_contents('php://input'), true);
+        $token = trim((string) ($data['token'] ?? ''));
+        $state = $this->getVerificationState($token);
 
+        if ($state['code'] === 'already_verified') {
+            sendResponse('success', $state['message'], $state['data'] ?? [], 200);
+        }
+
+        if (!$state['success'] || $state['code'] !== 'ready_to_verify') {
+            sendResponse('error', $state['message'], [
+                'code' => $state['code'],
+            ] + ($state['data'] ?? []), $state['http_code']);
+        }
+
+        $user = $this->findUserByVerificationToken($token);
         if (!$user) {
-            $this->renderVerificationPage(
-                'Link tidak valid',
-                'Link verifikasi tidak valid atau sudah pernah digunakan. Silakan minta kirim ulang email verifikasi.',
-                false
-            );
-        }
-
-        if (!empty($user['email_verified_at'])) {
-            $this->renderVerificationPage(
-                'Email sudah aktif',
-                'Email ini sebenarnya sudah terverifikasi. Kamu bisa langsung login dan melanjutkan tryout.',
-                true
-            );
-        }
-
-        if (!empty($user['email_verification_expires_at']) && strtotime($user['email_verification_expires_at']) < time()) {
-            $this->renderVerificationPage(
-                'Link kedaluwarsa',
-                'Masa berlaku link verifikasi sudah habis. Silakan minta kirim ulang email verifikasi agar mendapatkan link baru.',
-                false
-            );
+            sendResponse('error', 'Link verifikasi tidak valid atau sudah pernah digunakan.', [
+                'code' => 'invalid_token',
+            ], 404);
         }
 
         $updateQuery = "UPDATE users
@@ -330,11 +412,10 @@ class AuthController {
         $stmt->bind_param('i', $user['id']);
         $stmt->execute();
 
-        $this->renderVerificationPage(
-            'Email berhasil diverifikasi',
-            'Akunmu sekarang sudah aktif. Terima kasih sudah bergabung di TO CPNS UTBK. Semoga setiap latihanmu dilancarkan dan membawamu makin dekat ke target UTBK atau CPNS yang kamu perjuangkan.',
-            true
-        );
+        sendResponse('success', 'Email berhasil diverifikasi. Silakan login untuk mulai tryout.', [
+            'email' => $user['email'],
+            'email_verified' => true,
+        ]);
     }
 
     public function updateProfile() {
@@ -467,7 +548,11 @@ $controller = new AuthController($mysqli);
 
 if (strpos($requestPath, '/api/auth/register') !== false && $requestMethod === 'POST') {
     $controller->register();
+} elseif (strpos($requestPath, '/api/auth/verify-email-status') !== false && $requestMethod === 'GET') {
+    $controller->getVerificationStatus();
 } elseif (strpos($requestPath, '/api/auth/verify-email') !== false && $requestMethod === 'GET') {
+    $controller->verifyEmail();
+} elseif (strpos($requestPath, '/api/auth/verify-email') !== false && $requestMethod === 'POST') {
     $controller->verifyEmail();
 } elseif (strpos($requestPath, '/api/auth/resend-verification') !== false && $requestMethod === 'POST') {
     $controller->resendVerificationEmail();

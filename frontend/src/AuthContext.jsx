@@ -136,6 +136,54 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const getVerificationStatus = useCallback(async (tokenValue) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.get(`/auth/verify-email-status?token=${encodeURIComponent(tokenValue)}`);
+      return {
+        success: true,
+        message: response.data.message,
+        data: response.data.data,
+      };
+    } catch (err) {
+      const message = err.response?.data?.message || 'Status verifikasi tidak dapat diperiksa';
+      setError(message);
+      return {
+        success: false,
+        status: err.response?.status || 0,
+        message,
+        data: err.response?.data?.data || null,
+      };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const verifyEmail = useCallback(async (tokenValue) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.post('/auth/verify-email', { token: tokenValue });
+      return {
+        success: true,
+        message: response.data.message,
+        data: response.data.data,
+      };
+    } catch (err) {
+      const message = err.response?.data?.message || 'Verifikasi email gagal';
+      setError(message);
+      return {
+        success: false,
+        status: err.response?.status || 0,
+        message,
+        data: err.response?.data?.data || null,
+      };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const refreshProfile = useCallback(async () => {
     if (!localStorage.getItem('token')) {
       return null;
@@ -168,7 +216,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, error, login, register, resendVerification, refreshProfile, logout, isAuthenticated, isAdmin }}
+      value={{ user, token, loading, error, login, register, resendVerification, getVerificationStatus, verifyEmail, refreshProfile, logout, isAuthenticated, isAdmin }}
     >
       {children}
     </AuthContext.Provider>

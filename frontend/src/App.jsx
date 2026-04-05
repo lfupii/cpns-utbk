@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
 import Home from './pages/Home';
 import Payment from './pages/Payment';
 import Test from './pages/Test';
@@ -35,6 +36,7 @@ function AppRoutes() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
       <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <Register />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route
         path="/payment/:packageId"
         element={

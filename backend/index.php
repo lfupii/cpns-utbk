@@ -1,0 +1,45 @@
+<?php
+// Load environment variables first
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require_once __DIR__ . '/vendor/autoload.php';
+    $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+    $dotenv->safeLoad();
+} else {
+    error_log('Composer autoload not found. Run "composer install" in backend.');
+}
+
+// Main API Router
+require_once __DIR__ . '/middleware/Response.php';
+
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+// Load environment variables after CORS handling to avoid preflight failure
+require_once __DIR__ . '/config/Database.php';
+
+// Remove /api from the path if it exists
+$requestPath = str_replace('/api', '', $requestUri);
+
+if ($requestPath === '' || $requestPath === '/' || $requestPath === '/health') {
+    sendResponse('success', 'API aktif', [
+        'service' => 'cpns-utbk-api',
+        'status' => 'ok',
+        'environment' => MIDTRANS_IS_PRODUCTION ? 'production' : 'sandbox',
+        'time' => date(DATE_ATOM),
+    ]);
+}
+
+// Route requests to appropriate controllers
+if (strpos($requestPath, '/auth/') !== false) {
+    require_once __DIR__ . '/controllers/AuthController.php';
+} elseif (strpos($requestPath, '/admin/') !== false) {
+    require_once __DIR__ . '/controllers/AdminController.php';
+} elseif (strpos($requestPath, '/payment/') !== false) {
+    require_once __DIR__ . '/controllers/PaymentController.php';
+} elseif (strpos($requestPath, '/questions/') !== false) {
+    require_once __DIR__ . '/controllers/QuestionController.php';
+} elseif (strpos($requestPath, '/test/') !== false) {
+    require_once __DIR__ . '/controllers/TestController.php';
+} else {
+    sendResponse('error', 'Endpoint tidak ditemukan', null, 404);
+}

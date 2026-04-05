@@ -1,0 +1,16 @@
+{
+  "name": "cpns-utbk-2026",
+  "version": "1.0.0",
+  "description": "Platform Tryout CPNS & UTBK 2026 dengan system pembayaran Midtrans",
+  "author": "Your Name",
+  "license": "MIT",
+  "keywords": [
+    "cpns",
+    "utbk",
+    "test",
+    "tryout",
+    "react",
+    "php",
+    "midtrans"
+  ]
+}

@@ -522,8 +522,8 @@ export default function Test() {
 
   return (
     <div className="min-h-screen bg-gray-100 test-shell">
-      <div className="bg-white shadow-lg test-topbar">
-        <div className="container mx-auto px-4 py-5">
+      <div className="test-topbar">
+        <div className="container mx-auto px-4 pt-9 pb-4">
           <div className="test-header-copy">
             <h1 className="test-header-title">
               {isCpnsMode ? 'Tryout CPNS' : 'Tryout UTBK'}

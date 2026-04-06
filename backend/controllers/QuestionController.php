@@ -91,6 +91,41 @@ class QuestionController {
         return $sectionCounts;
     }
 
+    private function buildQuestionShuffleKey(int $attemptId, array $question): string {
+        $sectionCode = (string) ($question['section_code'] ?? 'general');
+        $questionId = (int) ($question['id'] ?? 0);
+
+        return hash('sha256', $attemptId . '|' . $sectionCode . '|' . $questionId);
+    }
+
+    private function sortQuestionsForAttempt(array $questions, int $attemptId): array {
+        usort($questions, function (array $left, array $right) use ($attemptId): int {
+            $leftSectionOrder = (int) ($left['section_order'] ?? 1);
+            $rightSectionOrder = (int) ($right['section_order'] ?? 1);
+
+            if ($leftSectionOrder !== $rightSectionOrder) {
+                return $leftSectionOrder <=> $rightSectionOrder;
+            }
+
+            $leftSectionCode = (string) ($left['section_code'] ?? '');
+            $rightSectionCode = (string) ($right['section_code'] ?? '');
+            if ($leftSectionCode !== $rightSectionCode) {
+                return strcmp($leftSectionCode, $rightSectionCode);
+            }
+
+            $leftKey = $this->buildQuestionShuffleKey($attemptId, $left);
+            $rightKey = $this->buildQuestionShuffleKey($attemptId, $right);
+            $comparison = strcmp($leftKey, $rightKey);
+            if ($comparison !== 0) {
+                return $comparison;
+            }
+
+            return ((int) ($left['id'] ?? 0)) <=> ((int) ($right['id'] ?? 0));
+        });
+
+        return $questions;
+    }
+
     public function getPackages() {
         $query = "SELECT tp.*, tc.name AS category_name
                   FROM test_packages tp
@@ -185,6 +220,8 @@ class QuestionController {
 
             $questions[] = $row;
         }
+
+        $questions = $this->sortQuestionsForAttempt($questions, $attemptId);
 
         $sections = [];
         foreach ($workflow['sections'] as $section) {

@@ -1239,6 +1239,10 @@ button {
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
 }
 
+.admin-grid-questions-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .admin-sidebar {
   align-self: start;
 }
@@ -1471,6 +1475,13 @@ button {
   display: flex;
   gap: 0.55rem;
   flex-wrap: wrap;
+}
+
+.admin-empty-state {
+  margin-top: 0.95rem;
+  display: grid;
+  gap: 0.8rem;
+  justify-items: start;
 }
 
 .admin-main-card .account-form-grid {

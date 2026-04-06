@@ -35,6 +35,7 @@ export default function AdminPanel() {
   const [success, setSuccess] = useState('');
   const [packageForm, setPackageForm] = useState(null);
   const [questionForm, setQuestionForm] = useState(createEmptyQuestionForm());
+  const [showQuestionEditor, setShowQuestionEditor] = useState(false);
 
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
@@ -113,6 +114,7 @@ export default function AdminPanel() {
 
   const resetQuestionForm = () => {
     setQuestionForm(createEmptyQuestionForm(defaultSectionCode));
+    setShowQuestionEditor(false);
   };
 
   const handlePackageChange = (event) => {
@@ -262,6 +264,14 @@ export default function AdminPanel() {
     });
     setSuccess('');
     setError('');
+    setShowQuestionEditor(true);
+  };
+
+  const handleCreateQuestion = () => {
+    setQuestionForm(createEmptyQuestionForm(defaultSectionCode));
+    setSuccess('');
+    setError('');
+    setShowQuestionEditor(true);
   };
 
   const handleQuestionDelete = async (questionId) => {
@@ -411,18 +421,17 @@ export default function AdminPanel() {
             </section>
           </div>
 
-          <div className="admin-grid admin-grid-questions">
+          <div className={`admin-grid admin-grid-questions ${showQuestionEditor ? '' : 'admin-grid-questions-collapsed'}`}>
+            {showQuestionEditor && (
             <section className="account-card admin-main-card admin-panel-card admin-editor-card">
               <div className="admin-section-header">
                 <div>
                   <h2>{questionForm.question_id ? 'Edit Soal' : 'Tambah Soal Baru'}</h2>
                   <p className="text-muted">Atur teks soal, tingkat kesulitan, dan jawaban benar.</p>
                 </div>
-                {questionForm.question_id && (
-                  <button type="button" className="btn btn-outline" onClick={resetQuestionForm}>
-                    Buat Soal Baru
-                  </button>
-                )}
+                <button type="button" className="btn btn-outline" onClick={resetQuestionForm}>
+                  Tutup Editor
+                </button>
               </div>
 
               <form onSubmit={handleQuestionSubmit} className="admin-question-form">
@@ -517,9 +526,15 @@ export default function AdminPanel() {
                   <button type="submit" className="btn btn-primary" disabled={questionSaving}>
                     {questionSaving ? 'Menyimpan...' : questionForm.question_id ? 'Update Soal' : 'Tambah Soal'}
                   </button>
+                  {questionForm.question_id && (
+                    <button type="button" className="btn btn-outline" onClick={handleCreateQuestion}>
+                      Ganti Jadi Soal Baru
+                    </button>
+                  )}
                 </div>
               </form>
             </section>
+            )}
 
             <section className="account-card admin-main-card admin-panel-card admin-list-card">
               <div className="admin-section-header">
@@ -529,12 +544,20 @@ export default function AdminPanel() {
                     {selectedPackage ? `${selectedPackage.name} • ${questions.length} soal` : 'Pilih paket terlebih dahulu'}
                   </p>
                 </div>
+                <button type="button" className="btn btn-primary" onClick={handleCreateQuestion}>
+                  Tambah Soal
+                </button>
               </div>
 
               {loadingQuestions ? (
                 <p>Memuat soal...</p>
               ) : questions.length === 0 ? (
-                <p className="text-muted">Belum ada soal untuk paket ini.</p>
+                <div className="admin-empty-state">
+                  <p className="text-muted">Belum ada soal untuk paket ini.</p>
+                  <button type="button" className="btn btn-outline" onClick={handleCreateQuestion}>
+                    Tambah Soal Pertama
+                  </button>
+                </div>
               ) : (
                 <div className="admin-question-list">
                   {questions.map((question, index) => (

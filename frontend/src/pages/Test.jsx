@@ -524,45 +524,15 @@ export default function Test() {
     <div className="min-h-screen bg-gray-100 test-shell">
       <div className="bg-white shadow-lg test-topbar">
         <div className="container mx-auto px-4 py-5">
-          <div className="test-header-panel">
-            <div className="test-header-copy">
-              <span className="test-header-badge">
-                {isCpnsMode ? 'Mode CPNS' : 'Mode UTBK'}
-              </span>
-              <h1 className="test-header-title">
-                {isCpnsMode ? 'Tryout CPNS' : 'Tryout UTBK'}
-              </h1>
-              <p className="test-header-description">
-                {isCpnsMode
-                  ? 'Navigasi soal bebas dan jawaban akan langsung tersimpan saat dipilih.'
-                  : 'Kerjakan tiap bagian sesuai alur tryout dan pantau waktu yang masih tersedia.'}
-              </p>
-            </div>
-
-            <div className="test-header-stats">
-              <div className="test-header-stat">
-                <p className="test-header-stat-label">Terjawab</p>
-                <p className="test-header-stat-value">{answeredCount} / {totalQuestionCount}</p>
-              </div>
-              <div className="test-header-stat">
-                <p className="test-header-stat-label">
-                  {isUtbkMode ? 'Sisa Waktu Subtes' : 'Sisa Waktu'}
-                </p>
-                <p className={`test-header-stat-value ${
-                  (isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds) < 300
-                    ? 'test-header-stat-value-danger'
-                    : 'test-header-stat-value-success'
-                }`}>
-                  {formatTime(isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds)}
-                </p>
-              </div>
-              {isUtbkMode && (
-                <div className="test-header-stat">
-                  <p className="test-header-stat-label">Sisa Waktu Total</p>
-                  <p className="test-header-stat-value">{formatTime(attemptState.remainingSeconds)}</p>
-                </div>
-              )}
-            </div>
+          <div className="test-header-copy">
+            <h1 className="test-header-title">
+              {isCpnsMode ? 'Tryout CPNS' : 'Tryout UTBK'}
+            </h1>
+            <p className="test-header-description">
+              {isCpnsMode
+                ? 'Navigasi soal bebas dan jawaban akan langsung tersimpan saat dipilih.'
+                : 'Kerjakan tiap bagian sesuai alur tryout dan pantau waktu yang masih tersedia.'}
+            </p>
           </div>
         </div>
       </div>
@@ -579,8 +549,8 @@ export default function Test() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-3">
+        <div className="test-layout-grid">
+          <div className="test-main-column">
             <div className="card test-question-card">
               <div key={currentQuestion.id} className="test-question-stage">
               <div className="mb-6">
@@ -704,62 +674,89 @@ export default function Test() {
             </div>
           </div>
 
-          <div className="card test-sidebar-card">
-            <h3 className="font-bold mb-4">Navigasi Soal</h3>
+          <div className="test-sidebar-column">
+            <div className="test-sidebar-metrics">
+              <div className="test-header-stat">
+                <p className="test-header-stat-label">Terjawab</p>
+                <p className="test-header-stat-value">{answeredCount} / {totalQuestionCount}</p>
+              </div>
+              <div className="test-header-stat">
+                <p className="test-header-stat-label">
+                  {isUtbkMode ? 'Sisa Waktu Subtes' : 'Sisa Waktu'}
+                </p>
+                <p className={`test-header-stat-value ${
+                  (isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds) < 300
+                    ? 'test-header-stat-value-danger'
+                    : 'test-header-stat-value-success'
+                }`}>
+                  {formatTime(isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds)}
+                </p>
+              </div>
+              {isUtbkMode && (
+                <div className="test-header-stat">
+                  <p className="test-header-stat-label">Sisa Waktu Total</p>
+                  <p className="test-header-stat-value">{formatTime(attemptState.remainingSeconds)}</p>
+                </div>
+              )}
+            </div>
 
-            {isCpnsMode ? (
-              <>
-                <div className="grid grid-cols-4 gap-2">
-                  {questions.map((question, index) => {
+            <div className="card test-sidebar-card">
+              <h3 className="font-bold mb-4">Navigasi Soal</h3>
+
+              {isCpnsMode ? (
+                <>
+                  <div className="grid grid-cols-4 gap-2">
+                    {questions.map((question, index) => {
+                      const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
+
+                      return (
+                        <button
+                          key={question.id}
+                          onClick={() => goToQuestion(question.id)}
+                          className={`w-full py-2 rounded font-semibold transition test-nav-chip ${
+                            Number(question.id) === Number(currentQuestion?.id)
+                              ? 'bg-blue-600 text-white'
+                              : savedValue
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-700'
+                          }`}
+                        >
+                          {index + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 pt-4 border-t text-xs text-gray-600 space-y-2">
+                    <p><span className="inline-block w-3 h-3 rounded bg-green-100 mr-2" />Sudah tersimpan</p>
+                    <p><span className="inline-block w-3 h-3 rounded bg-red-100 mr-2" />Belum dijawab</p>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  {activeQuestions.map((question, index) => {
                     const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
-
                     return (
                       <button
                         key={question.id}
                         onClick={() => goToQuestion(question.id)}
-                        className={`w-full py-2 rounded font-semibold transition test-nav-chip ${
+                        className={`w-full rounded-lg border px-4 py-3 text-left test-subtest-chip ${
                           Number(question.id) === Number(currentQuestion?.id)
-                            ? 'bg-blue-600 text-white'
+                            ? 'border-blue-500 bg-blue-50'
                             : savedValue
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-700'
+                            ? 'border-green-300 bg-green-50'
+                            : 'border-gray-200 bg-white'
                         }`}
                       >
-                        {index + 1}
+                        <p className="font-semibold">Soal {index + 1}</p>
+                        <p className="text-xs text-gray-600">
+                          {savedValue ? 'Sudah dijawab' : 'Belum dijawab'}
+                        </p>
                       </button>
                     );
                   })}
                 </div>
-                <div className="mt-4 pt-4 border-t text-xs text-gray-600 space-y-2">
-                  <p><span className="inline-block w-3 h-3 rounded bg-green-100 mr-2" />Sudah tersimpan</p>
-                  <p><span className="inline-block w-3 h-3 rounded bg-red-100 mr-2" />Belum dijawab</p>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-3">
-                {activeQuestions.map((question, index) => {
-                  const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
-                  return (
-                    <button
-                      key={question.id}
-                      onClick={() => goToQuestion(question.id)}
-                      className={`w-full rounded-lg border px-4 py-3 text-left test-subtest-chip ${
-                        Number(question.id) === Number(currentQuestion?.id)
-                          ? 'border-blue-500 bg-blue-50'
-                          : savedValue
-                          ? 'border-green-300 bg-green-50'
-                          : 'border-gray-200 bg-white'
-                      }`}
-                    >
-                      <p className="font-semibold">Soal {index + 1}</p>
-                      <p className="text-xs text-gray-600">
-                        {savedValue ? 'Sudah dijawab' : 'Belum dijawab'}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>

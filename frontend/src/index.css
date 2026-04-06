@@ -1217,11 +1217,11 @@ button {
 
 .admin-layout {
   display: grid;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .admin-message-card {
-  padding: 1.25rem;
+  padding: 1rem 1.1rem;
 }
 
 .admin-message-card .alert,
@@ -1232,7 +1232,7 @@ button {
 .admin-grid {
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .admin-grid-questions {
@@ -1243,25 +1243,37 @@ button {
   align-self: start;
 }
 
+.admin-sticky-card {
+  position: sticky;
+  top: 1rem;
+}
+
+.admin-panel-card {
+  padding: 1.3rem;
+}
+
 .admin-sidebar h2,
 .admin-main-card h2 {
-  font-size: 1.5rem;
+  font-size: 1.32rem;
   line-height: 1.1;
   color: #132038;
 }
 
 .admin-package-switcher {
-  margin-top: 1.25rem;
+  margin-top: 0.9rem;
   display: grid;
-  gap: 0.9rem;
+  gap: 0.65rem;
+  max-height: 460px;
+  overflow: auto;
+  padding-right: 0.25rem;
 }
 
 .admin-package-switch {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  padding: 1rem 1.1rem;
-  border-radius: 1.2rem;
+  padding: 0.8rem 0.95rem;
+  border-radius: 1rem;
   border: 1px solid rgba(214, 226, 240, 0.95);
   background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
   text-align: left;
@@ -1270,13 +1282,14 @@ button {
 }
 
 .admin-package-switch strong {
-  font-size: 1rem;
+  font-size: 0.94rem;
   color: #16243c;
 }
 
 .admin-package-switch span {
   color: #607089;
   font-weight: 700;
+  font-size: 0.84rem;
 }
 
 .admin-package-switch:hover {
@@ -1293,12 +1306,12 @@ button {
 
 .admin-package-form,
 .admin-question-form {
-  margin-top: 1.25rem;
+  margin-top: 0.95rem;
 }
 
 .admin-question-form {
   display: grid;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .form-group-full {
@@ -1310,6 +1323,18 @@ button {
   align-items: start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.admin-section-header-compact {
+  align-items: center;
+}
+
+.admin-section-header p {
+  margin-top: 0.28rem;
+}
+
+.admin-meta-pill {
+  white-space: nowrap;
 }
 
 .admin-options-header {
@@ -1326,21 +1351,21 @@ button {
 
 .admin-options-list {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.7rem;
 }
 
 .admin-option-row {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
-  gap: 0.75rem;
+  gap: 0.55rem;
   align-items: center;
 }
 
 .admin-correct-toggle {
-  min-width: 74px;
-  min-height: 46px;
-  padding: 0 0.9rem;
-  border-radius: 0.95rem;
+  min-width: 68px;
+  min-height: 42px;
+  padding: 0 0.75rem;
+  border-radius: 0.85rem;
   border: 1px solid rgba(203, 213, 225, 0.95);
   background: #ffffff;
   color: #51627f;
@@ -1357,8 +1382,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
   background: rgba(45, 140, 255, 0.1);
   color: #1f6fd7;
@@ -1367,9 +1392,9 @@ button {
 
 .admin-option-row input {
   width: 100%;
-  min-height: 48px;
-  padding: 0 1rem;
-  border-radius: 1rem;
+  min-height: 44px;
+  padding: 0 0.85rem;
+  border-radius: 0.9rem;
   border: 1px solid #cbd5e1;
   background: #ffffff;
 }
@@ -1381,18 +1406,21 @@ button {
 }
 
 .admin-option-delete {
-  min-width: 96px;
+  min-width: 86px;
 }
 
 .admin-question-list {
-  margin-top: 1.25rem;
+  margin-top: 0.95rem;
   display: grid;
-  gap: 1rem;
+  gap: 0.8rem;
+  max-height: 72vh;
+  overflow: auto;
+  padding-right: 0.25rem;
 }
 
 .admin-question-item {
-  padding: 1.2rem;
-  border-radius: 1.25rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
   border: 1px solid rgba(214, 226, 240, 0.95);
   background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
 }
@@ -1405,43 +1433,96 @@ button {
 }
 
 .admin-question-top h3 {
-  margin-top: 0.8rem;
-  font-size: 1.12rem;
-  line-height: 1.45;
+  margin-top: 0.55rem;
+  font-size: 1rem;
+  line-height: 1.4;
   color: #1a2740;
 }
 
 .admin-question-options-preview {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.5rem;
 }
 
 .admin-question-options-preview p {
-  padding: 0.9rem 1rem;
-  border-radius: 1rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.85rem;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(214, 226, 240, 0.95);
   color: #40516a;
+  font-size: 0.93rem;
 }
 
 .admin-correct-badge {
   display: inline-flex;
   align-items: center;
   margin-left: 0.75rem;
-  padding: 0.35rem 0.65rem;
+  padding: 0.3rem 0.55rem;
   border-radius: 999px;
   background: rgba(16, 185, 129, 0.12);
   color: #047857;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 800;
 }
 
 .admin-question-actions {
-  margin-top: 1rem;
+  margin-top: 0.8rem;
   display: flex;
-  gap: 0.75rem;
+  gap: 0.55rem;
   flex-wrap: wrap;
+}
+
+.admin-main-card .account-form-grid {
+  gap: 0.85rem 1rem;
+}
+
+.admin-main-card .form-group label {
+  margin-bottom: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.admin-main-card input,
+.admin-main-card select,
+.admin-main-card textarea {
+  min-height: 44px;
+  padding: 0.78rem 0.9rem;
+  border-radius: 0.95rem;
+}
+
+.admin-main-card textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.admin-main-card .account-form-actions {
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(214, 226, 240, 0.8);
+}
+
+.admin-editor-card,
+.admin-list-card {
+  min-height: 72vh;
+}
+
+.admin-editor-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-editor-card .admin-question-form {
+  flex: 1;
+}
+
+@media (min-width: 1081px) {
+  .admin-layout {
+    padding-bottom: 0.5rem;
+  }
+
+  .admin-main-card textarea[name='question_text'] {
+    min-height: 130px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1492,6 +1573,22 @@ button {
   .admin-grid,
   .admin-grid-questions {
     grid-template-columns: 1fr;
+  }
+
+  .admin-sticky-card {
+    position: static;
+  }
+
+  .admin-package-switcher,
+  .admin-question-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .admin-editor-card,
+  .admin-list-card {
+    min-height: auto;
   }
 
   .account-history-score {

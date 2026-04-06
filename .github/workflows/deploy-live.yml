@@ -138,11 +138,15 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           lftp -e "
-          set net:max-retries 2
-          set net:timeout 20
+          set cmd:fail-exit true
+          set net:max-retries 6
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-max 30
+          set net:timeout 40
           set ftp:passive-mode true
+          set ftp:prefer-epsv false
           open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
-          mirror -R --verbose=2 --parallel=2 frontend/dist .
+          mirror -R --verbose=2 --parallel=1 frontend/dist .
           bye
           "
 
@@ -154,10 +158,14 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           lftp -e "
-          set net:max-retries 2
-          set net:timeout 20
+          set cmd:fail-exit true
+          set net:max-retries 6
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-max 30
+          set net:timeout 40
           set ftp:passive-mode true
+          set ftp:prefer-epsv false
           open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
-          mirror -R --verbose=2 --parallel=2 .deploy/backend api
+          mirror -R --verbose=2 --parallel=1 .deploy/backend api
           bye
           "

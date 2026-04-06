@@ -1579,11 +1579,12 @@ textarea:focus-visible {
 .test-topbar {
   position: relative;
   overflow: hidden;
+  background: transparent;
 }
 
 .test-header-copy {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.45rem;
 }
 
 .test-header-title {

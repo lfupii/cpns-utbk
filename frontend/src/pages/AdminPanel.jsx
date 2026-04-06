@@ -309,9 +309,14 @@ export default function AdminPanel() {
           )}
 
           <div className="admin-grid">
-            <section className="account-card admin-sidebar">
-              <h2>Paket Aktif</h2>
-              <p className="text-muted">Pilih paket yang ingin dikelola.</p>
+            <section className="account-card admin-sidebar admin-sticky-card">
+              <div className="admin-section-header admin-section-header-compact">
+                <div>
+                  <h2>Paket Aktif</h2>
+                  <p className="text-muted">Pilih paket yang ingin dikelola.</p>
+                </div>
+                <span className="account-package-tag admin-meta-pill">{packages.length} paket</span>
+              </div>
               <div className="admin-package-switcher">
                 {packages.map((pkg) => (
                   <button
@@ -330,8 +335,18 @@ export default function AdminPanel() {
               </div>
             </section>
 
-            <section className="account-card admin-main-card">
-              <h2>Pengaturan Paket</h2>
+            <section className="account-card admin-main-card admin-panel-card">
+              <div className="admin-section-header admin-section-header-compact">
+                <div>
+                  <h2>Pengaturan Paket</h2>
+                  <p className="text-muted">Harga, akses, dan mekanisme ujian.</p>
+                </div>
+                {selectedPackage && (
+                  <span className="account-package-tag admin-meta-pill">
+                    {selectedPackage.test_mode === 'utbk_sectioned' ? 'UTBK Bertahap' : 'CPNS CAT'}
+                  </span>
+                )}
+              </div>
               {packageForm && (
                 <form className="admin-package-form" onSubmit={handlePackageSave}>
                   <div className="account-form-grid">
@@ -397,7 +412,7 @@ export default function AdminPanel() {
           </div>
 
           <div className="admin-grid admin-grid-questions">
-            <section className="account-card admin-main-card">
+            <section className="account-card admin-main-card admin-panel-card admin-editor-card">
               <div className="admin-section-header">
                 <div>
                   <h2>{questionForm.question_id ? 'Edit Soal' : 'Tambah Soal Baru'}</h2>
@@ -506,7 +521,7 @@ export default function AdminPanel() {
               </form>
             </section>
 
-            <section className="account-card admin-main-card">
+            <section className="account-card admin-main-card admin-panel-card admin-list-card">
               <div className="admin-section-header">
                 <div>
                   <h2>Daftar Soal</h2>

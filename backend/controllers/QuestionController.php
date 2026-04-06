@@ -10,19 +10,21 @@ class QuestionController {
         $this->mysqli = $mysqli;
     }
 
-    private function getAttemptWithPackage(int $userId, int $packageId, int $attemptId): array {
-        $accessQuery = "SELECT ua.id
-                        FROM user_access ua
-                        WHERE ua.user_id = ? AND ua.package_id = ? AND ua.access_status = 'active'
-                          AND (ua.access_expires_at IS NULL OR ua.access_expires_at > NOW())
-                        LIMIT 1";
-        $stmt = $this->mysqli->prepare($accessQuery);
-        $stmt->bind_param('ii', $userId, $packageId);
-        $stmt->execute();
-        $access = $stmt->get_result()->fetch_assoc();
+    private function getAttemptWithPackage(int $userId, int $packageId, int $attemptId, bool $isAdmin = false): array {
+        if (!$isAdmin) {
+            $accessQuery = "SELECT ua.id
+                            FROM user_access ua
+                            WHERE ua.user_id = ? AND ua.package_id = ? AND ua.access_status = 'active'
+                              AND (ua.access_expires_at IS NULL OR ua.access_expires_at > NOW())
+                            LIMIT 1";
+            $stmt = $this->mysqli->prepare($accessQuery);
+            $stmt->bind_param('ii', $userId, $packageId);
+            $stmt->execute();
+            $access = $stmt->get_result()->fetch_assoc();
 
-        if (!$access) {
-            sendResponse('error', 'Anda belum memiliki akses aktif ke paket ini', null, 403);
+            if (!$access) {
+                sendResponse('error', 'Anda belum memiliki akses aktif ke paket ini', null, 403);
+            }
         }
 
         $attemptQuery = "SELECT ta.*, tp.name AS package_name, tp.question_count, tp.time_limit, tp.test_mode, tp.workflow_config, tc.name AS category_name
@@ -154,7 +156,12 @@ class QuestionController {
             sendResponse('error', 'Package ID dan Attempt ID harus diisi', null, 400);
         }
 
-        $attempt = $this->getAttemptWithPackage((int) $tokenData['userId'], $packageId, $attemptId);
+        $attempt = $this->getAttemptWithPackage(
+            (int) $tokenData['userId'],
+            $packageId,
+            $attemptId,
+            userHasRole($tokenData, $this->mysqli, 'admin')
+        );
         $workflow = TestWorkflow::buildPackageWorkflow($attempt);
         $attemptState = TestWorkflow::computeAttemptState($attempt, $workflow);
         $savedAnswers = $this->getSavedAnswers($attemptId);

@@ -90,24 +90,34 @@ function verifyToken() {
     return $decoded;
 }
 
-function verifyAdmin() {
-    $decoded = verifyToken();
-
-    if (($decoded['role'] ?? null) === 'admin') {
-        return $decoded;
+function userHasRole(array $decoded, mysqli $mysqli, string $role): bool {
+    if (($decoded['role'] ?? null) === $role) {
+        return true;
     }
 
-    require_once __DIR__ . '/../config/Database.php';
+    $userId = (int) ($decoded['userId'] ?? 0);
+    if ($userId <= 0) {
+        return false;
+    }
+
     $stmt = $mysqli->prepare('SELECT role FROM users WHERE id = ? LIMIT 1');
-    $stmt->bind_param('i', $decoded['userId']);
+    $stmt->bind_param('i', $userId);
     $stmt->execute();
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
 
-    if (!$user || ($user['role'] ?? 'user') !== 'admin') {
-        sendResponse('error', 'Akses admin ditolak', null, 403);
+    return ($user['role'] ?? 'user') === $role;
+}
+
+function verifyAdmin() {
+    $decoded = verifyToken();
+
+    require_once __DIR__ . '/../config/Database.php';
+
+    if (userHasRole($decoded, $mysqli, 'admin')) {
+        $decoded['role'] = 'admin';
+        return $decoded;
     }
 
-    $decoded['role'] = 'admin';
-    return $decoded;
+    sendResponse('error', 'Akses admin ditolak', null, 403);
 }

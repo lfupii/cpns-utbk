@@ -232,6 +232,41 @@ function ensureTestWorkflowSchema(mysqli $mysqli): void {
     }
 }
 
+function ensureTestAttemptProgressSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'test_attempts')) {
+        return;
+    }
+
+    $schemaChanged = false;
+
+    if (!databaseColumnExists($mysqli, 'test_attempts', 'active_section_order')) {
+        $mysqli->query("ALTER TABLE test_attempts ADD COLUMN active_section_order INT NULL AFTER status");
+        $schemaChanged = true;
+    }
+
+    if (!databaseColumnExists($mysqli, 'test_attempts', 'active_section_started_at')) {
+        $mysqli->query("ALTER TABLE test_attempts ADD COLUMN active_section_started_at TIMESTAMP NULL AFTER active_section_order");
+        $schemaChanged = true;
+    }
+
+    $schemaVersion = '20260406_utbk_attempt_progress_v1';
+    $appliedSchemaVersion = getSystemSetting($mysqli, 'utbk_attempt_progress_schema_version');
+    if ($schemaChanged || $appliedSchemaVersion !== $schemaVersion) {
+        $backfillQuery = "UPDATE test_attempts ta
+                          JOIN test_packages tp ON tp.id = ta.package_id
+                          SET ta.active_section_order = COALESCE(NULLIF(ta.active_section_order, 0), 1),
+                              ta.active_section_started_at = COALESCE(ta.active_section_started_at, ta.start_time)
+                          WHERE tp.test_mode = 'utbk_sectioned'
+                            AND (
+                                ta.active_section_order IS NULL
+                                OR ta.active_section_order <= 0
+                                OR ta.active_section_started_at IS NULL
+                            )";
+        $mysqli->query($backfillQuery);
+        setSystemSetting($mysqli, 'utbk_attempt_progress_schema_version', $schemaVersion);
+    }
+}
+
 function backfillTestWorkflowData(mysqli $mysqli): void {
     $packageQuery = "SELECT tp.id, tp.name, tp.category_id, tp.time_limit, tp.test_mode, tp.workflow_config, tc.name AS category_name
                      FROM test_packages tp
@@ -407,4 +442,5 @@ function bootstrapDefaultAdmin(mysqli $mysqli): void {
 
 ensureEmailVerificationSchema($mysqli);
 ensureTestWorkflowSchema($mysqli);
+ensureTestAttemptProgressSchema($mysqli);
 bootstrapDefaultAdmin($mysqli);

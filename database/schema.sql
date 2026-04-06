@@ -135,6 +135,8 @@ CREATE TABLE test_attempts (
   start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   end_time TIMESTAMP NULL,
   status ENUM('ongoing', 'completed', 'abandoned') DEFAULT 'ongoing',
+  active_section_order INT NULL,
+  active_section_started_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,

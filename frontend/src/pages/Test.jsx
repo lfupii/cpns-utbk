@@ -90,6 +90,7 @@ export default function Test() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAdvancingSection, setIsAdvancingSection] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
   const attemptState = useMemo(
@@ -135,6 +136,16 @@ export default function Test() {
   const currentQuestionIndex = useMemo(() => (
     activeQuestions.findIndex((question) => Number(question.id) === Number(currentQuestion?.id))
   ), [activeQuestions, currentQuestion]);
+
+  const activeSectionIndex = useMemo(() => (
+    (workflow?.sections || []).findIndex(
+      (section) => section.code === attemptState.activeSectionCode
+    )
+  ), [attemptState.activeSectionCode, workflow]);
+
+  const nextSection = useMemo(() => (
+    activeSectionIndex >= 0 ? (workflow?.sections || [])[activeSectionIndex + 1] || null : null
+  ), [activeSectionIndex, workflow]);
 
   const unsavedAnswers = useMemo(() => (
     Object.entries(draftAnswers)
@@ -269,7 +280,10 @@ export default function Test() {
     }
 
     if (confirmManual) {
-      const confirmed = window.confirm('Yakin ingin menyelesaikan ujian sekarang? Nilai akan langsung diproses.');
+      const confirmationMessage = workflow?.mode === MODE_UTBK
+        ? 'Yakin ingin menyelesaikan ujian sekarang? Sisa waktu subtes terakhir akan hangus dan nilai langsung diproses.'
+        : 'Yakin ingin menyelesaikan ujian sekarang? Nilai akan langsung diproses.';
+      const confirmed = window.confirm(confirmationMessage);
       if (!confirmed) {
         return;
       }
@@ -291,7 +305,41 @@ export default function Test() {
       setIsSubmitting(false);
       submitTriggeredRef.current = false;
     }
-  }, [attemptId, isSubmitting, navigate, unsavedAnswers]);
+  }, [attemptId, isSubmitting, navigate, unsavedAnswers, workflow]);
+
+  const handleAdvanceSection = useCallback(async () => {
+    if (!attemptId || isAdvancingSection || !nextSection) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Pindah ke subtes "${nextSection.name}" sekarang? Sisa waktu subtes saat ini akan dilepas.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setError('');
+    setSaveMessage('');
+    setIsAdvancingSection(true);
+
+    try {
+      await apiClient.post('/test/advance-section', {
+        attempt_id: attemptId,
+      });
+      await loadQuestions(attemptId);
+    } catch (err) {
+      const payload = err.response?.data?.data;
+      if (payload?.attempt_completed) {
+        navigate(`/results/${attemptId}`);
+        return;
+      }
+
+      setError(err.response?.data?.message || 'Gagal pindah ke subtes berikutnya');
+    } finally {
+      setIsAdvancingSection(false);
+    }
+  }, [attemptId, isAdvancingSection, loadQuestions, navigate, nextSection]);
 
   useEffect(() => {
     const boot = async () => {
@@ -493,7 +541,11 @@ export default function Test() {
                 <p className="text-gray-600 text-sm">
                   {isUtbkMode ? 'Sisa Waktu Subtes' : 'Sisa Waktu'}
                 </p>
-                <p className={`font-bold text-lg ${attemptState.remainingSeconds < 300 ? 'text-red-600' : 'text-green-600'}`}>
+                <p className={`font-bold text-lg ${
+                  (isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds) < 300
+                    ? 'text-red-600'
+                    : 'text-green-600'
+                }`}>
                   {formatTime(isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds)}
                 </p>
               </div>
@@ -620,10 +672,30 @@ export default function Test() {
                 )}
 
                 {isUtbkMode && (
-                  <div className="ml-auto text-sm text-gray-600 self-center">
-                    {isCurrentSaved ? 'Jawaban aktif sudah tersimpan otomatis.' : 'Jawaban akan tersimpan otomatis saat dipilih.'}
-                    {!hasMultipleActiveQuestions ? ' Subtes ini hanya memiliki 1 soal aktif.' : ''}
-                  </div>
+                  <>
+                    <div className="text-sm text-gray-600 self-center flex-1 min-w-[220px]">
+                      {isCurrentSaved ? 'Jawaban aktif sudah tersimpan otomatis.' : 'Jawaban akan tersimpan otomatis saat dipilih.'}
+                      {!hasMultipleActiveQuestions ? ' Subtes ini hanya memiliki 1 soal aktif.' : ''}
+                    </div>
+
+                    {nextSection ? (
+                      <button
+                        onClick={handleAdvanceSection}
+                        disabled={isAdvancingSection || isSubmitting}
+                        className="btn btn-primary test-action-button disabled:opacity-50"
+                      >
+                        {isAdvancingSection ? 'Membuka Subtes...' : `Lanjut ke ${nextSection.name} →`}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleSubmit({ confirmManual: true })}
+                        disabled={isSubmitting}
+                        className="btn btn-primary test-action-button disabled:opacity-50"
+                      >
+                        {isSubmitting ? 'Memproses...' : 'Selesaikan Ujian'}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
               </div>

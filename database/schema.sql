@@ -61,6 +61,8 @@ CREATE TABLE test_packages (
   max_attempts INT DEFAULT 1,
   question_count INT NOT NULL,
   time_limit INT NOT NULL COMMENT 'dalam menit',
+  test_mode VARCHAR(50) DEFAULT NULL,
+  workflow_config LONGTEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (category_id) REFERENCES test_categories(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -71,6 +73,10 @@ CREATE TABLE questions (
   question_text LONGTEXT NOT NULL,
   question_type ENUM('single_choice', 'multiple_choice') DEFAULT 'single_choice',
   difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+  section_code VARCHAR(100) DEFAULT NULL,
+  section_name VARCHAR(150) DEFAULT NULL,
+  section_order INT NOT NULL DEFAULT 1,
+  question_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
   INDEX (package_id)
@@ -173,9 +179,42 @@ INSERT INTO test_categories (name, description) VALUES
 ('CPNS 2026', 'Tryout test untuk CAT CPNS 2026'),
 ('UTBK 2026', 'Tryout test untuk UTBK 2026');
 
-INSERT INTO test_packages (category_id, name, description, price, duration_days, max_attempts, question_count, time_limit) VALUES
-(1, 'CPNS Intensif', 'Paket demo CPNS dengan simulasi soal dan evaluasi hasil.', 10000, 30, 1, 30, 120),
-(2, 'UTBK Intensif', 'Paket demo UTBK dengan latihan dasar TPS dan penalaran.', 5000, 30, 1, 10, 90);
+INSERT INTO test_packages (
+  category_id,
+  name,
+  description,
+  price,
+  duration_days,
+  max_attempts,
+  question_count,
+  time_limit,
+  test_mode,
+  workflow_config
+) VALUES
+(
+  1,
+  'CPNS Intensif',
+  'Paket demo CPNS dengan simulasi soal dan evaluasi hasil.',
+  10000,
+  30,
+  1,
+  30,
+  100,
+  'cpns_cat',
+  '{"label":"CPNS CAT","allow_random_navigation":true,"save_behavior":"manual_next","manual_finish":true,"total_duration_minutes":100,"sections":[{"code":"twk","name":"TWK","order":1,"duration_minutes":null,"target_question_count":30},{"code":"tiu","name":"TIU","order":2,"duration_minutes":null,"target_question_count":35},{"code":"tkp","name":"TKP","order":3,"duration_minutes":null,"target_question_count":45}]}'
+),
+(
+  2,
+  'UTBK Intensif',
+  'Paket demo UTBK dengan latihan dasar TPS dan penalaran.',
+  5000,
+  30,
+  1,
+  10,
+  195,
+  'utbk_sectioned',
+  '{"label":"UTBK Bertahap","allow_random_navigation":false,"save_behavior":"auto","manual_finish":false,"total_duration_minutes":195,"sections":[{"code":"tps_penalaran_induktif","name":"Penalaran Induktif","session_name":"Tes Potensi Skolastik (TPS)","session_order":1,"order":1,"duration_minutes":10,"target_question_count":10},{"code":"tps_penalaran_deduktif","name":"Penalaran Deduktif","session_name":"Tes Potensi Skolastik (TPS)","session_order":1,"order":2,"duration_minutes":10,"target_question_count":10},{"code":"tps_penalaran_kuantitatif","name":"Penalaran Kuantitatif","session_name":"Tes Potensi Skolastik (TPS)","session_order":1,"order":3,"duration_minutes":10,"target_question_count":10},{"code":"tps_ppu","name":"Pengetahuan dan Pemahaman Umum","session_name":"Tes Potensi Skolastik (TPS)","session_order":1,"order":4,"duration_minutes":15,"target_question_count":20},{"code":"tps_pbm","name":"Pemahaman Bacaan dan Menulis","session_name":"Tes Potensi Skolastik (TPS)","session_order":1,"order":5,"duration_minutes":25,"target_question_count":20},{"code":"tps_pk","name":"Pengetahuan Kuantitatif","session_name":"Tes Potensi Skolastik (TPS)","session_order":1,"order":6,"duration_minutes":20,"target_question_count":20},{"code":"literasi_indonesia","name":"Literasi dalam Bahasa Indonesia","session_name":"Tes Literasi","session_order":2,"order":7,"duration_minutes":42.5,"target_question_count":30},{"code":"literasi_inggris","name":"Literasi dalam Bahasa Inggris","session_name":"Tes Literasi","session_order":2,"order":8,"duration_minutes":20,"target_question_count":20},{"code":"penalaran_matematika","name":"Penalaran Matematika","session_name":"Tes Literasi","session_order":2,"order":9,"duration_minutes":42.5,"target_question_count":20}]}'
+);
 
 INSERT INTO questions (package_id, question_text, question_type, difficulty) VALUES
 (1, 'Kata "isyarat" dalam kalimat "Dia memberikan isyarat untuk keluar" memiliki arti...', 'single_choice', 'easy'),

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/Database.php';
+require_once __DIR__ . '/../utils/TestWorkflow.php';
 require_once __DIR__ . '/../middleware/Response.php';
 
 class AdminController {
@@ -23,10 +24,38 @@ class AdminController {
         $stmt->execute();
     }
 
-    private function normalizeQuestionPayload(array $data): array {
+    private function enrichPackage(array $package): array {
+        $workflow = TestWorkflow::buildPackageWorkflow($package);
+        $package['time_limit'] = (int) ($workflow['total_duration_minutes'] ?? (int) ($package['time_limit'] ?? 0));
+        $package['workflow'] = $workflow;
+
+        return $package;
+    }
+
+    private function getPackage(int $packageId): array {
+        $query = "SELECT tp.*, tc.name AS category_name
+                  FROM test_packages tp
+                  JOIN test_categories tc ON tc.id = tp.category_id
+                  WHERE tp.id = ?
+                  LIMIT 1";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $package = $stmt->get_result()->fetch_assoc();
+
+        if (!$package) {
+            sendResponse('error', 'Paket tidak ditemukan', null, 404);
+        }
+
+        return $package;
+    }
+
+    private function normalizeQuestionPayload(int $packageId, array $data): array {
         $questionText = trim((string) ($data['question_text'] ?? ''));
         $difficulty = (string) ($data['difficulty'] ?? 'medium');
         $questionType = (string) ($data['question_type'] ?? 'single_choice');
+        $sectionCode = trim((string) ($data['section_code'] ?? ''));
+        $questionOrder = max(1, (int) ($data['question_order'] ?? 1));
         $options = $data['options'] ?? [];
 
         if ($questionText === '') {
@@ -40,6 +69,23 @@ class AdminController {
 
         if ($questionType !== 'single_choice') {
             sendResponse('error', 'Tipe soal belum didukung', null, 422);
+        }
+
+        $package = $this->getPackage($packageId);
+        $workflow = TestWorkflow::buildPackageWorkflow($package);
+        $sections = $workflow['sections'];
+        $sectionLookup = [];
+        foreach ($sections as $section) {
+            $sectionLookup[(string) $section['code']] = $section;
+        }
+
+        if ($sectionCode === '') {
+            $firstSection = $sections[0] ?? ['code' => 'general', 'name' => 'Semua Soal', 'order' => 1];
+            $sectionCode = (string) $firstSection['code'];
+        }
+
+        if (!isset($sectionLookup[$sectionCode])) {
+            sendResponse('error', 'Bagian/subtes soal tidak valid untuk paket ini', null, 422);
         }
 
         if (!is_array($options) || count($options) < 2) {
@@ -80,6 +126,10 @@ class AdminController {
             'question_text' => $questionText,
             'difficulty' => $difficulty,
             'question_type' => $questionType,
+            'section_code' => $sectionCode,
+            'section_name' => (string) $sectionLookup[$sectionCode]['name'],
+            'section_order' => (int) ($sectionLookup[$sectionCode]['order'] ?? 1),
+            'question_order' => $questionOrder,
             'options' => $normalizedOptions,
         ];
     }
@@ -95,7 +145,7 @@ class AdminController {
 
         $packages = [];
         while ($row = $result->fetch_assoc()) {
-            $packages[] = $row;
+            $packages[] = $this->enrichPackage($row);
         }
 
         sendResponse('success', 'Data paket admin berhasil diambil', $packages);
@@ -112,6 +162,12 @@ class AdminController {
         $durationDays = (int) ($data['duration_days'] ?? 30);
         $maxAttempts = (int) ($data['max_attempts'] ?? 1);
         $timeLimit = (int) ($data['time_limit'] ?? 90);
+        $package = $this->getPackage($packageId);
+        $workflow = TestWorkflow::buildPackageWorkflow($package);
+
+        if (in_array($workflow['mode'], [TestWorkflow::MODE_CPNS_CAT, TestWorkflow::MODE_UTBK_SECTIONED], true)) {
+            $timeLimit = (int) ($workflow['total_duration_minutes'] ?? $timeLimit);
+        }
 
         if ($packageId <= 0 || $name === '' || $price <= 0 || $durationDays <= 0 || $maxAttempts <= 0 || $timeLimit <= 0) {
             sendResponse('error', 'Data paket tidak lengkap atau tidak valid', null, 422);
@@ -151,7 +207,7 @@ class AdminController {
                   LEFT JOIN question_options qo ON qo.question_id = q.id
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.id ASC";
+                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -175,19 +231,32 @@ class AdminController {
             sendResponse('error', 'Package ID harus diisi', null, 400);
         }
 
-        $payload = $this->normalizeQuestionPayload($data);
+        $payload = $this->normalizeQuestionPayload($packageId, $data);
         $this->mysqli->begin_transaction();
 
         try {
             $insertQuestion = $this->mysqli->prepare(
-                'INSERT INTO questions (package_id, question_text, question_type, difficulty) VALUES (?, ?, ?, ?)'
+                'INSERT INTO questions (
+                    package_id,
+                    question_text,
+                    question_type,
+                    difficulty,
+                    section_code,
+                    section_name,
+                    section_order,
+                    question_order
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insertQuestion->bind_param(
-                'isss',
+                'isssssii',
                 $packageId,
                 $payload['question_text'],
                 $payload['question_type'],
-                $payload['difficulty']
+                $payload['difficulty'],
+                $payload['section_code'],
+                $payload['section_name'],
+                $payload['section_order'],
+                $payload['question_order']
             );
             $insertQuestion->execute();
             $questionId = (int) $insertQuestion->insert_id;
@@ -219,18 +288,30 @@ class AdminController {
             sendResponse('error', 'Question ID dan Package ID harus diisi', null, 400);
         }
 
-        $payload = $this->normalizeQuestionPayload($data);
+        $payload = $this->normalizeQuestionPayload($packageId, $data);
         $this->mysqli->begin_transaction();
 
         try {
             $updateQuestion = $this->mysqli->prepare(
-                'UPDATE questions SET question_text = ?, question_type = ?, difficulty = ? WHERE id = ? AND package_id = ?'
+                'UPDATE questions
+                 SET question_text = ?,
+                     question_type = ?,
+                     difficulty = ?,
+                     section_code = ?,
+                     section_name = ?,
+                     section_order = ?,
+                     question_order = ?
+                 WHERE id = ? AND package_id = ?'
             );
             $updateQuestion->bind_param(
-                'sssii',
+                'sssssiiii',
                 $payload['question_text'],
                 $payload['question_type'],
                 $payload['difficulty'],
+                $payload['section_code'],
+                $payload['section_name'],
+                $payload['section_order'],
+                $payload['question_order'],
                 $questionId,
                 $packageId
             );

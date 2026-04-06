@@ -103,6 +103,8 @@ if ($mysqli->connect_error) {
 
 $mysqli->set_charset('utf8mb4');
 
+require_once __DIR__ . '/../utils/TestWorkflow.php';
+
 function databaseTableExists(mysqli $mysqli, string $tableName): bool {
     $query = 'SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1';
     $stmt = $mysqli->prepare($query);
@@ -175,6 +177,170 @@ function ensureEmailVerificationSchema(mysqli $mysqli): void {
     }
 }
 
+function ensureTestWorkflowSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'test_packages') || !databaseTableExists($mysqli, 'questions')) {
+        return;
+    }
+
+    $schemaChanged = false;
+
+    if (!databaseColumnExists($mysqli, 'test_packages', 'test_mode')) {
+        $mysqli->query("ALTER TABLE test_packages ADD COLUMN test_mode VARCHAR(50) NULL AFTER time_limit");
+        $schemaChanged = true;
+    }
+
+    if (!databaseColumnExists($mysqli, 'test_packages', 'workflow_config')) {
+        $mysqli->query("ALTER TABLE test_packages ADD COLUMN workflow_config LONGTEXT NULL AFTER test_mode");
+        $schemaChanged = true;
+    }
+
+    if (!databaseColumnExists($mysqli, 'questions', 'section_code')) {
+        $mysqli->query("ALTER TABLE questions ADD COLUMN section_code VARCHAR(100) NULL AFTER difficulty");
+        $schemaChanged = true;
+    }
+
+    if (!databaseColumnExists($mysqli, 'questions', 'section_name')) {
+        $mysqli->query("ALTER TABLE questions ADD COLUMN section_name VARCHAR(150) NULL AFTER section_code");
+        $schemaChanged = true;
+    }
+
+    if (!databaseColumnExists($mysqli, 'questions', 'section_order')) {
+        $mysqli->query("ALTER TABLE questions ADD COLUMN section_order INT NOT NULL DEFAULT 1 AFTER section_name");
+        $schemaChanged = true;
+    }
+
+    if (!databaseColumnExists($mysqli, 'questions', 'question_order')) {
+        $mysqli->query("ALTER TABLE questions ADD COLUMN question_order INT NOT NULL DEFAULT 0 AFTER section_order");
+        $schemaChanged = true;
+    }
+
+    $workflowSchemaVersion = '20260406_test_workflow_modes_v1';
+    $appliedWorkflowSchemaVersion = getSystemSetting($mysqli, 'test_workflow_schema_version');
+    if ($schemaChanged || $appliedWorkflowSchemaVersion !== $workflowSchemaVersion) {
+        backfillTestWorkflowData($mysqli);
+        setSystemSetting($mysqli, 'test_workflow_schema_version', $workflowSchemaVersion);
+    }
+}
+
+function backfillTestWorkflowData(mysqli $mysqli): void {
+    $packageQuery = "SELECT tp.id, tp.name, tp.category_id, tp.time_limit, tp.test_mode, tp.workflow_config, tc.name AS category_name
+                     FROM test_packages tp
+                     LEFT JOIN test_categories tc ON tc.id = tp.category_id
+                     ORDER BY tp.id ASC";
+    $packageResult = $mysqli->query($packageQuery);
+    if (!$packageResult) {
+        return;
+    }
+
+    $updatePackageStmt = $mysqli->prepare(
+        'UPDATE test_packages SET test_mode = ?, workflow_config = ?, time_limit = ? WHERE id = ?'
+    );
+    $countQuestionsStmt = $mysqli->prepare(
+        "SELECT COUNT(*) AS total,
+                SUM(CASE WHEN section_code IS NULL OR section_code = '' THEN 1 ELSE 0 END) AS missing_section_code,
+                SUM(CASE WHEN section_name IS NULL OR section_name = '' THEN 1 ELSE 0 END) AS missing_section_name,
+                SUM(CASE WHEN question_order IS NULL OR question_order <= 0 THEN 1 ELSE 0 END) AS missing_question_order
+         FROM questions
+         WHERE package_id = ?"
+    );
+    $fetchQuestionIdsStmt = $mysqli->prepare(
+        'SELECT id FROM questions WHERE package_id = ? ORDER BY id ASC'
+    );
+    $updateQuestionStmt = $mysqli->prepare(
+        'UPDATE questions SET section_code = ?, section_name = ?, section_order = ?, question_order = ? WHERE id = ?'
+    );
+
+    while ($package = $packageResult->fetch_assoc()) {
+        $mode = TestWorkflow::detectMode($package);
+        $workflow = TestWorkflow::buildPackageWorkflow($package);
+        $workflowConfig = json_encode([
+            'label' => $workflow['label'],
+            'allow_random_navigation' => $workflow['allow_random_navigation'],
+            'save_behavior' => $workflow['save_behavior'],
+            'manual_finish' => $workflow['manual_finish'],
+            'total_duration_minutes' => $workflow['total_duration_minutes'],
+            'sections' => $workflow['sections'],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $effectiveTimeLimit = (int) round((float) ($workflow['total_duration_minutes'] ?? (int) ($package['time_limit'] ?? 0)));
+
+        $currentConfig = trim((string) ($package['workflow_config'] ?? ''));
+        if ((string) ($package['test_mode'] ?? '') !== $mode
+            || $currentConfig === ''
+            || $currentConfig !== $workflowConfig
+            || (int) ($package['time_limit'] ?? 0) !== $effectiveTimeLimit
+        ) {
+            $packageId = (int) $package['id'];
+            $updatePackageStmt->bind_param('ssii', $mode, $workflowConfig, $effectiveTimeLimit, $packageId);
+            $updatePackageStmt->execute();
+        }
+
+        $packageId = (int) $package['id'];
+        $countQuestionsStmt->bind_param('i', $packageId);
+        $countQuestionsStmt->execute();
+        $questionMeta = $countQuestionsStmt->get_result()->fetch_assoc();
+        $questionTotal = (int) ($questionMeta['total'] ?? 0);
+
+        if ($questionTotal <= 0) {
+            continue;
+        }
+
+        $needsRebuild = (int) ($questionMeta['missing_section_code'] ?? 0) > 0
+            || (int) ($questionMeta['missing_section_name'] ?? 0) > 0
+            || (int) ($questionMeta['missing_question_order'] ?? 0) > 0;
+
+        if (!$needsRebuild) {
+            continue;
+        }
+
+        $fetchQuestionIdsStmt->bind_param('i', $packageId);
+        $fetchQuestionIdsStmt->execute();
+        $questionRows = $fetchQuestionIdsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $questionIds = array_map(static function (array $row): int {
+            return (int) $row['id'];
+        }, $questionRows);
+
+        $sections = $workflow['sections'];
+        if (count($sections) === 0) {
+            $sections = TestWorkflow::defaultWorkflow(TestWorkflow::MODE_STANDARD, $effectiveTimeLimit)['sections'];
+        }
+
+        $allocation = TestWorkflow::allocateQuestionsToSections(count($questionIds), $sections);
+        $questionIndex = 0;
+
+        foreach ($sections as $sectionIndex => $section) {
+            $countInSection = (int) ($allocation[$sectionIndex] ?? 0);
+
+            for ($order = 1; $order <= $countInSection; $order++) {
+                if (!isset($questionIds[$questionIndex])) {
+                    break;
+                }
+
+                $questionId = (int) $questionIds[$questionIndex];
+                $sectionCode = (string) $section['code'];
+                $sectionName = (string) $section['name'];
+                $sectionOrder = (int) ($section['order'] ?? ($sectionIndex + 1));
+
+                $updateQuestionStmt->bind_param('ssiii', $sectionCode, $sectionName, $sectionOrder, $order, $questionId);
+                $updateQuestionStmt->execute();
+                $questionIndex++;
+            }
+        }
+
+        while (isset($questionIds[$questionIndex])) {
+            $fallbackSection = $sections[count($sections) - 1];
+            $questionId = (int) $questionIds[$questionIndex];
+            $sectionCode = (string) $fallbackSection['code'];
+            $sectionName = (string) $fallbackSection['name'];
+            $sectionOrder = (int) ($fallbackSection['order'] ?? count($sections));
+            $questionOrder = $questionIndex + 1;
+
+            $updateQuestionStmt->bind_param('ssiii', $sectionCode, $sectionName, $sectionOrder, $questionOrder, $questionId);
+            $updateQuestionStmt->execute();
+            $questionIndex++;
+        }
+    }
+}
+
 function shouldBootstrapDefaultAdmin(): bool {
     if (DEFAULT_ADMIN_FORCE_BOOTSTRAP) {
         return true;
@@ -230,4 +396,5 @@ function bootstrapDefaultAdmin(mysqli $mysqli): void {
 }
 
 ensureEmailVerificationSchema($mysqli);
+ensureTestWorkflowSchema($mysqli);
 bootstrapDefaultAdmin($mysqli);

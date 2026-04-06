@@ -8,11 +8,13 @@ const createOption = (index, text = '', isCorrect = false) => ({
   is_correct: isCorrect,
 });
 
-const createEmptyQuestionForm = () => ({
+const createEmptyQuestionForm = (sectionCode = '') => ({
   question_id: null,
   question_text: '',
   difficulty: 'medium',
   question_type: 'single_choice',
+  section_code: sectionCode,
+  question_order: 1,
   options: [
     createOption(0),
     createOption(1),
@@ -38,6 +40,8 @@ export default function AdminPanel() {
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
     [packages, selectedPackageId]
   );
+  const packageSections = selectedPackage?.workflow?.sections || [];
+  const defaultSectionCode = packageSections[0]?.code || '';
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -97,8 +101,18 @@ export default function AdminPanel() {
     fetchQuestions();
   }, [selectedPackageId]);
 
+  useEffect(() => {
+    setQuestionForm((current) => {
+      if (current.question_id) {
+        return current;
+      }
+
+      return createEmptyQuestionForm(defaultSectionCode);
+    });
+  }, [defaultSectionCode]);
+
   const resetQuestionForm = () => {
-    setQuestionForm(createEmptyQuestionForm());
+    setQuestionForm(createEmptyQuestionForm(defaultSectionCode));
   };
 
   const handlePackageChange = (event) => {
@@ -238,6 +252,8 @@ export default function AdminPanel() {
       question_text: question.question_text || '',
       difficulty: question.difficulty || 'medium',
       question_type: question.question_type || 'single_choice',
+      section_code: question.section_code || defaultSectionCode,
+      question_order: Number(question.question_order || 1),
       options: (question.options || []).map((option, index) => ({
         letter: option.letter || String.fromCharCode(65 + index),
         text: option.text || '',
@@ -337,12 +353,37 @@ export default function AdminPanel() {
                     </div>
                     <div className="form-group">
                       <label>Waktu Ujian (menit)</label>
-                      <input type="number" min="1" name="time_limit" value={packageForm.time_limit} onChange={handlePackageChange} />
+                      <input
+                        type="number"
+                        min="1"
+                        name="time_limit"
+                        value={packageForm.time_limit}
+                        onChange={handlePackageChange}
+                        disabled={selectedPackage?.test_mode === 'cpns_cat' || selectedPackage?.test_mode === 'utbk_sectioned'}
+                      />
                     </div>
                     <div className="form-group form-group-full">
                       <label>Deskripsi</label>
                       <textarea name="description" rows="3" value={packageForm.description} onChange={handlePackageChange} />
                     </div>
+                    {selectedPackage?.workflow && (
+                      <div className="form-group form-group-full">
+                        <label>Mekanisme Ujian</label>
+                        <textarea
+                          rows="4"
+                          value={[
+                            `${selectedPackage.workflow.label} • ${selectedPackage.workflow.total_duration_minutes} menit`,
+                            selectedPackage.workflow.allow_random_navigation
+                              ? 'Navigasi soal bebas.'
+                              : 'Navigasi soal dikunci mengikuti subtes aktif.',
+                            ...packageSections.map((section) => (
+                              `${section.order}. ${section.name}${section.duration_minutes ? ` - ${section.duration_minutes} menit` : ''}`
+                            )),
+                          ].join('\n')}
+                          disabled
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="account-form-actions">
@@ -389,6 +430,35 @@ export default function AdminPanel() {
                     <option value="medium">Sedang</option>
                     <option value="hard">Sulit</option>
                   </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Bagian / Subtes</label>
+                  <select
+                    name="section_code"
+                    value={questionForm.section_code}
+                    onChange={handleQuestionChange}
+                    required
+                  >
+                    {packageSections.map((section) => (
+                      <option key={section.code} value={section.code}>
+                        {section.session_name ? `${section.session_name} • ` : ''}
+                        {section.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Urutan Soal</label>
+                  <input
+                    type="number"
+                    min="1"
+                    name="question_order"
+                    value={questionForm.question_order}
+                    onChange={handleQuestionChange}
+                    required
+                  />
                 </div>
 
                 <div className="admin-options-header">
@@ -456,7 +526,9 @@ export default function AdminPanel() {
                     <article key={question.id} className="admin-question-item">
                       <div className="admin-question-top">
                         <div>
-                          <span className="account-package-tag">Soal {index + 1}</span>
+                          <span className="account-package-tag">
+                            {question.section_name || 'Bagian umum'} • Urutan {question.question_order || index + 1}
+                          </span>
                           <h3>{question.question_text}</h3>
                         </div>
                         <span className="account-status-pill account-status-fresh">{question.difficulty}</span>

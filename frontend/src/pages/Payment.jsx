@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
 
 export default function Payment() {
   const { packageId } = useParams();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const numericPackageId = Number(packageId);
   const [packageData, setPackageData] = useState(null);
@@ -170,7 +170,7 @@ export default function Payment() {
         </button>
 
         <div className="card">
-          <h1 className="text-3xl font-bold mb-8">Konfirmasi Pembayaran</h1>
+          <h1 className="text-3xl font-bold mb-8">{isAdmin ? 'Akses Test Admin' : 'Konfirmasi Pembayaran'}</h1>
 
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
@@ -225,47 +225,75 @@ export default function Payment() {
             </div>
           </div>
 
-          {/* Payment Methods Info */}
-          <div className="bg-yellow-50 rounded-lg p-6 mb-8 border border-yellow-200">
-            <h3 className="font-bold mb-2">Metode Pembayaran Tersedia:</h3>
-            <ul className="text-sm space-y-1 text-gray-700">
-              <li>✓ Kartu Kredit / Debit</li>
-              <li>✓ Transfer Bank</li>
-              <li>✓ E-Wallet (GoPay, OVO, Dana)</li>
-              <li>✓ QRIS</li>
-            </ul>
-            {!isProduction && (
-              <p className="mt-4 text-sm text-amber-800">
-                Mode sandbox aktif. Untuk uji coba QRIS, jangan bayar pakai aplikasi QRIS asli.
-                Gunakan QRIS Simulator Midtrans.
-              </p>
-            )}
-          </div>
+          {isAdmin ? (
+            <>
+              <div className="bg-green-50 rounded-lg p-6 mb-8 border border-green-200 text-green-800">
+                <h3 className="font-bold mb-2">Bypass Pembayaran Admin Aktif</h3>
+                <p>
+                  Role admin bisa langsung mengakses test ini tanpa transaksi pembayaran.
+                </p>
+              </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-4">
-            <button
-              onClick={() => navigate('/#paket')}
-              className="flex-1 btn-outline"
-            >
-              Batal
-            </button>
-            <button
-              onClick={handlePayment}
-              disabled={processing}
-              className="flex-1 btn-primary disabled:opacity-50"
-            >
-              {processing ? 'Processing...' : 'Lanjut ke Pembayaran'}
-            </button>
-          </div>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => navigate('/#paket')}
+                  className="flex-1 btn-outline"
+                >
+                  Kembali
+                </button>
+                <Link
+                  to={`/test/${numericPackageId}`}
+                  className="flex-1 btn btn-primary text-center"
+                >
+                  Mulai Test
+                </Link>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Payment Methods Info */}
+              <div className="bg-yellow-50 rounded-lg p-6 mb-8 border border-yellow-200">
+                <h3 className="font-bold mb-2">Metode Pembayaran Tersedia:</h3>
+                <ul className="text-sm space-y-1 text-gray-700">
+                  <li>✓ Kartu Kredit / Debit</li>
+                  <li>✓ Transfer Bank</li>
+                  <li>✓ E-Wallet (GoPay, OVO, Dana)</li>
+                  <li>✓ QRIS</li>
+                </ul>
+                {!isProduction && (
+                  <p className="mt-4 text-sm text-amber-800">
+                    Mode sandbox aktif. Untuk uji coba QRIS, jangan bayar pakai aplikasi QRIS asli.
+                    Gunakan QRIS Simulator Midtrans.
+                  </p>
+                )}
+              </div>
 
-          {/* Notice */}
-          <div className="mt-8 p-4 bg-blue-100 rounded-lg border border-blue-300 text-sm text-blue-800">
-            <p>
-              💡 <strong>Penting:</strong> Setelah pembayaran berhasil, Anda akan mendapatkan akses untuk mengerjakan test ini. 
-              Anda hanya bisa mengerjakan {packageData.max_attempts} kali. Untuk test ulang, Anda harus membayar lagi.
-            </p>
-          </div>
+              {/* Action Buttons */}
+              <div className="flex gap-4">
+                <button
+                  onClick={() => navigate('/#paket')}
+                  className="flex-1 btn-outline"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handlePayment}
+                  disabled={processing}
+                  className="flex-1 btn-primary disabled:opacity-50"
+                >
+                  {processing ? 'Processing...' : 'Lanjut ke Pembayaran'}
+                </button>
+              </div>
+
+              {/* Notice */}
+              <div className="mt-8 p-4 bg-blue-100 rounded-lg border border-blue-300 text-sm text-blue-800">
+                <p>
+                  💡 <strong>Penting:</strong> Setelah pembayaran berhasil, Anda akan mendapatkan akses untuk mengerjakan test ini.
+                  Anda hanya bisa mengerjakan {packageData.max_attempts} kali. Untuk test ulang, Anda harus membayar lagi.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

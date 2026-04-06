@@ -55,7 +55,11 @@ class TestController {
         }
     }
 
-    private function assertActiveAccess(int $userId, int $packageId): void {
+    private function assertActiveAccess(int $userId, int $packageId, bool $isAdmin = false): void {
+        if ($isAdmin) {
+            return;
+        }
+
         $query = "SELECT ua.id FROM user_access ua
                   WHERE ua.user_id = ? AND ua.package_id = ? AND ua.access_status = 'active'
                     AND (ua.access_expires_at IS NULL OR ua.access_expires_at > NOW())
@@ -134,8 +138,12 @@ class TestController {
         return $attempt ?: null;
     }
 
-    private function ensureAttemptQuota(int $userId, int $packageId, int $maxAttempts): int {
+    private function ensureAttemptQuota(int $userId, int $packageId, int $maxAttempts, bool $isAdmin = false): int {
         $completedAttempts = $this->getCompletedAttemptCount($userId, $packageId);
+
+        if ($isAdmin) {
+            return $completedAttempts;
+        }
 
         if ($completedAttempts >= $maxAttempts) {
             throw new RuntimeException(
@@ -287,7 +295,7 @@ class TestController {
         }
     }
 
-    private function finalizeAttempt(int $attemptId, int $userId, array $answers = []): array {
+    private function finalizeAttempt(int $attemptId, int $userId, array $answers = [], bool $isAdmin = false): array {
         $this->mysqli->begin_transaction();
 
         try {
@@ -315,7 +323,7 @@ class TestController {
                 throw new RuntimeException('Attempt ini sudah tidak aktif lagi', 409);
             }
 
-            $this->assertActiveAccess($userId, (int) $attempt['package_id']);
+            $this->assertActiveAccess($userId, (int) $attempt['package_id'], $isAdmin);
             $workflow = TestWorkflow::buildPackageWorkflow($attempt);
             $attemptState = TestWorkflow::computeAttemptState($attempt, $workflow);
 
@@ -394,14 +402,18 @@ class TestController {
 
         try {
             $userId = (int) $tokenData['userId'];
-            $this->assertActiveAccess($userId, $packageId);
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            $this->assertActiveAccess($userId, $packageId, $isAdmin);
             $package = $this->getPackage($packageId);
-            $completedAttempts = $this->ensureAttemptQuota($userId, $packageId, (int) $package['max_attempts']);
+            $completedAttempts = $this->ensureAttemptQuota($userId, $packageId, (int) $package['max_attempts'], $isAdmin);
             $ongoingAttempt = $this->getOngoingAttempt($userId, $packageId);
 
             sendResponse('success', 'Akses terverifikasi', [
                 'can_access' => true,
-                'remaining_attempts' => max(0, (int) $package['max_attempts'] - $completedAttempts),
+                'remaining_attempts' => $isAdmin
+                    ? null
+                    : max(0, (int) $package['max_attempts'] - $completedAttempts),
+                'admin_bypass' => $isAdmin,
                 'ongoing_attempt_id' => $ongoingAttempt ? (int) $ongoingAttempt['id'] : null,
                 'workflow' => TestWorkflow::buildPackageWorkflow($package),
             ]);
@@ -421,7 +433,8 @@ class TestController {
 
         try {
             $userId = (int) $tokenData['userId'];
-            $this->assertActiveAccess($userId, $packageId);
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            $this->assertActiveAccess($userId, $packageId, $isAdmin);
             $package = $this->getPackage($packageId);
             $workflow = TestWorkflow::buildPackageWorkflow($package);
 
@@ -429,7 +442,7 @@ class TestController {
             if ($ongoingAttempt) {
                 $attemptState = TestWorkflow::computeAttemptState($ongoingAttempt, $workflow);
                 if (!empty($attemptState['is_expired'])) {
-                    $completion = $this->finalizeAttempt((int) $ongoingAttempt['id'], $userId);
+                    $completion = $this->finalizeAttempt((int) $ongoingAttempt['id'], $userId, [], $isAdmin);
                     sendResponse('success', 'Waktu test sebelumnya sudah habis dan attempt ditutup otomatis.', [
                         'attempt_id' => (int) $ongoingAttempt['id'],
                         'completed_attempt_id' => (int) $ongoingAttempt['id'],
@@ -449,7 +462,7 @@ class TestController {
                 ]);
             }
 
-            $this->ensureAttemptQuota($userId, $packageId, (int) $package['max_attempts']);
+            $this->ensureAttemptQuota($userId, $packageId, (int) $package['max_attempts'], $isAdmin);
 
             $attemptQuery = "INSERT INTO test_attempts (user_id, package_id, status) VALUES (?, ?, 'ongoing')";
             $stmt = $this->mysqli->prepare($attemptQuery);
@@ -502,13 +515,14 @@ class TestController {
                 );
             }
 
-            $this->assertActiveAccess($userId, (int) $attempt['package_id']);
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            $this->assertActiveAccess($userId, (int) $attempt['package_id'], $isAdmin);
             $workflow = TestWorkflow::buildPackageWorkflow($attempt);
             $attemptState = TestWorkflow::computeAttemptState($attempt, $workflow);
 
             if (!empty($attemptState['is_expired'])) {
                 $this->mysqli->rollback();
-                $completion = $this->finalizeAttempt($attemptId, $userId);
+                $completion = $this->finalizeAttempt($attemptId, $userId, [], $isAdmin);
                 sendResponse('error', 'Waktu ujian sudah habis. Attempt ditutup otomatis.', [
                     'attempt_completed' => true,
                     'attempt_id' => $attemptId,
@@ -558,7 +572,12 @@ class TestController {
         }
 
         try {
-            $completion = $this->finalizeAttempt($attemptId, (int) $tokenData['userId'], $answers);
+            $completion = $this->finalizeAttempt(
+                $attemptId,
+                (int) $tokenData['userId'],
+                $answers,
+                userHasRole($tokenData, $this->mysqli, 'admin')
+            );
             $emailDelivery = $completion['email_delivery'];
 
             if ($completion['already_completed']) {

@@ -445,8 +445,8 @@ export default function Test() {
     && Boolean(currentAnswerValue);
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="bg-white shadow-lg">
+    <div className="min-h-screen bg-gray-100 test-shell">
+      <div className="bg-white shadow-lg test-topbar">
         <div className="container mx-auto px-4 py-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -508,12 +508,13 @@ export default function Test() {
                     return (
                       <div
                         key={section.code}
-                        className={`rounded-lg border px-4 py-3 ${
-                          isActive ? 'border-blue-500 bg-blue-50' :
-                          isDone ? 'border-gray-300 bg-gray-100' :
-                          isLocked ? 'border-amber-200 bg-amber-50' :
-                          'border-gray-200 bg-white'
-                        }`}
+                        className={`test-section-flow-card ${
+                          isActive ? 'test-section-flow-card-active' :
+                          isDone ? 'test-section-flow-card-done' :
+                          isLocked ? 'test-section-flow-card-locked' :
+                          ''
+                        } rounded-lg border px-4 py-3`}
+                        
                       >
                         <p className="text-xs uppercase tracking-wide text-gray-500">
                           {section.session_name || 'Bagian'}
@@ -533,7 +534,8 @@ export default function Test() {
               </div>
             )}
 
-            <div className="card">
+            <div className="card test-question-card">
+              <div key={currentQuestion.id} className="test-question-stage">
               <div className="mb-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                   <div>
@@ -544,7 +546,7 @@ export default function Test() {
                       {currentQuestion.section_name || 'Bagian umum'}
                     </p>
                   </div>
-                  <span className={`px-3 py-1 rounded text-sm font-semibold ${
+                  <span className={`px-3 py-1 rounded text-sm font-semibold test-difficulty-pill ${
                     currentQuestion.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
                     currentQuestion.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                     'bg-red-100 text-red-800'
@@ -560,10 +562,7 @@ export default function Test() {
                 {currentQuestion.options?.map((option) => (
                   <label
                     key={option.id}
-                    className="flex items-start p-4 border-2 rounded-lg cursor-pointer transition hover:border-blue-500"
-                    style={{
-                      borderColor: Number(currentAnswerValue) === Number(option.id) ? '#2563eb' : '#d1d5db',
-                    }}
+                    className={`test-option ${Number(currentAnswerValue) === Number(option.id) ? 'test-option-active' : ''}`}
                   >
                     <input
                       type="radio"
@@ -585,7 +584,7 @@ export default function Test() {
                 <button
                   onClick={() => goToQuestion(activeQuestions[Math.max(0, currentQuestionIndex - 1)]?.id)}
                   disabled={currentQuestionIndex <= 0}
-                  className="btn-outline disabled:opacity-50"
+                  className="btn btn-outline test-action-button disabled:opacity-50"
                 >
                   ← Sebelumnya
                 </button>
@@ -593,7 +592,7 @@ export default function Test() {
                 <button
                   onClick={() => goToQuestion(activeQuestions[Math.min(activeQuestions.length - 1, currentQuestionIndex + 1)]?.id)}
                   disabled={currentQuestionIndex === -1 || currentQuestionIndex >= activeQuestions.length - 1}
-                  className="btn-outline disabled:opacity-50"
+                  className="btn btn-outline test-action-button disabled:opacity-50"
                 >
                   Selanjutnya →
                 </button>
@@ -602,7 +601,7 @@ export default function Test() {
                   <button
                     onClick={handleSaveAndNext}
                     disabled={isSaving || !currentAnswerValue}
-                    className="btn-primary disabled:opacity-50"
+                    className="btn btn-primary test-action-button disabled:opacity-50"
                   >
                     {isSaving ? 'Menyimpan...' : 'Simpan dan Lanjutkan'}
                   </button>
@@ -612,7 +611,7 @@ export default function Test() {
                   <button
                     onClick={() => handleSubmit({ confirmManual: true })}
                     disabled={isSubmitting}
-                    className="ml-auto btn-primary disabled:opacity-50"
+                    className="ml-auto btn btn-primary test-action-button disabled:opacity-50"
                   >
                     {isSubmitting ? 'Memproses...' : 'Selesai Ujian'}
                   </button>
@@ -624,10 +623,11 @@ export default function Test() {
                   </div>
                 )}
               </div>
+              </div>
             </div>
           </div>
 
-          <div className="card">
+          <div className="card test-sidebar-card">
             <h3 className="font-bold mb-4">{isCpnsMode ? 'Navigasi Soal' : 'Status Subtes Aktif'}</h3>
 
             {isCpnsMode ? (
@@ -641,7 +641,7 @@ export default function Test() {
                       <button
                         key={question.id}
                         onClick={() => goToQuestion(question.id)}
-                        className={`w-full py-2 rounded font-semibold transition ${
+                        className={`w-full py-2 rounded font-semibold transition test-nav-chip ${
                           Number(question.id) === Number(currentQuestion?.id)
                             ? 'bg-blue-600 text-white'
                             : savedValue
@@ -670,7 +670,7 @@ export default function Test() {
                     <button
                       key={question.id}
                       onClick={() => goToQuestion(question.id)}
-                      className={`w-full rounded-lg border px-4 py-3 text-left ${
+                      className={`w-full rounded-lg border px-4 py-3 text-left test-subtest-chip ${
                         Number(question.id) === Number(currentQuestion?.id)
                           ? 'border-blue-500 bg-blue-50'
                           : savedValue

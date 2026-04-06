@@ -1763,6 +1763,46 @@ textarea:focus-visible {
   background: #fff;
 }
 
+.admin-section-filter {
+  min-width: min(100%, 260px);
+}
+
+.admin-section-summary {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.admin-section-summary-chip {
+  min-width: 150px;
+  padding: 0.8rem 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+  color: #314156;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+}
+
+.admin-section-summary-chip span {
+  font-size: 0.82rem;
+  color: #607089;
+  line-height: 1.35;
+}
+
+.admin-section-summary-chip strong {
+  font-size: 1rem;
+  color: #132038;
+}
+
+.admin-section-summary-chip-active {
+  border-color: rgba(45, 140, 255, 0.36);
+  background: linear-gradient(180deg, rgba(240, 248, 255, 0.98) 0%, rgba(230, 242, 255, 0.98) 100%);
+  box-shadow: 0 16px 32px rgba(45, 140, 255, 0.12);
+}
+
 .admin-import-card {
   margin-top: 1rem;
   padding: 1rem 1.05rem;
@@ -2106,6 +2146,7 @@ textarea:focus-visible {
     width: 100%;
   }
 
+  .admin-section-filter,
   .admin-search-input {
     min-width: 100%;
     width: 100%;

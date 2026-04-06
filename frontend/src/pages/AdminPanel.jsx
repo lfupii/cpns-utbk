@@ -233,6 +233,7 @@ export default function AdminPanel() {
   const [showQuestionEditor, setShowQuestionEditor] = useState(false);
   const [expandedQuestionId, setExpandedQuestionId] = useState(null);
   const [questionQuery, setQuestionQuery] = useState('');
+  const [questionSectionFilter, setQuestionSectionFilter] = useState('');
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState('');
 
@@ -248,20 +249,53 @@ export default function AdminPanel() {
     return response.data.data || [];
   }, []);
 
+  const sectionStats = useMemo(() => {
+    const counts = questions.reduce((accumulator, question) => {
+      const code = String(question.section_code || 'general');
+      return {
+        ...accumulator,
+        [code]: (accumulator[code] || 0) + 1,
+      };
+    }, {});
+
+    const mappedSections = packageSections.map((section) => ({
+      code: String(section.code),
+      name: section.name,
+      sessionName: section.session_name || '',
+      count: counts[String(section.code)] || 0,
+    }));
+
+    const knownCodes = new Set(mappedSections.map((section) => section.code));
+    const uncategorizedSections = Object.entries(counts)
+      .filter(([code]) => !knownCodes.has(code))
+      .map(([code, count]) => ({
+        code,
+        name: questions.find((question) => String(question.section_code || 'general') === code)?.section_name || 'Bagian umum',
+        sessionName: '',
+        count,
+      }));
+
+    return [...mappedSections, ...uncategorizedSections];
+  }, [packageSections, questions]);
+
   const filteredQuestions = useMemo(() => {
     const needle = questionQuery.trim().toLowerCase();
-    if (!needle) {
-      return questions;
-    }
-
     return questions.filter((question) => {
+      if (questionSectionFilter && String(question.section_code || 'general') !== questionSectionFilter) {
+        return false;
+      }
+
+      if (!needle) {
+        return true;
+      }
+
       const haystack = [
         question.question_text,
         question.section_name,
       ].join(' ').toLowerCase();
       return haystack.includes(needle);
     });
-  }, [questionQuery, questions]);
+  }, [questionQuery, questionSectionFilter, questions]);
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -344,6 +378,17 @@ export default function AdminPanel() {
       return createEmptyQuestionForm(defaultSectionCode);
     });
   }, [defaultSectionCode]);
+
+  useEffect(() => {
+    if (!questionSectionFilter) {
+      return;
+    }
+
+    const hasMatchingSection = sectionStats.some((section) => section.code === questionSectionFilter);
+    if (!hasMatchingSection) {
+      setQuestionSectionFilter('');
+    }
+  }, [questionSectionFilter, sectionStats]);
 
   const resetQuestionForm = () => {
     setQuestionForm(createEmptyQuestionForm(defaultSectionCode));
@@ -723,6 +768,19 @@ export default function AdminPanel() {
                   </p>
                 </div>
                 <div className="admin-list-toolbar-actions">
+                  <select
+                    value={questionSectionFilter}
+                    onChange={(event) => setQuestionSectionFilter(event.target.value)}
+                    className="admin-search-input admin-section-filter"
+                  >
+                    <option value="">Semua subtes</option>
+                    {sectionStats.map((section) => (
+                      <option key={section.code} value={section.code}>
+                        {section.sessionName ? `${section.sessionName} • ` : ''}
+                        {section.name} ({section.count})
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="search"
                     value={questionQuery}
@@ -735,6 +793,30 @@ export default function AdminPanel() {
                   </button>
                 </div>
               </div>
+
+              {sectionStats.length > 0 && (
+                <div className="admin-section-summary">
+                  <button
+                    type="button"
+                    className={`admin-section-summary-chip ${questionSectionFilter === '' ? 'admin-section-summary-chip-active' : ''}`}
+                    onClick={() => setQuestionSectionFilter('')}
+                  >
+                    <span>Semua Subtes</span>
+                    <strong>{questions.length}</strong>
+                  </button>
+                  {sectionStats.map((section) => (
+                    <button
+                      key={section.code}
+                      type="button"
+                      className={`admin-section-summary-chip ${questionSectionFilter === section.code ? 'admin-section-summary-chip-active' : ''}`}
+                      onClick={() => setQuestionSectionFilter(section.code)}
+                    >
+                      <span>{section.name}</span>
+                      <strong>{section.count}</strong>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="admin-import-card">
                 <div>

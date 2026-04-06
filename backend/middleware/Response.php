@@ -112,9 +112,14 @@ function userHasRole(array $decoded, mysqli $mysqli, string $role): bool {
 function verifyAdmin() {
     $decoded = verifyToken();
 
-    require_once __DIR__ . '/../config/Database.php';
+    if (($decoded['role'] ?? null) === 'admin') {
+        return $decoded;
+    }
 
-    if (userHasRole($decoded, $mysqli, 'admin')) {
+    require_once __DIR__ . '/../config/Database.php';
+    $mysqli = $GLOBALS['mysqli'] ?? null;
+
+    if ($mysqli instanceof mysqli && userHasRole($decoded, $mysqli, 'admin')) {
         $decoded['role'] = 'admin';
         return $decoded;
     }

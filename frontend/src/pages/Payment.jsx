@@ -80,7 +80,11 @@ export default function Payment() {
                 transaction_id: result?.transaction_id || null,
               });
               console.log('Payment successful:', result);
-              navigate(`/test/${numericPackageId}`);
+              window.sessionStorage.setItem(
+                'paymentSuccessMessage',
+                `Pembayaran untuk paket ${packageData?.name || 'tryout'} berhasil. Akses sudah aktif dan kamu bisa mulai test dari halaman Paket Aktif kapan saja.`
+              );
+              navigate('/active-packages');
             } catch (confirmError) {
               setError(
                 confirmError.response?.data?.message ||

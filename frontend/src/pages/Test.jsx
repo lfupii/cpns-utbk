@@ -137,6 +137,14 @@ export default function Test() {
     activeQuestions.findIndex((question) => Number(question.id) === Number(currentQuestion?.id))
   ), [activeQuestions, currentQuestion]);
 
+  const orderedQuestions = useMemo(() => (
+    workflow?.mode === MODE_UTBK ? activeQuestions : questions
+  ), [activeQuestions, questions, workflow]);
+
+  const orderedCurrentQuestionIndex = useMemo(() => (
+    orderedQuestions.findIndex((question) => Number(question.id) === Number(currentQuestion?.id))
+  ), [currentQuestion, orderedQuestions]);
+
   const activeSectionIndex = useMemo(() => (
     (workflow?.sections || []).findIndex(
       (section) => section.code === attemptState.activeSectionCode
@@ -473,8 +481,18 @@ export default function Test() {
     }
 
     setError('');
-    const nextQuestion = activeQuestions[currentQuestionIndex + 1] || null;
+    const nextQuestion = orderedQuestions[orderedCurrentQuestionIndex + 1] || null;
     await saveAnswer(currentQuestion.id, selectedOptionId, nextQuestion?.id || null);
+  };
+
+  const handleRelativeNavigation = (direction) => {
+    const nextIndex = orderedCurrentQuestionIndex + direction;
+    const targetQuestion = orderedQuestions[nextIndex] || null;
+    if (!targetQuestion) {
+      return;
+    }
+
+    goToQuestion(targetQuestion.id);
   };
 
   if (loading) {
@@ -511,11 +529,11 @@ export default function Test() {
   const currentGlobalQuestionIndex = questions.findIndex(
     (question) => Number(question.id) === Number(currentQuestion.id)
   );
-  const previousQuestionId = currentQuestionIndex > 0 ? activeQuestions[currentQuestionIndex - 1]?.id : null;
-  const nextQuestionId = currentQuestionIndex >= 0 ? activeQuestions[currentQuestionIndex + 1]?.id : null;
-  const hasMultipleActiveQuestions = activeQuestions.length > 1;
+  const previousQuestionId = orderedCurrentQuestionIndex > 0 ? orderedQuestions[orderedCurrentQuestionIndex - 1]?.id : null;
+  const nextQuestionId = orderedCurrentQuestionIndex >= 0 ? orderedQuestions[orderedCurrentQuestionIndex + 1]?.id : null;
+  const hasMultipleActiveQuestions = orderedQuestions.length > 1;
   const questionTitleNumber = isUtbkMode
-    ? Math.max(1, currentQuestionIndex + 1)
+    ? Math.max(1, orderedCurrentQuestionIndex + 1)
     : Math.max(1, currentGlobalQuestionIndex + 1);
 
   return (
@@ -633,8 +651,9 @@ export default function Test() {
               <div className="flex flex-wrap gap-3 pt-6 border-t border-gray-200">
                 {(isCpnsMode || hasMultipleActiveQuestions) && (
                   <button
-                    onClick={() => goToQuestion(isCpnsMode ? questions[currentGlobalQuestionIndex - 1]?.id : previousQuestionId)}
-                    disabled={isCpnsMode ? currentGlobalQuestionIndex <= 0 : !previousQuestionId}
+                    type="button"
+                    onClick={() => handleRelativeNavigation(-1)}
+                    disabled={!previousQuestionId}
                     className="btn btn-outline test-action-button disabled:opacity-50"
                   >
                     ← Sebelumnya
@@ -643,8 +662,9 @@ export default function Test() {
 
                 {(isCpnsMode || hasMultipleActiveQuestions) && (
                   <button
-                    onClick={() => goToQuestion(isCpnsMode ? questions[currentGlobalQuestionIndex + 1]?.id : nextQuestionId)}
-                    disabled={isCpnsMode ? currentGlobalQuestionIndex === -1 || currentGlobalQuestionIndex >= questions.length - 1 : !nextQuestionId}
+                    type="button"
+                    onClick={() => handleRelativeNavigation(1)}
+                    disabled={!nextQuestionId}
                     className="btn btn-outline test-action-button disabled:opacity-50"
                   >
                     Selanjutnya →
@@ -653,6 +673,7 @@ export default function Test() {
 
                 {isCpnsMode && (
                   <button
+                    type="button"
                     onClick={handleSaveAndNext}
                     disabled={isSaving || !currentAnswerValue}
                     className="btn btn-primary test-action-button disabled:opacity-50"
@@ -663,6 +684,7 @@ export default function Test() {
 
                 {isCpnsMode && (
                   <button
+                    type="button"
                     onClick={() => handleSubmit({ confirmManual: true })}
                     disabled={isSubmitting}
                     className="ml-auto btn btn-primary test-action-button disabled:opacity-50"
@@ -680,6 +702,7 @@ export default function Test() {
 
                     {nextSection ? (
                       <button
+                        type="button"
                         onClick={handleAdvanceSection}
                         disabled={isAdvancingSection || isSubmitting}
                         className="btn btn-primary test-action-button disabled:opacity-50"
@@ -688,6 +711,7 @@ export default function Test() {
                       </button>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => handleSubmit({ confirmManual: true })}
                         disabled={isSubmitting}
                         className="btn btn-primary test-action-button disabled:opacity-50"

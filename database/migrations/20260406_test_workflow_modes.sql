@@ -1,12 +1,104 @@
-ALTER TABLE test_packages
-  ADD COLUMN IF NOT EXISTS test_mode VARCHAR(50) NULL AFTER time_limit,
-  ADD COLUMN IF NOT EXISTS workflow_config LONGTEXT NULL AFTER test_mode;
+SET @add_test_mode = (
+  SELECT IF(
+    EXISTS(
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'test_packages'
+        AND column_name = 'test_mode'
+    ),
+    'SELECT 1',
+    'ALTER TABLE test_packages ADD COLUMN test_mode VARCHAR(50) NULL AFTER time_limit'
+  )
+);
+PREPARE stmt FROM @add_test_mode;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-ALTER TABLE questions
-  ADD COLUMN IF NOT EXISTS section_code VARCHAR(100) NULL AFTER difficulty,
-  ADD COLUMN IF NOT EXISTS section_name VARCHAR(150) NULL AFTER section_code,
-  ADD COLUMN IF NOT EXISTS section_order INT NOT NULL DEFAULT 1 AFTER section_name,
-  ADD COLUMN IF NOT EXISTS question_order INT NOT NULL DEFAULT 0 AFTER section_order;
+SET @add_workflow_config = (
+  SELECT IF(
+    EXISTS(
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'test_packages'
+        AND column_name = 'workflow_config'
+    ),
+    'SELECT 1',
+    'ALTER TABLE test_packages ADD COLUMN workflow_config LONGTEXT NULL AFTER test_mode'
+  )
+);
+PREPARE stmt FROM @add_workflow_config;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @add_section_code = (
+  SELECT IF(
+    EXISTS(
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'questions'
+        AND column_name = 'section_code'
+    ),
+    'SELECT 1',
+    'ALTER TABLE questions ADD COLUMN section_code VARCHAR(100) NULL AFTER difficulty'
+  )
+);
+PREPARE stmt FROM @add_section_code;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @add_section_name = (
+  SELECT IF(
+    EXISTS(
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'questions'
+        AND column_name = 'section_name'
+    ),
+    'SELECT 1',
+    'ALTER TABLE questions ADD COLUMN section_name VARCHAR(150) NULL AFTER section_code'
+  )
+);
+PREPARE stmt FROM @add_section_name;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @add_section_order = (
+  SELECT IF(
+    EXISTS(
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'questions'
+        AND column_name = 'section_order'
+    ),
+    'SELECT 1',
+    'ALTER TABLE questions ADD COLUMN section_order INT NOT NULL DEFAULT 1 AFTER section_name'
+  )
+);
+PREPARE stmt FROM @add_section_order;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @add_question_order = (
+  SELECT IF(
+    EXISTS(
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'questions'
+        AND column_name = 'question_order'
+    ),
+    'SELECT 1',
+    'ALTER TABLE questions ADD COLUMN question_order INT NOT NULL DEFAULT 0 AFTER section_order'
+  )
+);
+PREPARE stmt FROM @add_question_order;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 UPDATE test_packages
 SET

@@ -175,7 +175,8 @@ class QuestionController {
                                 JSON_OBJECT(
                                     'id', qo.id,
                                     'letter', qo.option_letter,
-                                    'text', qo.option_text
+                                    'text', qo.option_text,
+                                    'image_url', qo.option_image_url
                                 )
                                 ORDER BY qo.id SEPARATOR ','
                              ) AS options
@@ -192,7 +193,8 @@ class QuestionController {
                                 JSON_OBJECT(
                                     'id', qo.id,
                                     'letter', qo.option_letter,
-                                    'text', qo.option_text
+                                    'text', qo.option_text,
+                                    'image_url', qo.option_image_url
                                 )
                                 ORDER BY qo.id SEPARATOR ','
                              ) AS options

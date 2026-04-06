@@ -455,7 +455,7 @@ export default function Test() {
       [questionId]: Number(optionId),
     }));
 
-    if (workflow?.save_behavior === 'auto') {
+    if (workflow?.save_behavior === 'auto' || workflow?.mode === MODE_CPNS) {
       saveAnswer(questionId, optionId);
     }
   };
@@ -467,22 +467,6 @@ export default function Test() {
 
     setCurrentQuestionId(Number(questionId));
     setSaveMessage('');
-  };
-
-  const handleSaveAndNext = async () => {
-    if (!currentQuestion) {
-      return;
-    }
-
-    const selectedOptionId = draftAnswers[String(currentQuestion.id)] || draftAnswers[currentQuestion.id];
-    if (!selectedOptionId) {
-      setError('Pilih salah satu jawaban terlebih dahulu.');
-      return;
-    }
-
-    setError('');
-    const nextQuestion = orderedQuestions[orderedCurrentQuestionIndex + 1] || null;
-    await saveAnswer(currentQuestion.id, selectedOptionId, nextQuestion?.id || null);
   };
 
   const handleRelativeNavigation = (direction) => {
@@ -539,38 +523,43 @@ export default function Test() {
   return (
     <div className="min-h-screen bg-gray-100 test-shell">
       <div className="bg-white shadow-lg test-topbar">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h1 className="text-xl font-bold">{isCpnsMode ? 'Simulasi CAT CPNS' : 'Simulasi UTBK'}</h1>
-              <p className="text-sm text-gray-600">
+        <div className="container mx-auto px-4 py-5">
+          <div className="test-header-panel">
+            <div className="test-header-copy">
+              <span className="test-header-badge">
+                {isCpnsMode ? 'Mode CPNS' : 'Mode UTBK'}
+              </span>
+              <h1 className="test-header-title">
+                {isCpnsMode ? 'Tryout CPNS' : 'Tryout UTBK'}
+              </h1>
+              <p className="test-header-description">
                 {isCpnsMode
-                  ? 'Navigasi soal bebas. Simpan jawaban dengan tombol Simpan dan Lanjutkan.'
-                  : `Subtes aktif: ${attemptState.activeSectionName || '-'}`}
+                  ? 'Navigasi soal bebas dan jawaban akan langsung tersimpan saat dipilih.'
+                  : 'Kerjakan tiap bagian sesuai alur tryout dan pantau waktu yang masih tersedia.'}
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-6 items-center">
-              <div>
-                <p className="text-gray-600 text-sm">Terjawab</p>
-                <p className="font-bold">{answeredCount} / {totalQuestionCount}</p>
+            <div className="test-header-stats">
+              <div className="test-header-stat">
+                <p className="test-header-stat-label">Terjawab</p>
+                <p className="test-header-stat-value">{answeredCount} / {totalQuestionCount}</p>
               </div>
-              <div>
-                <p className="text-gray-600 text-sm">
+              <div className="test-header-stat">
+                <p className="test-header-stat-label">
                   {isUtbkMode ? 'Sisa Waktu Subtes' : 'Sisa Waktu'}
                 </p>
-                <p className={`font-bold text-lg ${
+                <p className={`test-header-stat-value ${
                   (isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds) < 300
-                    ? 'text-red-600'
-                    : 'text-green-600'
+                    ? 'test-header-stat-value-danger'
+                    : 'test-header-stat-value-success'
                 }`}>
                   {formatTime(isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds)}
                 </p>
               </div>
               {isUtbkMode && (
-                <div>
-                  <p className="text-gray-600 text-sm">Sisa Waktu Total</p>
-                  <p className="font-bold text-lg">{formatTime(attemptState.remainingSeconds)}</p>
+                <div className="test-header-stat">
+                  <p className="test-header-stat-label">Sisa Waktu Total</p>
+                  <p className="test-header-stat-value">{formatTime(attemptState.remainingSeconds)}</p>
                 </div>
               )}
             </div>
@@ -600,7 +589,7 @@ export default function Test() {
                     <h2 className="text-lg font-bold">
                       Soal Nomor {questionTitleNumber}
                     </h2>
-                    <p className="text-sm text-gray-600">
+                    <p className="test-question-section-label">
                       {currentQuestion.section_name || 'Bagian umum'}
                     </p>
                   </div>
@@ -674,17 +663,6 @@ export default function Test() {
                 {isCpnsMode && (
                   <button
                     type="button"
-                    onClick={handleSaveAndNext}
-                    disabled={isSaving || !currentAnswerValue}
-                    className="btn btn-primary test-action-button disabled:opacity-50"
-                  >
-                    {isSaving ? 'Menyimpan...' : 'Simpan dan Lanjutkan'}
-                  </button>
-                )}
-
-                {isCpnsMode && (
-                  <button
-                    type="button"
                     onClick={() => handleSubmit({ confirmManual: true })}
                     disabled={isSubmitting}
                     className="ml-auto btn btn-primary test-action-button disabled:opacity-50"
@@ -734,7 +712,6 @@ export default function Test() {
                 <div className="grid grid-cols-4 gap-2">
                   {questions.map((question, index) => {
                     const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
-                    const draftValue = draftAnswers[String(question.id)] || draftAnswers[question.id];
 
                     return (
                       <button
@@ -745,8 +722,6 @@ export default function Test() {
                             ? 'bg-blue-600 text-white'
                             : savedValue
                             ? 'bg-green-100 text-green-800'
-                            : draftValue
-                            ? 'bg-amber-100 text-amber-800'
                             : 'bg-red-100 text-red-700'
                         }`}
                       >
@@ -757,7 +732,6 @@ export default function Test() {
                 </div>
                 <div className="mt-4 pt-4 border-t text-xs text-gray-600 space-y-2">
                   <p><span className="inline-block w-3 h-3 rounded bg-green-100 mr-2" />Sudah tersimpan</p>
-                  <p><span className="inline-block w-3 h-3 rounded bg-amber-100 mr-2" />Sudah dipilih, belum disimpan</p>
                   <p><span className="inline-block w-3 h-3 rounded bg-red-100 mr-2" />Belum dijawab</p>
                 </div>
               </>

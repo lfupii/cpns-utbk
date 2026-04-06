@@ -50,16 +50,26 @@ class AdminController {
         return $package;
     }
 
+    private function normalizeMediaUrl($value): ?string {
+        $normalized = trim((string) ($value ?? ''));
+        if ($normalized === '') {
+            return null;
+        }
+
+        return substr($normalized, 0, 1000);
+    }
+
     private function normalizeQuestionPayload(int $packageId, array $data): array {
         $questionText = trim((string) ($data['question_text'] ?? ''));
+        $questionImageUrl = $this->normalizeMediaUrl($data['question_image_url'] ?? null);
         $difficulty = (string) ($data['difficulty'] ?? 'medium');
         $questionType = (string) ($data['question_type'] ?? 'single_choice');
         $sectionCode = trim((string) ($data['section_code'] ?? ''));
         $questionOrder = max(1, (int) ($data['question_order'] ?? 1));
         $options = $data['options'] ?? [];
 
-        if ($questionText === '') {
-            sendResponse('error', 'Pertanyaan tidak boleh kosong', null, 422);
+        if ($questionText === '' && $questionImageUrl === null) {
+            sendResponse('error', 'Pertanyaan harus memiliki teks atau gambar', null, 422);
         }
 
         $allowedDifficulty = ['easy', 'medium', 'hard'];
@@ -97,14 +107,15 @@ class AdminController {
         foreach ($options as $index => $option) {
             $letter = trim((string) ($option['letter'] ?? ''));
             $text = trim((string) ($option['text'] ?? ''));
+            $imageUrl = $this->normalizeMediaUrl($option['image_url'] ?? null);
             $isCorrect = !empty($option['is_correct']);
 
             if ($letter === '') {
                 $letter = chr(65 + $index);
             }
 
-            if ($text === '') {
-                sendResponse('error', 'Teks opsi jawaban tidak boleh kosong', null, 422);
+            if ($text === '' && $imageUrl === null) {
+                sendResponse('error', 'Setiap opsi jawaban harus memiliki teks atau gambar', null, 422);
             }
 
             if ($isCorrect) {
@@ -114,6 +125,7 @@ class AdminController {
             $normalizedOptions[] = [
                 'letter' => strtoupper(substr($letter, 0, 5)),
                 'text' => $text,
+                'image_url' => $imageUrl,
                 'is_correct' => $isCorrect ? 1 : 0,
             ];
         }
@@ -124,6 +136,7 @@ class AdminController {
 
         return [
             'question_text' => $questionText,
+            'question_image_url' => $questionImageUrl,
             'difficulty' => $difficulty,
             'question_type' => $questionType,
             'section_code' => $sectionCode,
@@ -132,6 +145,53 @@ class AdminController {
             'question_order' => $questionOrder,
             'options' => $normalizedOptions,
         ];
+    }
+
+    private function insertQuestionWithOptions(int $packageId, array $payload): int {
+        $insertQuestion = $this->mysqli->prepare(
+            'INSERT INTO questions (
+                package_id,
+                question_text,
+                question_image_url,
+                question_type,
+                difficulty,
+                section_code,
+                section_name,
+                section_order,
+                question_order
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $insertQuestion->bind_param(
+            'issssssii',
+            $packageId,
+            $payload['question_text'],
+            $payload['question_image_url'],
+            $payload['question_type'],
+            $payload['difficulty'],
+            $payload['section_code'],
+            $payload['section_name'],
+            $payload['section_order'],
+            $payload['question_order']
+        );
+        $insertQuestion->execute();
+        $questionId = (int) $insertQuestion->insert_id;
+
+        $insertOption = $this->mysqli->prepare(
+            'INSERT INTO question_options (question_id, option_letter, option_text, option_image_url, is_correct) VALUES (?, ?, ?, ?, ?)'
+        );
+        foreach ($payload['options'] as $option) {
+            $insertOption->bind_param(
+                'isssi',
+                $questionId,
+                $option['letter'],
+                $option['text'],
+                $option['image_url'],
+                $option['is_correct']
+            );
+            $insertOption->execute();
+        }
+
+        return $questionId;
     }
 
     public function getPackages() {
@@ -200,6 +260,7 @@ class AdminController {
                         'id', qo.id,
                         'letter', qo.option_letter,
                         'text', qo.option_text,
+                        'image_url', qo.option_image_url,
                         'is_correct', qo.is_correct
                       ) ORDER BY qo.id SEPARATOR ','
                   ) AS options
@@ -235,39 +296,7 @@ class AdminController {
         $this->mysqli->begin_transaction();
 
         try {
-            $insertQuestion = $this->mysqli->prepare(
-                'INSERT INTO questions (
-                    package_id,
-                    question_text,
-                    question_type,
-                    difficulty,
-                    section_code,
-                    section_name,
-                    section_order,
-                    question_order
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $insertQuestion->bind_param(
-                'isssssii',
-                $packageId,
-                $payload['question_text'],
-                $payload['question_type'],
-                $payload['difficulty'],
-                $payload['section_code'],
-                $payload['section_name'],
-                $payload['section_order'],
-                $payload['question_order']
-            );
-            $insertQuestion->execute();
-            $questionId = (int) $insertQuestion->insert_id;
-
-            $insertOption = $this->mysqli->prepare(
-                'INSERT INTO question_options (question_id, option_letter, option_text, is_correct) VALUES (?, ?, ?, ?)'
-            );
-            foreach ($payload['options'] as $option) {
-                $insertOption->bind_param('issi', $questionId, $option['letter'], $option['text'], $option['is_correct']);
-                $insertOption->execute();
-            }
+            $questionId = $this->insertQuestionWithOptions($packageId, $payload);
 
             $this->syncQuestionCount($packageId);
             $this->mysqli->commit();
@@ -295,6 +324,7 @@ class AdminController {
             $updateQuestion = $this->mysqli->prepare(
                 'UPDATE questions
                  SET question_text = ?,
+                     question_image_url = ?,
                      question_type = ?,
                      difficulty = ?,
                      section_code = ?,
@@ -304,8 +334,9 @@ class AdminController {
                  WHERE id = ? AND package_id = ?'
             );
             $updateQuestion->bind_param(
-                'sssssiiii',
+                'ssssssiiii',
                 $payload['question_text'],
+                $payload['question_image_url'],
                 $payload['question_type'],
                 $payload['difficulty'],
                 $payload['section_code'],
@@ -322,10 +353,17 @@ class AdminController {
             $deleteOptions->execute();
 
             $insertOption = $this->mysqli->prepare(
-                'INSERT INTO question_options (question_id, option_letter, option_text, is_correct) VALUES (?, ?, ?, ?)'
+                'INSERT INTO question_options (question_id, option_letter, option_text, option_image_url, is_correct) VALUES (?, ?, ?, ?, ?)'
             );
             foreach ($payload['options'] as $option) {
-                $insertOption->bind_param('issi', $questionId, $option['letter'], $option['text'], $option['is_correct']);
+                $insertOption->bind_param(
+                    'isssi',
+                    $questionId,
+                    $option['letter'],
+                    $option['text'],
+                    $option['image_url'],
+                    $option['is_correct']
+                );
                 $insertOption->execute();
             }
 
@@ -335,6 +373,53 @@ class AdminController {
         } catch (Throwable $error) {
             $this->mysqli->rollback();
             sendResponse('error', 'Gagal memperbarui soal', ['details' => $error->getMessage()], 500);
+        }
+    }
+
+    public function importQuestions() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        $packageId = (int) ($data['package_id'] ?? 0);
+        $rows = $data['rows'] ?? [];
+
+        if ($packageId <= 0) {
+            sendResponse('error', 'Package ID harus diisi', null, 400);
+        }
+
+        if (!is_array($rows) || count($rows) === 0) {
+            sendResponse('error', 'Data import kosong', null, 422);
+        }
+
+        if (count($rows) > 500) {
+            sendResponse('error', 'Maksimal 500 soal per sekali import', null, 422);
+        }
+
+        $this->mysqli->begin_transaction();
+
+        try {
+            $imported = 0;
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    throw new RuntimeException('Format baris import tidak valid', 422);
+                }
+
+                $payload = $this->normalizeQuestionPayload($packageId, $row);
+                $this->insertQuestionWithOptions($packageId, $payload);
+                $imported++;
+            }
+
+            $this->syncQuestionCount($packageId);
+            $this->mysqli->commit();
+            sendResponse('success', 'Import soal berhasil', [
+                'imported_count' => $imported,
+            ], 201);
+        } catch (RuntimeException $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 422);
+        } catch (Throwable $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', 'Gagal mengimpor soal', ['details' => $error->getMessage()], 500);
         }
     }
 
@@ -377,6 +462,8 @@ if (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 
     $controller->updatePackage();
 } elseif (strpos($requestPath, '/api/admin/questions') !== false && $requestMethod === 'GET') {
     $controller->getQuestions();
+} elseif (strpos($requestPath, '/api/admin/questions/import') !== false && $requestMethod === 'POST') {
+    $controller->importQuestions();
 } elseif (strpos($requestPath, '/api/admin/questions') !== false && $requestMethod === 'POST') {
     $controller->createQuestion();
 } elseif (strpos($requestPath, '/api/admin/questions') !== false && $requestMethod === 'PUT') {

@@ -214,7 +214,17 @@ function ensureTestWorkflowSchema(mysqli $mysqli): void {
         $schemaChanged = true;
     }
 
-    $workflowSchemaVersion = '20260406_test_workflow_modes_v1';
+    if (!databaseColumnExists($mysqli, 'questions', 'question_image_url')) {
+        $mysqli->query("ALTER TABLE questions ADD COLUMN question_image_url VARCHAR(1000) NULL AFTER question_text");
+        $schemaChanged = true;
+    }
+
+    if (databaseTableExists($mysqli, 'question_options') && !databaseColumnExists($mysqli, 'question_options', 'option_image_url')) {
+        $mysqli->query("ALTER TABLE question_options ADD COLUMN option_image_url VARCHAR(1000) NULL AFTER option_text");
+        $schemaChanged = true;
+    }
+
+    $workflowSchemaVersion = '20260406_test_workflow_modes_v2';
     $appliedWorkflowSchemaVersion = getSystemSetting($mysqli, 'test_workflow_schema_version');
     if ($schemaChanged || $appliedWorkflowSchemaVersion !== $workflowSchemaVersion) {
         backfillTestWorkflowData($mysqli);

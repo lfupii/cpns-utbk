@@ -555,7 +555,17 @@ export default function Test() {
                       currentQuestion.difficulty === 'medium' ? 'Sedang' : 'Sulit'}
                   </span>
                 </div>
-                <p className="text-gray-800 leading-relaxed text-lg">{currentQuestion.question_text}</p>
+                {currentQuestion.question_text && (
+                  <p className="text-gray-800 leading-relaxed text-lg">{currentQuestion.question_text}</p>
+                )}
+                {currentQuestion.question_image_url && (
+                  <img
+                    src={currentQuestion.question_image_url}
+                    alt={`Soal ${currentQuestionIndex + 1}`}
+                    className="test-question-image"
+                    loading="lazy"
+                  />
+                )}
               </div>
 
               <div className="space-y-3 mb-8">
@@ -574,7 +584,15 @@ export default function Test() {
                     />
                     <div className="ml-4">
                       <p className="font-semibold">{option.letter}.</p>
-                      <p className="text-gray-800">{option.text}</p>
+                      {option.text && <p className="text-gray-800">{option.text}</p>}
+                      {option.image_url && (
+                        <img
+                          src={option.image_url}
+                          alt={`Opsi ${option.letter}`}
+                          className="test-option-image"
+                          loading="lazy"
+                        />
+                      )}
                     </div>
                   </label>
                 ))}

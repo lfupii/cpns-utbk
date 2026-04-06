@@ -522,22 +522,23 @@ export default function Test() {
 
   return (
     <div className="min-h-screen bg-gray-100 test-shell">
-      <div className="test-topbar">
-        <div className="container mx-auto px-4 pt-9 pb-4">
-          <div className="test-header-copy">
-            <h1 className="test-header-title">
+      <div className="container mx-auto px-4 py-8">
+        <section className="test-hero">
+          <div className="test-hero-copy">
+            <p className="test-hero-kicker">
+              {isCpnsMode ? 'CPNS Simulation' : 'UTBK Simulation'}
+            </p>
+            <h1 className="test-hero-title">
               {isCpnsMode ? 'Tryout CPNS' : 'Tryout UTBK'}
             </h1>
-            <p className="test-header-description">
+            <p className="test-hero-description">
               {isCpnsMode
-                ? 'Navigasi soal bebas dan jawaban akan langsung tersimpan saat dipilih.'
-                : 'Kerjakan tiap bagian sesuai alur tryout dan pantau waktu yang masih tersedia.'}
+                ? 'Navigasi soal bebas dengan penyimpanan jawaban otomatis setiap kali Anda memilih opsi.'
+                : 'Kerjakan setiap bagian sesuai alur tryout dan fokus pada waktu yang masih tersedia di tiap sesi.'}
             </p>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="container mx-auto px-4 py-8">
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
             {error}

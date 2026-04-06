@@ -253,7 +253,6 @@ export default function AdminPanel() {
       const haystack = [
         question.question_text,
         question.section_name,
-        question.difficulty,
       ].join(' ').toLowerCase();
       return haystack.includes(needle);
     });
@@ -723,7 +722,7 @@ export default function AdminPanel() {
                     type="search"
                     value={questionQuery}
                     onChange={(event) => setQuestionQuery(event.target.value)}
-                    placeholder="Cari soal, section, atau difficulty"
+                    placeholder="Cari soal atau section"
                     className="admin-search-input"
                   />
                   <button type="button" className="btn btn-primary" onClick={handleCreateQuestion}>
@@ -798,7 +797,7 @@ export default function AdminPanel() {
                           <div className="admin-question-row-main">
                             <strong>{truncateText(question.question_text || 'Soal berbasis gambar')}</strong>
                             <p>
-                              Urutan {question.question_order || index + 1} • {question.difficulty}
+                              Urutan {question.question_order || index + 1}
                               {question.question_image_url ? ' • ada gambar' : ''}
                             </p>
                           </div>
@@ -866,7 +865,7 @@ export default function AdminPanel() {
 
             {showQuestionEditor && (
               <section className="account-card admin-main-card admin-panel-card admin-editor-card">
-                <div className="admin-section-header">
+                <div className="admin-section-header admin-editor-header">
                   <div>
                     <h2>{questionForm.question_id ? 'Edit Soal' : 'Tambah Soal Baru'}</h2>
                     <p className="text-muted">Teks, gambar, pilihan jawaban, dan kunci jawaban dikelola di sini.</p>
@@ -905,15 +904,6 @@ export default function AdminPanel() {
                   </div>
 
                   <div className="account-form-grid">
-                    <div className="form-group">
-                      <label>Tingkat Kesulitan</label>
-                      <select name="difficulty" value={questionForm.difficulty} onChange={handleQuestionChange}>
-                        <option value="easy">Mudah</option>
-                        <option value="medium">Sedang</option>
-                        <option value="hard">Sulit</option>
-                      </select>
-                    </div>
-
                     <div className="form-group">
                       <label>Bagian / Subtes</label>
                       <select

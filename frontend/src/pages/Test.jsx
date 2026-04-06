@@ -115,12 +115,22 @@ export default function Test() {
   }, [attemptState.activeSectionCode, questions, workflow]);
 
   const currentQuestion = useMemo(() => {
-    if (!currentQuestionId) {
-      return activeQuestions[0] || questions[0] || null;
+    if (workflow?.mode === MODE_UTBK) {
+      if (!currentQuestionId) {
+        return activeQuestions[0] || null;
+      }
+
+      return activeQuestions.find(
+        (question) => Number(question.id) === Number(currentQuestionId)
+      ) || activeQuestions[0] || null;
     }
 
-    return questionMap.get(Number(currentQuestionId)) || activeQuestions[0] || questions[0] || null;
-  }, [activeQuestions, currentQuestionId, questionMap, questions]);
+    if (!currentQuestionId) {
+      return questions[0] || null;
+    }
+
+    return questionMap.get(Number(currentQuestionId)) || questions[0] || null;
+  }, [activeQuestions, currentQuestionId, questionMap, questions, workflow]);
 
   const currentQuestionIndex = useMemo(() => (
     activeQuestions.findIndex((question) => Number(question.id) === Number(currentQuestion?.id))
@@ -171,7 +181,10 @@ export default function Test() {
     const nextWorkflow = payload.workflow || null;
     const nextSections = payload.sections || [];
     const nextElapsedSeconds = Number(payload.attempt?.state?.elapsed_seconds || 0);
-    const nextCurrentQuestionId = preserveCurrentQuestion
+    const canPreserveCurrentQuestion = preserveCurrentQuestion && nextQuestions.some(
+      (question) => Number(question.id) === Number(currentQuestionId)
+    );
+    const nextCurrentQuestionId = canPreserveCurrentQuestion
       ? currentQuestionId
       : pickInitialQuestionId(nextQuestions, nextSavedAnswers, nextWorkflow, nextElapsedSeconds);
 
@@ -392,6 +405,10 @@ export default function Test() {
   };
 
   const goToQuestion = (questionId) => {
+    if (!questionId) {
+      return;
+    }
+
     setCurrentQuestionId(Number(questionId));
     setSaveMessage('');
   };
@@ -443,6 +460,15 @@ export default function Test() {
   const currentAnswerValue = draftAnswers[String(currentQuestion.id)] || draftAnswers[currentQuestion.id] || null;
   const isCurrentSaved = Number(savedAnswers[String(currentQuestion.id)] || 0) === Number(currentAnswerValue || 0)
     && Boolean(currentAnswerValue);
+  const currentGlobalQuestionIndex = questions.findIndex(
+    (question) => Number(question.id) === Number(currentQuestion.id)
+  );
+  const previousQuestionId = currentQuestionIndex > 0 ? activeQuestions[currentQuestionIndex - 1]?.id : null;
+  const nextQuestionId = currentQuestionIndex >= 0 ? activeQuestions[currentQuestionIndex + 1]?.id : null;
+  const hasMultipleActiveQuestions = activeQuestions.length > 1;
+  const questionTitleNumber = isUtbkMode
+    ? Math.max(1, currentQuestionIndex + 1)
+    : Math.max(1, currentGlobalQuestionIndex + 1);
 
   return (
     <div className="min-h-screen bg-gray-100 test-shell">
@@ -454,7 +480,7 @@ export default function Test() {
               <p className="text-sm text-gray-600">
                 {isCpnsMode
                   ? 'Navigasi soal bebas. Simpan jawaban dengan tombol Simpan dan Lanjutkan.'
-                  : `Subtes aktif: ${attemptState.activeSectionName || '-'}${sections.length ? ` • ${sections.length} subtes` : ''}`}
+                  : `Subtes aktif: ${attemptState.activeSectionName || '-'}`}
               </p>
             </div>
 
@@ -496,64 +522,18 @@ export default function Test() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">
-            {isUtbkMode && (
-              <div className="card mb-6">
-                <h2 className="text-lg font-bold mb-4">Alur Subtes UTBK</h2>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {sections.map((section) => {
-                    const isActive = section.code === attemptState.activeSectionCode;
-                    const isDone = attemptState.completedSectionCodes.includes(section.code) && !isActive;
-                    const isLocked = attemptState.lockedSectionCodes.includes(section.code);
-
-                    return (
-                      <div
-                        key={section.code}
-                        className={`test-section-flow-card ${
-                          isActive ? 'test-section-flow-card-active' :
-                          isDone ? 'test-section-flow-card-done' :
-                          isLocked ? 'test-section-flow-card-locked' :
-                          ''
-                        } rounded-lg border px-4 py-3`}
-                        
-                      >
-                        <p className="text-xs uppercase tracking-wide text-gray-500">
-                          {section.session_name || 'Bagian'}
-                        </p>
-                        <p className="font-semibold">{section.name}</p>
-                        <p className="text-sm text-gray-600">
-                          {section.question_count} soal
-                          {section.duration_minutes ? ` • ${section.duration_minutes} menit` : ''}
-                        </p>
-                        <p className="mt-2 text-xs font-semibold">
-                          {isActive ? 'Sedang dikerjakan' : isDone ? 'Sudah terkunci' : isLocked ? 'Menunggu giliran' : 'Siap'}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             <div className="card test-question-card">
               <div key={currentQuestion.id} className="test-question-stage">
               <div className="mb-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                   <div>
                     <h2 className="text-lg font-bold">
-                      Soal Nomor {isUtbkMode ? currentQuestionIndex + 1 : questions.findIndex((question) => question.id === currentQuestion.id) + 1}
+                      Soal Nomor {questionTitleNumber}
                     </h2>
                     <p className="text-sm text-gray-600">
                       {currentQuestion.section_name || 'Bagian umum'}
                     </p>
                   </div>
-                  <span className={`px-3 py-1 rounded text-sm font-semibold test-difficulty-pill ${
-                    currentQuestion.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
-                    currentQuestion.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {currentQuestion.difficulty === 'easy' ? 'Mudah' :
-                      currentQuestion.difficulty === 'medium' ? 'Sedang' : 'Sulit'}
-                  </span>
                 </div>
                 {currentQuestion.question_text && (
                   <p className="text-gray-800 leading-relaxed text-lg">{currentQuestion.question_text}</p>
@@ -599,21 +579,25 @@ export default function Test() {
               </div>
 
               <div className="flex flex-wrap gap-3 pt-6 border-t border-gray-200">
-                <button
-                  onClick={() => goToQuestion(activeQuestions[Math.max(0, currentQuestionIndex - 1)]?.id)}
-                  disabled={currentQuestionIndex <= 0}
-                  className="btn btn-outline test-action-button disabled:opacity-50"
-                >
-                  ← Sebelumnya
-                </button>
+                {(isCpnsMode || hasMultipleActiveQuestions) && (
+                  <button
+                    onClick={() => goToQuestion(isCpnsMode ? questions[currentGlobalQuestionIndex - 1]?.id : previousQuestionId)}
+                    disabled={isCpnsMode ? currentGlobalQuestionIndex <= 0 : !previousQuestionId}
+                    className="btn btn-outline test-action-button disabled:opacity-50"
+                  >
+                    ← Sebelumnya
+                  </button>
+                )}
 
-                <button
-                  onClick={() => goToQuestion(activeQuestions[Math.min(activeQuestions.length - 1, currentQuestionIndex + 1)]?.id)}
-                  disabled={currentQuestionIndex === -1 || currentQuestionIndex >= activeQuestions.length - 1}
-                  className="btn btn-outline test-action-button disabled:opacity-50"
-                >
-                  Selanjutnya →
-                </button>
+                {(isCpnsMode || hasMultipleActiveQuestions) && (
+                  <button
+                    onClick={() => goToQuestion(isCpnsMode ? questions[currentGlobalQuestionIndex + 1]?.id : nextQuestionId)}
+                    disabled={isCpnsMode ? currentGlobalQuestionIndex === -1 || currentGlobalQuestionIndex >= questions.length - 1 : !nextQuestionId}
+                    className="btn btn-outline test-action-button disabled:opacity-50"
+                  >
+                    Selanjutnya →
+                  </button>
+                )}
 
                 {isCpnsMode && (
                   <button
@@ -638,6 +622,7 @@ export default function Test() {
                 {isUtbkMode && (
                   <div className="ml-auto text-sm text-gray-600 self-center">
                     {isCurrentSaved ? 'Jawaban aktif sudah tersimpan otomatis.' : 'Jawaban akan tersimpan otomatis saat dipilih.'}
+                    {!hasMultipleActiveQuestions ? ' Subtes ini hanya memiliki 1 soal aktif.' : ''}
                   </div>
                 )}
               </div>
@@ -646,7 +631,7 @@ export default function Test() {
           </div>
 
           <div className="card test-sidebar-card">
-            <h3 className="font-bold mb-4">{isCpnsMode ? 'Navigasi Soal' : 'Status Subtes Aktif'}</h3>
+            <h3 className="font-bold mb-4">Navigasi Soal</h3>
 
             {isCpnsMode ? (
               <>
@@ -703,9 +688,6 @@ export default function Test() {
                     </button>
                   );
                 })}
-                <div className="pt-4 border-t text-sm text-gray-600">
-                  Subtes sebelumnya akan terkunci otomatis saat waktunya habis dan tidak dapat dibuka kembali.
-                </div>
               </div>
             )}
           </div>

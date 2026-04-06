@@ -235,7 +235,10 @@ class TestWorkflow {
             'active_section_code' => null,
             'active_section_name' => null,
             'active_section_order' => null,
+            'active_section_elapsed_seconds' => 0,
+            'active_section_duration_seconds' => 0,
             'active_section_remaining_seconds' => $remainingSeconds,
+            'active_section_started_at' => null,
             'available_section_codes' => array_values(array_map(
                 static function (array $section): string {
                     return (string) $section['code'];
@@ -244,56 +247,106 @@ class TestWorkflow {
             )),
             'completed_section_codes' => [],
             'locked_section_codes' => [],
+            'has_next_section' => false,
+            'next_section_code' => null,
+            'next_section_name' => null,
+            'is_last_section' => true,
         ];
 
         if ($workflow['mode'] !== self::MODE_UTBK_SECTIONED || count($workflow['sections']) === 0) {
             return $state;
         }
 
-        $cursor = 0;
-        $activeSection = null;
+        $sections = array_values($workflow['sections']);
+        $sectionDurations = array_map([self::class, 'getSectionDurationSeconds'], $sections);
+        $activeIndex = self::findSectionIndexByOrder(
+            $sections,
+            max(1, (int) ($attempt['active_section_order'] ?? ($sections[0]['order'] ?? 1)))
+        );
+        $sectionStartedAt = strtotime((string) ($attempt['active_section_started_at'] ?? ''));
+        if ($sectionStartedAt === false) {
+            $sectionStartedAt = $startTime;
+        }
+        if ($sectionStartedAt < $startTime) {
+            $sectionStartedAt = $startTime;
+        }
+
+        $consumedSeconds = 0;
         $completed = [];
         $locked = [];
-        $sections = $workflow['sections'];
 
-        foreach ($sections as $index => $section) {
-            $durationSeconds = max(0, (int) round((float) ($section['duration_minutes'] ?? 0) * 60));
-            $sectionEnd = $cursor + $durationSeconds;
+        for ($index = 0; $index < $activeIndex; $index++) {
+            $completed[] = (string) ($sections[$index]['code'] ?? '');
+            $consumedSeconds += (int) ($sectionDurations[$index] ?? 0);
+        }
 
-            if (!$isExpired && $elapsedSeconds < $sectionEnd) {
-                $activeSection = $section;
-                $state['active_section_remaining_seconds'] = max(0, $sectionEnd - $elapsedSeconds);
+        $activeSection = $sections[$activeIndex] ?? $sections[0];
+        $activeSectionStart = $sectionStartedAt;
+
+        while ($activeIndex < count($sections)) {
+            $activeSection = $sections[$activeIndex];
+            $durationSeconds = (int) ($sectionDurations[$activeIndex] ?? 0);
+            $elapsedInSection = max(0, $now - $activeSectionStart);
+
+            if ($durationSeconds > 0 && $elapsedInSection < $durationSeconds) {
+                $remainingSeconds = max(0, $totalSeconds - ($consumedSeconds + $elapsedInSection));
+                $state['elapsed_seconds'] = max(0, $totalSeconds - $remainingSeconds);
+                $state['remaining_seconds'] = $remainingSeconds;
+                $state['total_duration_seconds'] = $totalSeconds;
+                $state['is_expired'] = false;
+                $state['active_section_code'] = (string) ($activeSection['code'] ?? '');
+                $state['active_section_name'] = (string) ($activeSection['name'] ?? '');
+                $state['active_section_order'] = (int) ($activeSection['order'] ?? ($activeIndex + 1));
+                $state['active_section_elapsed_seconds'] = $elapsedInSection;
+                $state['active_section_duration_seconds'] = $durationSeconds;
+                $state['active_section_remaining_seconds'] = max(0, $durationSeconds - $elapsedInSection);
+                $state['active_section_started_at'] = date(DATE_ATOM, $activeSectionStart);
+                $state['available_section_codes'] = [$state['active_section_code']];
+                $state['completed_section_codes'] = $completed;
+
                 foreach ($sections as $futureIndex => $futureSection) {
-                    if ($futureIndex > $index) {
-                        $locked[] = (string) $futureSection['code'];
+                    if ($futureIndex > $activeIndex) {
+                        $locked[] = (string) ($futureSection['code'] ?? '');
                     }
                 }
-                break;
+
+                $nextSection = $sections[$activeIndex + 1] ?? null;
+                $state['locked_section_codes'] = $locked;
+                $state['has_next_section'] = $nextSection !== null;
+                $state['next_section_code'] = $nextSection['code'] ?? null;
+                $state['next_section_name'] = $nextSection['name'] ?? null;
+                $state['is_last_section'] = $nextSection === null;
+
+                return $state;
             }
 
-            $completed[] = (string) $section['code'];
-            $cursor = $sectionEnd;
+            $consumedSeconds += $durationSeconds;
+            $completed[] = (string) ($activeSection['code'] ?? '');
+            $activeSectionStart += $durationSeconds;
+            $activeIndex++;
         }
 
-        if ($isExpired) {
-            $activeSection = $sections[count($sections) - 1];
-            $locked = [];
-        } elseif ($activeSection === null) {
-            $activeSection = $sections[count($sections) - 1];
-        }
-
-        $state['active_section_code'] = (string) ($activeSection['code'] ?? '');
-        $state['active_section_name'] = (string) ($activeSection['name'] ?? '');
-        $state['active_section_order'] = (int) ($activeSection['order'] ?? 1);
-        $state['available_section_codes'] = $isExpired
-            ? []
-            : [$state['active_section_code']];
-        $state['completed_section_codes'] = $isExpired
-            ? array_values(array_map(static function (array $section): string {
-                return (string) $section['code'];
-            }, $sections))
-            : $completed;
-        $state['locked_section_codes'] = $locked;
+        $lastSection = $sections[count($sections) - 1];
+        $state['elapsed_seconds'] = $totalSeconds;
+        $state['remaining_seconds'] = 0;
+        $state['total_duration_seconds'] = $totalSeconds;
+        $state['is_expired'] = $totalSeconds > 0;
+        $state['active_section_code'] = (string) ($lastSection['code'] ?? '');
+        $state['active_section_name'] = (string) ($lastSection['name'] ?? '');
+        $state['active_section_order'] = (int) ($lastSection['order'] ?? count($sections));
+        $state['active_section_elapsed_seconds'] = (int) self::getSectionDurationSeconds($lastSection);
+        $state['active_section_duration_seconds'] = (int) self::getSectionDurationSeconds($lastSection);
+        $state['active_section_remaining_seconds'] = 0;
+        $state['active_section_started_at'] = date(DATE_ATOM, max($startTime, $activeSectionStart));
+        $state['available_section_codes'] = [];
+        $state['completed_section_codes'] = array_values(array_map(static function (array $section): string {
+            return (string) ($section['code'] ?? '');
+        }, $sections));
+        $state['locked_section_codes'] = [];
+        $state['has_next_section'] = false;
+        $state['next_section_code'] = null;
+        $state['next_section_name'] = null;
+        $state['is_last_section'] = true;
 
         return $state;
     }
@@ -390,5 +443,19 @@ class TestWorkflow {
         });
 
         return array_values($normalized);
+    }
+
+    private static function getSectionDurationSeconds(array $section): int {
+        return max(0, (int) round((float) ($section['duration_minutes'] ?? 0) * 60));
+    }
+
+    private static function findSectionIndexByOrder(array $sections, int $targetOrder): int {
+        foreach ($sections as $index => $section) {
+            if ((int) ($section['order'] ?? ($index + 1)) === $targetOrder) {
+                return $index;
+            }
+        }
+
+        return 0;
     }
 }

@@ -197,6 +197,23 @@ class TestController {
         return $result ?: null;
     }
 
+    private function findSectionIndex(array $sections, array $attemptState): int {
+        $activeCode = (string) ($attemptState['active_section_code'] ?? '');
+        $activeOrder = (int) ($attemptState['active_section_order'] ?? 0);
+
+        foreach ($sections as $index => $section) {
+            if ($activeCode !== '' && (string) ($section['code'] ?? '') === $activeCode) {
+                return $index;
+            }
+
+            if ($activeOrder > 0 && (int) ($section['order'] ?? ($index + 1)) === $activeOrder) {
+                return $index;
+            }
+        }
+
+        return 0;
+    }
+
     private function getAnsweredCount(int $attemptId): int {
         $query = 'SELECT COUNT(*) AS total FROM user_answers WHERE attempt_id = ?';
         $stmt = $this->mysqli->prepare($query);
@@ -330,6 +347,7 @@ class TestController {
             if ($workflow['mode'] === TestWorkflow::MODE_UTBK_SECTIONED
                 && empty($attemptState['is_expired'])
                 && empty($workflow['manual_finish'])
+                && empty($attemptState['is_last_section'])
             ) {
                 throw new RuntimeException(
                     'Tes UTBK berjalan otomatis per subtes dan hanya bisa selesai ketika seluruh waktu habis.',
@@ -464,9 +482,22 @@ class TestController {
 
             $this->ensureAttemptQuota($userId, $packageId, (int) $package['max_attempts'], $isAdmin);
 
-            $attemptQuery = "INSERT INTO test_attempts (user_id, package_id, status) VALUES (?, ?, 'ongoing')";
-            $stmt = $this->mysqli->prepare($attemptQuery);
-            $stmt->bind_param('ii', $userId, $packageId);
+            if ($workflow['mode'] === TestWorkflow::MODE_UTBK_SECTIONED) {
+                $firstSectionOrder = (int) ($workflow['sections'][0]['order'] ?? 1);
+                $attemptQuery = "INSERT INTO test_attempts (
+                                    user_id,
+                                    package_id,
+                                    status,
+                                    active_section_order,
+                                    active_section_started_at
+                                 ) VALUES (?, ?, 'ongoing', ?, NOW())";
+                $stmt = $this->mysqli->prepare($attemptQuery);
+                $stmt->bind_param('iii', $userId, $packageId, $firstSectionOrder);
+            } else {
+                $attemptQuery = "INSERT INTO test_attempts (user_id, package_id, status) VALUES (?, ?, 'ongoing')";
+                $stmt = $this->mysqli->prepare($attemptQuery);
+                $stmt->bind_param('ii', $userId, $packageId);
+            }
 
             if (!$stmt->execute()) {
                 sendResponse('error', 'Gagal memulai test', null, 500);
@@ -556,6 +587,83 @@ class TestController {
         }
     }
 
+    public function advanceSection() {
+        $tokenData = verifyToken();
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        $attemptId = (int) ($data['attempt_id'] ?? 0);
+        if ($attemptId <= 0) {
+            sendResponse('error', 'Attempt ID harus diisi', null, 400);
+        }
+
+        $userId = (int) $tokenData['userId'];
+        $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+        $this->mysqli->begin_transaction();
+
+        try {
+            $attempt = $this->getAttemptForUser($attemptId, $userId, true);
+            if (!$attempt) {
+                throw new RuntimeException('Attempt tidak ditemukan', 404);
+            }
+
+            if (($attempt['status'] ?? '') !== 'ongoing') {
+                $existingResult = $this->getExistingResult($attemptId, $userId);
+                throw new RuntimeException(
+                    $existingResult ? 'Attempt ini sudah selesai.' : 'Attempt ini sudah tidak aktif lagi',
+                    409
+                );
+            }
+
+            $this->assertActiveAccess($userId, (int) $attempt['package_id'], $isAdmin);
+            $workflow = TestWorkflow::buildPackageWorkflow($attempt);
+            if ($workflow['mode'] !== TestWorkflow::MODE_UTBK_SECTIONED) {
+                throw new RuntimeException('Fitur pindah subtes hanya tersedia untuk paket UTBK.', 400);
+            }
+
+            $attemptState = TestWorkflow::computeAttemptState($attempt, $workflow);
+            if (!empty($attemptState['is_expired'])) {
+                $this->mysqli->rollback();
+                $completion = $this->finalizeAttempt($attemptId, $userId, [], $isAdmin);
+                sendResponse('error', 'Waktu ujian sudah habis. Attempt ditutup otomatis.', [
+                    'attempt_completed' => true,
+                    'attempt_id' => $attemptId,
+                    'result' => $completion['result'],
+                ], 409);
+            }
+
+            $sections = array_values($workflow['sections']);
+            $currentIndex = $this->findSectionIndex($sections, $attemptState);
+            $nextSection = $sections[$currentIndex + 1] ?? null;
+            if (!$nextSection) {
+                throw new RuntimeException('Subtes ini sudah berada di bagian terakhir.', 409);
+            }
+
+            $nextSectionOrder = (int) ($nextSection['order'] ?? ($currentIndex + 2));
+            $updateStmt = $this->mysqli->prepare(
+                'UPDATE test_attempts
+                 SET active_section_order = ?, active_section_started_at = NOW()
+                 WHERE id = ?'
+            );
+            $updateStmt->bind_param('ii', $nextSectionOrder, $attemptId);
+            $updateStmt->execute();
+
+            $this->mysqli->commit();
+
+            sendResponse('success', 'Berhasil pindah ke subtes berikutnya.', [
+                'attempt_id' => $attemptId,
+                'next_section_code' => (string) ($nextSection['code'] ?? ''),
+                'next_section_name' => (string) ($nextSection['name'] ?? ''),
+                'next_section_order' => $nextSectionOrder,
+            ]);
+        } catch (RuntimeException $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 400);
+        } catch (Throwable $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', 'Gagal pindah ke subtes berikutnya', ['details' => $error->getMessage()], 500);
+        }
+    }
+
     public function submitAnswers() {
         $tokenData = verifyToken();
         $data = json_decode(file_get_contents('php://input'), true);
@@ -634,6 +742,8 @@ if (strpos($requestPath, '/api/test/check-access') !== false && $requestMethod =
     $controller->startAttempt();
 } elseif (strpos($requestPath, '/api/test/save-answer') !== false && $requestMethod === 'POST') {
     $controller->saveAnswer();
+} elseif (strpos($requestPath, '/api/test/advance-section') !== false && $requestMethod === 'POST') {
+    $controller->advanceSection();
 } elseif (strpos($requestPath, '/api/test/submit') !== false && $requestMethod === 'POST') {
     $controller->submitAnswers();
 } elseif (strpos($requestPath, '/api/test/results') !== false && $requestMethod === 'GET') {

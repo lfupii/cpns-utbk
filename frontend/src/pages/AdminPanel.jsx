@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 
@@ -243,6 +243,11 @@ export default function AdminPanel() {
   const packageSections = selectedPackage?.workflow?.sections || [];
   const defaultSectionCode = packageSections[0]?.code || '';
 
+  const fetchAdminQuestions = useCallback(async (packageId) => {
+    const response = await apiClient.get(`/admin/questions?package_id=${packageId}&_=${Date.now()}`);
+    return response.data.data || [];
+  }, []);
+
   const filteredQuestions = useMemo(() => {
     const needle = questionQuery.trim().toLowerCase();
     if (!needle) {
@@ -300,11 +305,11 @@ export default function AdminPanel() {
     }
 
     const [questionsResponse, packagesResponse] = await Promise.all([
-      apiClient.get(`/admin/questions?package_id=${packageId}`),
+      fetchAdminQuestions(packageId),
       apiClient.get('/admin/packages'),
     ]);
 
-    setQuestions(questionsResponse.data.data || []);
+    setQuestions(questionsResponse || []);
     setPackages(packagesResponse.data.data || []);
   };
 
@@ -318,8 +323,8 @@ export default function AdminPanel() {
       setLoadingQuestions(true);
       setError('');
       try {
-        const response = await apiClient.get(`/admin/questions?package_id=${selectedPackageId}`);
-        setQuestions(response.data.data || []);
+        const nextQuestions = await fetchAdminQuestions(selectedPackageId);
+        setQuestions(nextQuestions);
       } catch (err) {
         setError(err.response?.data?.message || 'Gagal memuat daftar soal');
       } finally {
@@ -328,7 +333,7 @@ export default function AdminPanel() {
     };
 
     fetchQuestions();
-  }, [selectedPackageId]);
+  }, [fetchAdminQuestions, selectedPackageId]);
 
   useEffect(() => {
     setQuestionForm((current) => {

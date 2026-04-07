@@ -270,8 +270,8 @@ textarea:focus-visible {
 .brand-logo-image {
   display: block;
   width: auto;
-  height: 44px;
-  max-width: min(28vw, 180px);
+  height: 132px;
+  max-width: min(72vw, 540px);
   object-fit: contain;
 }
 
@@ -2589,8 +2589,8 @@ textarea:focus-visible {
   }
 
   .brand-logo-image {
-    height: 40px;
-    max-width: min(42vw, 156px);
+    height: 96px;
+    max-width: min(68vw, 420px);
   }
 
   .landing-hero {
@@ -3068,8 +3068,8 @@ textarea:focus-visible {
   }
 
   .brand-logo-image {
-    height: 34px;
-    max-width: min(48vw, 138px);
+    height: 72px;
+    max-width: min(74vw, 320px);
   }
 
   .test-sidebar-metrics {

@@ -29,19 +29,20 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
         <div className="container landing-navbar-inner">
           <div className="landing-navbar-brand">
             <BrandLogo />
-            <button
-              type="button"
-              className={`mobile-nav-toggle ${isMobileMenuOpen ? 'mobile-nav-toggle-open' : ''}`}
-              aria-label={isMobileMenuOpen ? 'Tutup navigasi' : 'Buka navigasi'}
-              aria-expanded={isMobileMenuOpen}
-              aria-controls="public-nav-panel"
-              onClick={() => setIsMobileMenuOpen((current) => !current)}
-            >
-              <span />
-              <span />
-              <span />
-            </button>
           </div>
+
+          <button
+            type="button"
+            className={`mobile-nav-toggle ${isMobileMenuOpen ? 'mobile-nav-toggle-open' : ''}`}
+            aria-label={isMobileMenuOpen ? 'Tutup navigasi' : 'Buka navigasi'}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="public-nav-panel"
+            onClick={() => setIsMobileMenuOpen((current) => !current)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
 
           <div
             id="public-nav-panel"

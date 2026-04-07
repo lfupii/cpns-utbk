@@ -120,6 +120,25 @@ export default function Login() {
           <p className="text-sm text-gray-500 text-center">
             Gunakan email yang sudah diverifikasi untuk login dan menerima hasil tryout.
           </p>
+          <p className="text-sm text-gray-500 text-center mt-3">
+            Butuh informasi legal atau review merchant? Lihat{' '}
+            <Link to="/terms" className="text-blue-600 font-semibold hover:underline">
+              Syarat
+            </Link>
+            ,{' '}
+            <Link to="/refund-policy" className="text-blue-600 font-semibold hover:underline">
+              Kebijakan Refund
+            </Link>
+            ,{' '}
+            <Link to="/privacy-policy" className="text-blue-600 font-semibold hover:underline">
+              Kebijakan Privasi
+            </Link>
+            , dan{' '}
+            <Link to="/midtrans-review" className="text-blue-600 font-semibold hover:underline">
+              panduan reviewer
+            </Link>
+            .
+          </p>
         </div>
       </div>
     </div>

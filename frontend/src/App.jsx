@@ -12,6 +12,11 @@ import Profile from './pages/Profile';
 import ActivePackages from './pages/ActivePackages';
 import TestHistory from './pages/TestHistory';
 import AdminPanel from './pages/AdminPanel';
+import Contact from './pages/Contact';
+import TermsConditions from './pages/TermsConditions';
+import RefundPolicy from './pages/RefundPolicy';
+import MidtransReview from './pages/MidtransReview';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import './index.css';
 
 function ProtectedRoute({ children }) {
@@ -73,6 +78,11 @@ function AppRoutes() {
       <div key={location.pathname} className="route-stage">
         <Routes location={location}>
           <Route path="/" element={<Home />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/terms" element={<TermsConditions />} />
+          <Route path="/refund-policy" element={<RefundPolicy />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/midtrans-review" element={<MidtransReview />} />
           <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
           <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />

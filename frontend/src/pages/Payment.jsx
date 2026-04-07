@@ -266,6 +266,21 @@ export default function Payment() {
                     Gunakan QRIS Simulator Midtrans.
                   </p>
                 )}
+                <p className="mt-4 text-sm text-slate-700">
+                  Dengan melanjutkan pembayaran, Anda menyetujui{' '}
+                  <Link to="/terms" className="text-blue-600 hover:underline">
+                    Syarat &amp; Ketentuan
+                  </Link>{' '}
+                  ,{' '}
+                  <Link to="/privacy-policy" className="text-blue-600 hover:underline">
+                    Kebijakan Privasi
+                  </Link>{' '}
+                  dan{' '}
+                  <Link to="/refund-policy" className="text-blue-600 hover:underline">
+                    Kebijakan Refund
+                  </Link>{' '}
+                  yang berlaku untuk produk digital tryout ini.
+                </p>
               </div>
 
               {/* Action Buttons */}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
 import ProfileDropdown from '../components/ProfileDropdown';
+import { businessProfile } from '../siteContent';
 
 export default function Home() {
   const { user, logout, isAdmin } = useAuth();
@@ -86,8 +87,9 @@ export default function Home() {
             <a href="#tentang">Tentang</a>
             <a href="#keunggulan">Fitur</a>
             <a href="#paket">Program</a>
-            <a href="#testimoni">Cerita</a>
-            <a href="#blog">Insight</a>
+            <Link to="/contact">Kontak</Link>
+            <Link to="/terms">Syarat</Link>
+            <Link to="/privacy-policy">Privasi</Link>
           </div>
 
           <div className="landing-nav-actions">
@@ -310,15 +312,36 @@ export default function Home() {
       </main>
 
       <footer className="landing-footer-note">
-        <div className="container landing-footer-note-inner">
-          <p className="landing-footer-note-title">Informasi Kontak</p>
-          <p>
-            Butuh bantuan atau verifikasi informasi layanan? Hubungi kami di{' '}
-            <a href="mailto:support@tocpnsutbk.com">support@tocpnsutbk.com</a>.
-          </p>
-          <p>
-            Website resmi: <a href="https://tocpnsutbk.com">tocpnsutbk.com</a>
-          </p>
+        <div className="container landing-footer-note-grid">
+          <div className="landing-footer-note-inner">
+            <p className="landing-footer-note-title">Informasi Kontak</p>
+            <p>
+              Butuh bantuan atau verifikasi informasi layanan? Hubungi kami di{' '}
+              <a href={businessProfile.supportMailto}>{businessProfile.supportEmail}</a>.
+            </p>
+            <p>
+              Website resmi: <a href={businessProfile.websiteUrl}>{businessProfile.websiteUrl}</a>
+            </p>
+          </div>
+
+          <div className="landing-footer-note-inner">
+            <p className="landing-footer-note-title">Kebijakan</p>
+            <p>
+              <Link to="/contact">Kontak</Link>
+            </p>
+            <p>
+              <Link to="/terms">Syarat &amp; Ketentuan</Link>
+            </p>
+            <p>
+              <Link to="/privacy-policy">Kebijakan Privasi</Link>
+            </p>
+            <p>
+              <Link to="/refund-policy">Kebijakan Refund</Link>
+            </p>
+            <p>
+              <Link to="/midtrans-review">Panduan Reviewer Midtrans</Link>
+            </p>
+          </div>
         </div>
       </footer>
     </div>

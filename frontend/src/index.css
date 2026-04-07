@@ -239,7 +239,7 @@ textarea:focus-visible {
 
 .brand-logo {
   position: relative;
-  padding: 0.2rem 0;
+  padding: 0.1rem 0;
 }
 
 .brand-logo-mark {
@@ -248,8 +248,8 @@ textarea:focus-visible {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 260px;
-  padding: 0.15rem 0.6rem 0.8rem;
+  min-width: 142px;
+  padding: 0.08rem 0.35rem 0.46rem;
 }
 
 .brand-logo-word {
@@ -263,12 +263,12 @@ textarea:focus-visible {
   font-family: var(--font-display);
   -webkit-text-stroke: 1px rgba(12, 32, 68, 0.18);
   text-shadow:
-    0 6px 22px rgba(28, 74, 151, 0.2),
-    0 2px 0 rgba(255, 255, 255, 0.28);
+    0 3px 12px rgba(28, 74, 151, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .brand-logo-word-top {
-  font-size: 3rem;
+  font-size: 1.65rem;
   color: #1154c4;
   background: linear-gradient(180deg, #2f82ff 0%, #0d4eb9 42%, #083688 100%);
   -webkit-background-clip: text;
@@ -278,7 +278,7 @@ textarea:focus-visible {
 
 .brand-logo-word-bottom {
   margin-top: -0.12rem;
-  font-size: 2.78rem;
+  font-size: 1.52rem;
   color: #ff4b14;
   background: linear-gradient(180deg, #ff9148 0%, #ff4d17 28%, #f12800 72%, #bf1300 100%);
   -webkit-background-clip: text;
@@ -289,25 +289,25 @@ textarea:focus-visible {
 .brand-logo-mark::before {
   content: '';
   position: absolute;
-  inset: 0.1rem 0.8rem 0.45rem;
+  inset: 0.08rem 0.45rem 0.24rem;
   border-radius: 999px;
   background:
     radial-gradient(circle at 28% 64%, rgba(255, 175, 53, 0.45), transparent 30%),
     radial-gradient(circle at 74% 48%, rgba(52, 177, 255, 0.32), transparent 26%),
     radial-gradient(circle at 50% 35%, rgba(17, 84, 196, 0.18), transparent 38%);
-  filter: blur(18px);
+  filter: blur(12px);
   z-index: 0;
 }
 
 .brand-logo-swoosh {
   position: absolute;
   left: 50%;
-  bottom: 0.08rem;
-  width: 205px;
-  height: 48px;
+  bottom: 0.04rem;
+  width: 112px;
+  height: 26px;
   border-radius: 999px;
   transform-origin: center;
-  filter: drop-shadow(0 7px 20px rgba(25, 98, 216, 0.18));
+  filter: drop-shadow(0 4px 12px rgba(25, 98, 216, 0.18));
 }
 
 .brand-logo-swoosh::before {
@@ -329,9 +329,9 @@ textarea:focus-visible {
 
 .brand-logo-swoosh-middle {
   z-index: 2;
-  width: 222px;
-  height: 40px;
-  bottom: 0.34rem;
+  width: 122px;
+  height: 22px;
+  bottom: 0.18rem;
   transform: translateX(-50%) rotate(-9deg);
 }
 
@@ -341,9 +341,9 @@ textarea:focus-visible {
 
 .brand-logo-swoosh-front {
   z-index: 2;
-  width: 170px;
-  height: 26px;
-  bottom: 0.6rem;
+  width: 94px;
+  height: 14px;
+  bottom: 0.34rem;
   transform: translateX(-58%) rotate(-7deg);
 }
 
@@ -356,28 +356,28 @@ textarea:focus-visible {
   z-index: 2;
   border-radius: 999px;
   background: radial-gradient(circle, #ffb300 0%, #ff8b00 72%, transparent 74%);
-  box-shadow: 0 0 14px rgba(255, 174, 0, 0.4);
+  box-shadow: 0 0 9px rgba(255, 174, 0, 0.4);
 }
 
 .brand-logo-spark-1 {
-  top: 1.6rem;
-  right: 1.8rem;
-  width: 7px;
-  height: 7px;
+  top: 0.9rem;
+  right: 0.95rem;
+  width: 4px;
+  height: 4px;
 }
 
 .brand-logo-spark-2 {
-  top: 1.15rem;
-  right: 2.5rem;
-  width: 5px;
-  height: 5px;
+  top: 0.66rem;
+  right: 1.34rem;
+  width: 3px;
+  height: 3px;
 }
 
 .brand-logo-spark-3 {
-  top: 1.95rem;
-  right: 2.85rem;
-  width: 4px;
-  height: 4px;
+  top: 1.08rem;
+  right: 1.56rem;
+  width: 2px;
+  height: 2px;
 }
 
 .landing-nav-links,
@@ -2463,46 +2463,46 @@ textarea:focus-visible {
   }
 
   .brand-logo-mark {
-    min-width: 212px;
-    padding-bottom: 0.65rem;
+    min-width: 132px;
+    padding-bottom: 0.4rem;
   }
 
   .brand-logo-word-top {
-    font-size: 2.3rem;
+    font-size: 1.5rem;
   }
 
   .brand-logo-word-bottom {
-    font-size: 2.14rem;
+    font-size: 1.38rem;
   }
 
   .brand-logo-swoosh-back {
-    width: 168px;
-    height: 38px;
+    width: 102px;
+    height: 23px;
   }
 
   .brand-logo-swoosh-middle {
-    width: 184px;
-    height: 31px;
+    width: 112px;
+    height: 19px;
   }
 
   .brand-logo-swoosh-front {
-    width: 138px;
-    height: 21px;
+    width: 84px;
+    height: 13px;
   }
 
   .brand-logo-spark-1 {
-    top: 1.2rem;
-    right: 1.35rem;
+    top: 0.82rem;
+    right: 0.86rem;
   }
 
   .brand-logo-spark-2 {
-    top: 0.92rem;
-    right: 2rem;
+    top: 0.6rem;
+    right: 1.2rem;
   }
 
   .brand-logo-spark-3 {
-    top: 1.55rem;
-    right: 2.3rem;
+    top: 1rem;
+    right: 1.42rem;
   }
 
   .landing-hero {
@@ -2965,47 +2965,47 @@ textarea:focus-visible {
   }
 
   .brand-logo-mark {
-    min-width: 184px;
+    min-width: 120px;
     padding-left: 0.15rem;
     padding-right: 0.15rem;
   }
 
   .brand-logo-word-top {
-    font-size: 1.96rem;
+    font-size: 1.34rem;
   }
 
   .brand-logo-word-bottom {
-    font-size: 1.8rem;
+    font-size: 1.22rem;
   }
 
   .brand-logo-swoosh-back {
-    width: 148px;
-    height: 33px;
+    width: 92px;
+    height: 20px;
   }
 
   .brand-logo-swoosh-middle {
-    width: 162px;
-    height: 27px;
+    width: 100px;
+    height: 17px;
   }
 
   .brand-logo-swoosh-front {
-    width: 122px;
-    height: 18px;
+    width: 74px;
+    height: 12px;
   }
 
   .brand-logo-spark-1 {
-    top: 1.05rem;
-    right: 1rem;
+    top: 0.74rem;
+    right: 0.72rem;
   }
 
   .brand-logo-spark-2 {
-    top: 0.8rem;
-    right: 1.52rem;
+    top: 0.54rem;
+    right: 1rem;
   }
 
   .brand-logo-spark-3 {
-    top: 1.3rem;
-    right: 1.82rem;
+    top: 0.9rem;
+    right: 1.18rem;
   }
 
   .test-sidebar-metrics {

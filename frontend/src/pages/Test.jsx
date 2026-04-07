@@ -636,7 +636,7 @@ export default function Test() {
                     type="button"
                     onClick={() => handleSubmit({ confirmManual: true })}
                     disabled={isSubmitting}
-                    className="ml-auto btn btn-primary test-action-button disabled:opacity-50"
+                    className="btn btn-primary test-action-button test-action-button-primary disabled:opacity-50"
                   >
                     {isSubmitting ? 'Memproses...' : 'Selesai Ujian'}
                   </button>
@@ -644,7 +644,7 @@ export default function Test() {
 
                 {isUtbkMode && (
                   <>
-                    <div className="text-sm text-gray-600 self-center flex-1 min-w-[220px]">
+                    <div className="w-full flex-1 self-center text-sm text-gray-600 sm:min-w-[220px]">
                       {isCurrentSaved ? 'Jawaban aktif sudah tersimpan otomatis.' : 'Jawaban akan tersimpan otomatis saat dipilih.'}
                       {!hasMultipleActiveQuestions ? ' Subtes ini hanya memiliki 1 soal aktif.' : ''}
                     </div>
@@ -706,7 +706,7 @@ export default function Test() {
 
               {isCpnsMode ? (
                 <>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                     {questions.map((question, index) => {
                       const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
 

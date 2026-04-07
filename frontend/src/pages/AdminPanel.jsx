@@ -243,6 +243,14 @@ export default function AdminPanel() {
   );
   const packageSections = selectedPackage?.workflow?.sections || [];
   const defaultSectionCode = packageSections[0]?.code || '';
+  const preferredSectionCode = useMemo(() => {
+    const validCodes = new Set(packageSections.map((section) => String(section.code)));
+    if (questionSectionFilter && validCodes.has(questionSectionFilter)) {
+      return questionSectionFilter;
+    }
+
+    return defaultSectionCode;
+  }, [defaultSectionCode, packageSections, questionSectionFilter]);
 
   const fetchAdminQuestions = useCallback(async (packageId) => {
     const response = await apiClient.get(`/admin/questions?package_id=${packageId}&_=${Date.now()}`);
@@ -391,7 +399,7 @@ export default function AdminPanel() {
   }, [questionSectionFilter, sectionStats]);
 
   const resetQuestionForm = () => {
-    setQuestionForm(createEmptyQuestionForm(defaultSectionCode));
+    setQuestionForm(createEmptyQuestionForm(preferredSectionCode));
     setShowQuestionEditor(false);
   };
 
@@ -546,7 +554,7 @@ export default function AdminPanel() {
   };
 
   const handleCreateQuestion = () => {
-    setQuestionForm(createEmptyQuestionForm(defaultSectionCode));
+    setQuestionForm(createEmptyQuestionForm(preferredSectionCode));
     setSuccess('');
     setError('');
     setShowQuestionEditor(true);
@@ -596,7 +604,7 @@ export default function AdminPanel() {
     try {
       const text = await file.text();
       const parsedRows = parseCsv(text);
-      const payloadRows = createImportPayload(parsedRows, defaultSectionCode);
+      const payloadRows = createImportPayload(parsedRows, preferredSectionCode);
       setImportRows(payloadRows);
       setImportFileName(file.name);
       setError('');

@@ -59,17 +59,17 @@ export default function Results() {
     percentage >= 50 ? 'text-yellow-600' : 'text-red-600';
 
   return (
-    <div className="min-h-screen bg-gray-100 py-12">
-      <div className="container mx-auto px-4 max-w-2xl">
+    <div className="min-h-screen bg-gray-100 py-8 sm:py-12">
+      <div className="container mx-auto max-w-2xl px-4">
         {/* Result Card */}
         <div className="card text-center mb-8">
-          <h1 className="text-4xl font-bold mb-8">Test Selesai!</h1>
+          <h1 className="mb-8 text-3xl font-bold sm:text-4xl">Test Selesai!</h1>
 
           {/* Score Circle */}
           <div className="mb-8">
-            <div className="w-48 h-48 mx-auto rounded-full border-8 border-blue-600 flex items-center justify-center mb-6">
+            <div className="mx-auto mb-6 flex h-36 w-36 items-center justify-center rounded-full border-8 border-blue-600 sm:h-48 sm:w-48">
               <div className="text-center">
-                <p className={`text-5xl font-bold ${scoreColor}`}>{percentage.toFixed(1)}%</p>
+                <p className={`text-4xl font-bold sm:text-5xl ${scoreColor}`}>{percentage.toFixed(1)}%</p>
                 <p className="text-gray-600 text-sm">Nilai Anda</p>
               </div>
             </div>
@@ -77,7 +77,7 @@ export default function Results() {
 
           {/* Results Summary */}
           <div className="bg-gray-50 rounded-lg p-6 mb-8">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <p className="text-gray-600 text-sm">Total Soal</p>
                 <p className="text-2xl font-bold">{results.total_questions}</p>
@@ -98,7 +98,7 @@ export default function Results() {
           {/* Grade */}
           <div className="mb-8">
             <p className="text-gray-600 mb-2">Nilai Akhir</p>
-            <p className={`text-4xl font-bold ${scoreColor}`}>{score.toFixed(2)}</p>
+            <p className={`text-3xl font-bold sm:text-4xl ${scoreColor}`}>{score.toFixed(2)}</p>
           </div>
 
           {/* Evaluation */}
@@ -140,19 +140,19 @@ export default function Results() {
         <div className="card">
           <h2 className="text-xl font-bold mb-4">Informasi Hasil Test</h2>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between pb-3 border-b border-gray-200">
+            <div className="flex flex-col gap-1 pb-3 border-b border-gray-200 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-gray-600">Tanggal Test:</span>
-              <span className="font-semibold">{new Date(results.created_at).toLocaleDateString('id-ID')}</span>
+              <span className="font-semibold sm:text-right">{new Date(results.created_at).toLocaleDateString('id-ID')}</span>
             </div>
-            <div className="flex justify-between pb-3 border-b border-gray-200">
+            <div className="flex flex-col gap-1 pb-3 border-b border-gray-200 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-gray-600">Waktu Pengerjaan:</span>
-              <span className="font-semibold">
+              <span className="font-semibold sm:text-right">
                 {results.time_taken ? `${Math.floor(results.time_taken / 60)} menit ${results.time_taken % 60} detik` : '-'}
               </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-gray-600">ID Hasil Test:</span>
-              <span className="font-semibold text-xs">{results.id}</span>
+              <span className="break-all font-semibold text-xs sm:text-right">{results.id}</span>
             </div>
           </div>
         </div>

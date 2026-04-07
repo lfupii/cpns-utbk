@@ -264,19 +264,15 @@ textarea:focus-visible {
 }
 
 .brand-logo {
-  height: 44px;
   padding: 0.15rem 0;
-  overflow: visible;
 }
 
 .brand-logo-image {
   display: block;
-  width: 180px;
-  height: 44px;
-  max-width: min(72vw, 180px);
+  width: auto;
+  height: 132px;
+  max-width: min(72vw, 540px);
   object-fit: contain;
-  transform: scale(3);
-  transform-origin: left center;
 }
 
 .landing-nav-links,
@@ -2593,9 +2589,8 @@ textarea:focus-visible {
   }
 
   .brand-logo-image {
-    width: 156px;
-    height: 40px;
-    max-width: min(68vw, 156px);
+    height: 96px;
+    max-width: min(68vw, 420px);
   }
 
   .landing-hero {
@@ -3073,9 +3068,8 @@ textarea:focus-visible {
   }
 
   .brand-logo-image {
-    width: 138px;
-    height: 34px;
-    max-width: min(74vw, 138px);
+    height: 72px;
+    max-width: min(74vw, 320px);
   }
 
   .test-sidebar-metrics {

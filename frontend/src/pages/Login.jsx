@@ -133,10 +133,6 @@ export default function Login() {
             <Link to="/terms#privacy-policy" className="text-blue-600 font-semibold hover:underline">
               Kebijakan Privasi
             </Link>
-            , dan{' '}
-            <Link to="/midtrans-review" className="text-blue-600 font-semibold hover:underline">
-              panduan reviewer
-            </Link>
             .
           </p>
         </div>

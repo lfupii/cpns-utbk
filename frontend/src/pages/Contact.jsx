@@ -48,9 +48,9 @@ export default function Contact() {
       <section className="policy-card">
         <h2>Untuk kebutuhan review merchant</h2>
         <p>
-          Jika Anda adalah reviewer payment gateway atau bank rekanan, silakan gunakan halaman{' '}
-          <a href="/midtrans-review">Panduan Reviewer Midtrans</a> untuk melihat alur pengecekan
-          website, jalur login, serta dokumen kebijakan yang tersedia secara publik.
+          Jika Anda adalah reviewer payment gateway atau bank rekanan, silakan gunakan halaman
+          publik website ini untuk melihat informasi produk, kontak bisnis, serta dokumen kebijakan
+          yang tersedia.
         </p>
         <p>
           Kredensial akun reviewer dikirim melalui kanal privat pada proses review dan tidak

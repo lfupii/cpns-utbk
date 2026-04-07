@@ -39,8 +39,8 @@ export const contactChannels = [
   },
   {
     title: 'Keperluan Review Midtrans',
-    value: 'Kredensial reviewer dikirim terpisah',
-    href: '/midtrans-review',
+    value: 'Kredensial dikirim terpisah',
+    href: '/terms',
     description:
       'Akun dummy/reviewer tidak ditampilkan publik demi keamanan. Kredensial login dikirim melalui kanal review Midtrans.',
   },
@@ -281,34 +281,6 @@ export const refundSections = [
     paragraphs: [
       'Seluruh pertanyaan mengenai pembatalan transaksi, kendala pembayaran, atau permintaan refund dapat dikirim ke support@tocpnsutbk.com dengan mencantumkan nama akun, email, paket, serta bukti transaksi.',
     ],
-  },
-];
-
-export const reviewerFlowSteps = [
-  {
-    title: 'Akses halaman publik',
-    description:
-      'Reviewer dapat membuka homepage, halaman kontak, Terms & Conditions, dan Refund Policy tanpa perlu login.',
-  },
-  {
-    title: 'Gunakan akun reviewer yang dikirim terpisah',
-    description:
-      'Kredensial dummy/reviewer dikirim melalui form review Midtrans dan tidak ditampilkan di website demi keamanan.',
-  },
-  {
-    title: 'Login tanpa OTP tambahan',
-    description:
-      'Akun reviewer sebaiknya dibuat sebagai akun yang sudah terverifikasi email sehingga reviewer tidak tertahan di langkah verifikasi.',
-  },
-  {
-    title: 'Pilih paket dan buka halaman pembayaran',
-    description:
-      'Setelah login, reviewer dapat memilih paket dari homepage, melihat ringkasan pesanan, harga dalam Rupiah, data pembeli, serta metode pembayaran yang tersedia pada halaman checkout.',
-  },
-  {
-    title: 'Review alur digital goods',
-    description:
-      'Produk yang dijual adalah akses tryout digital. Setelah pembayaran berhasil, sistem mengaktifkan akses paket sesuai masa berlaku dan jumlah percobaan paket.',
   },
 ];
 

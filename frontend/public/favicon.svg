@@ -1,10 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ruang Tryout">
   <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172f" />
-      <stop offset="100%" stop-color="#2d8cff" />
+    <linearGradient id="bg" x1="8%" y1="8%" x2="92%" y2="92%">
+      <stop offset="0%" stop-color="#0d57cb" />
+      <stop offset="100%" stop-color="#061f5f" />
+    </linearGradient>
+    <linearGradient id="warm" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff9700" />
+      <stop offset="100%" stop-color="#ffd33d" />
+    </linearGradient>
+    <linearGradient id="cool" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2aa7ff" />
+      <stop offset="100%" stop-color="#1265ec" />
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="18" fill="url(#g)" />
-  <path d="M18 44 27 20h10l9 24h-8l-1.7-4.8H27.7L26 44Zm11.9-11.1h4.2L32 27.2Z" fill="#fff"/>
+  <rect width="64" height="64" rx="18" fill="url(#bg)" />
+  <ellipse cx="32" cy="32" rx="22" ry="22" fill="rgba(255,255,255,0.08)" />
+  <path d="M10 41c10-11 24-14 44-11-8 8-20 14-36 15-3 0-5.6-.8-8-4Z" fill="url(#cool)" opacity=".95"/>
+  <path d="M12 43c11-8 28-12 42-6-9 7-20 11-33 12-3.6.3-6.5-1.1-9-6Z" fill="url(#warm)" />
+  <path d="M17 20h11.2c6.3 0 10.3 3.3 10.3 8.4 0 3.5-1.7 5.9-4.9 7.1l5.6 8.5H30l-4.2-6.9h-1.9V44H17Zm10.1 11.1c2.5 0 4.1-1 4.1-2.9 0-1.8-1.6-2.8-4.1-2.8h-3.2v5.7Z" fill="#fff"/>
+  <path d="M40.5 20H54v5.9h-4V44h-6.4V25.9h-3.1Z" fill="#ff5c1b"/>
 </svg>

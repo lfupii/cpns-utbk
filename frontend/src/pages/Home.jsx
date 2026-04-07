@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
 import ProfileDropdown from '../components/ProfileDropdown';
+import BrandLogo from '../components/BrandLogo';
 import { businessProfile } from '../siteContent';
 
 export default function Home() {
@@ -78,10 +79,7 @@ export default function Home() {
     <div className="landing-shell">
       <nav className="landing-navbar">
         <div className="container landing-navbar-inner">
-          <Link to="/" className="landing-logo" aria-label="AYO CPNS">
-            <span className="landing-logo-badge">AYO</span>
-            <span>CPNS</span>
-          </Link>
+          <BrandLogo />
 
           <div className="landing-nav-links">
             <a href="#tentang">Tentang</a>

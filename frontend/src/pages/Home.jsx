@@ -11,6 +11,7 @@ export default function Home() {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
 
@@ -31,8 +32,11 @@ export default function Home() {
   }, []);
 
   const handleLogout = () => {
+    setIsMobileMenuOpen(false);
     logout();
   };
+
+  const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
   const cpnsSource = packages.find((pkg) => pkg.name === 'CPNS Intensif') || null;
   const utbkSource = packages.find((pkg) => pkg.name === 'UTBK Intensif') || null;
@@ -79,29 +83,48 @@ export default function Home() {
     <div className="landing-shell">
       <nav className="landing-navbar">
         <div className="container landing-navbar-inner">
-          <BrandLogo />
-
-          <div className="landing-nav-links">
-            <a href="#tentang">Tentang</a>
-            <a href="#keunggulan">Fitur</a>
-            <a href="#paket">Program</a>
-            <Link to="/contact">Kontak</Link>
-            <Link to="/terms">Syarat &amp; Ketentuan</Link>
+          <div className="landing-navbar-brand">
+            <BrandLogo />
+            <button
+              type="button"
+              className={`mobile-nav-toggle ${isMobileMenuOpen ? 'mobile-nav-toggle-open' : ''}`}
+              aria-label={isMobileMenuOpen ? 'Tutup navigasi' : 'Buka navigasi'}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="landing-nav-panel"
+              onClick={() => setIsMobileMenuOpen((current) => !current)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
           </div>
 
-          <div className="landing-nav-actions">
-            {user ? (
-              <ProfileDropdown displayName={displayName} onLogout={handleLogout} isAdmin={isAdmin} />
-            ) : (
-              <>
-                <Link to="/login" className="btn btn-outline">
-                  Masuk
-                </Link>
-                <Link to="/register" className="btn btn-primary">
-                  Coba Gratis →
-                </Link>
-              </>
-            )}
+          <div
+            id="landing-nav-panel"
+            className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
+          >
+            <div className="landing-nav-links">
+              <a href="#tentang" onClick={closeMobileMenu}>Tentang</a>
+              <a href="#keunggulan" onClick={closeMobileMenu}>Fitur</a>
+              <a href="#paket" onClick={closeMobileMenu}>Program</a>
+              <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
+              <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
+            </div>
+
+            <div className="landing-nav-actions">
+              {user ? (
+                <ProfileDropdown displayName={displayName} onLogout={handleLogout} isAdmin={isAdmin} />
+              ) : (
+                <>
+                  <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>
+                    Masuk
+                  </Link>
+                  <Link to="/register" className="btn btn-primary" onClick={closeMobileMenu}>
+                    Coba Gratis →
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </nav>

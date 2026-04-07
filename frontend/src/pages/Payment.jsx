@@ -272,11 +272,11 @@ export default function Payment() {
                     Syarat &amp; Ketentuan
                   </Link>{' '}
                   ,{' '}
-                  <Link to="/privacy-policy" className="text-blue-600 hover:underline">
+                  <Link to="/terms#privacy-policy" className="text-blue-600 hover:underline">
                     Kebijakan Privasi
                   </Link>{' '}
                   dan{' '}
-                  <Link to="/refund-policy" className="text-blue-600 hover:underline">
+                  <Link to="/terms#refund-policy" className="text-blue-600 hover:underline">
                     Kebijakan Refund
                   </Link>{' '}
                   yang berlaku untuk produk digital tryout ini.

@@ -89,7 +89,7 @@ export default function Home() {
             <a href="#paket">Program</a>
             <Link to="/contact">Kontak</Link>
             <Link to="/terms">Syarat</Link>
-            <Link to="/privacy-policy">Privasi</Link>
+            <Link to="/terms#privacy-policy">Privasi</Link>
           </div>
 
           <div className="landing-nav-actions">
@@ -333,10 +333,10 @@ export default function Home() {
               <Link to="/terms">Syarat &amp; Ketentuan</Link>
             </p>
             <p>
-              <Link to="/privacy-policy">Kebijakan Privasi</Link>
+              <Link to="/terms#privacy-policy">Kebijakan Privasi</Link>
             </p>
             <p>
-              <Link to="/refund-policy">Kebijakan Refund</Link>
+              <Link to="/terms#refund-policy">Kebijakan Refund</Link>
             </p>
             <p>
               <Link to="/midtrans-review">Panduan Reviewer Midtrans</Link>

@@ -130,11 +130,11 @@ export default function Register() {
               Syarat &amp; Ketentuan
             </Link>{' '}
             ,{' '}
-            <Link to="/privacy-policy" className="text-blue-600 font-semibold hover:underline">
+            <Link to="/terms#privacy-policy" className="text-blue-600 font-semibold hover:underline">
               Kebijakan Privasi
             </Link>
             , dan memahami{' '}
-            <Link to="/refund-policy" className="text-blue-600 font-semibold hover:underline">
+            <Link to="/terms#refund-policy" className="text-blue-600 font-semibold hover:underline">
               Kebijakan Refund
             </Link>
             .

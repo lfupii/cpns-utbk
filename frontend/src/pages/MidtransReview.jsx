@@ -31,8 +31,8 @@ export default function MidtransReview() {
             <a href="/login">Login</a>
             <a href="/contact">Kontak</a>
             <a href="/terms">Syarat &amp; Ketentuan</a>
-            <a href="/privacy-policy">Kebijakan Privasi</a>
-            <a href="/refund-policy">Kebijakan Refund</a>
+            <a href="/terms#privacy-policy">Kebijakan Privasi</a>
+            <a href="/terms#refund-policy">Kebijakan Refund</a>
           </div>
         </article>
       </section>

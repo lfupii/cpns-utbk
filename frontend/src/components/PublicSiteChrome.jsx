@@ -54,21 +54,21 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
               <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
               <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
             </div>
+          </div>
 
-            <div className="landing-nav-actions">
-              {user ? (
-                <ProfileDropdown displayName={displayName} onLogout={handleLogout} isAdmin={isAdmin} />
-              ) : (
-                <>
-                  <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>
-                    Masuk
-                  </Link>
-                  <Link to="/register" className="btn btn-primary" onClick={closeMobileMenu}>
-                    Daftar
-                  </Link>
-                </>
-              )}
-            </div>
+          <div className="landing-nav-actions">
+            {user ? (
+              <ProfileDropdown displayName={displayName} onLogout={handleLogout} isAdmin={isAdmin} />
+            ) : (
+              <>
+                <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>
+                  Masuk
+                </Link>
+                <Link to="/register" className="btn btn-primary" onClick={closeMobileMenu}>
+                  Daftar
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>

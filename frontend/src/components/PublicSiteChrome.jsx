@@ -5,13 +5,9 @@ import ProfileDropdown from './ProfileDropdown';
 import { businessProfile } from '../siteContent';
 
 const footerLinks = [
-  { label: 'Beranda', to: '/' },
-  { label: 'Program', to: '/#paket' },
-  { label: 'Kontak', to: '/contact' },
-  { label: 'Syarat', to: '/terms' },
-  { label: 'Privasi', to: '/terms#privacy-policy' },
-  { label: 'Refund', to: '/terms#refund-policy' },
-  { label: 'Reviewer', to: '/midtrans-review' },
+  { label: 'Syarat & Ketentuan', to: '/terms' },
+  { label: 'Kebijakan Privasi', to: '/terms#privacy-policy' },
+  { label: 'Kebijakan Refund', to: '/terms#refund-policy' },
 ];
 
 export default function PublicSiteChrome({ eyebrow, title, subtitle, children }) {
@@ -28,12 +24,11 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
           </Link>
 
           <div className="landing-nav-links">
-            <Link to="/">Beranda</Link>
+            <Link to="/#tentang">Tentang</Link>
+            <Link to="/#keunggulan">Fitur</Link>
             <Link to="/#paket">Program</Link>
             <Link to="/contact">Kontak</Link>
-            <Link to="/terms">Syarat</Link>
-            <Link to="/terms#privacy-policy">Privasi</Link>
-            <Link to="/terms#refund-policy">Refund</Link>
+            <Link to="/terms">Syarat &amp; Ketentuan</Link>
           </div>
 
           <div className="landing-nav-actions">
@@ -71,7 +66,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
           </div>
 
           <div>
-            <p className="landing-footer-note-title">Link Penting</p>
+            <p className="landing-footer-note-title">Kebijakan</p>
             <div className="policy-link-list">
               {footerLinks.map((link) => (
                 <Link key={link.to} to={link.to}>

@@ -14,7 +14,6 @@ import TestHistory from './pages/TestHistory';
 import AdminPanel from './pages/AdminPanel';
 import Contact from './pages/Contact';
 import TermsConditions from './pages/TermsConditions';
-import MidtransReview from './pages/MidtransReview';
 import './index.css';
 
 function ProtectedRoute({ children }) {
@@ -80,7 +79,6 @@ function AppRoutes() {
           <Route path="/terms" element={<TermsConditions />} />
           <Route path="/refund-policy" element={<Navigate to="/terms#refund-policy" replace />} />
           <Route path="/privacy-policy" element={<Navigate to="/terms#privacy-policy" replace />} />
-          <Route path="/midtrans-review" element={<MidtransReview />} />
           <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
           <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />

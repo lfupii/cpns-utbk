@@ -88,8 +88,7 @@ export default function Home() {
             <a href="#keunggulan">Fitur</a>
             <a href="#paket">Program</a>
             <Link to="/contact">Kontak</Link>
-            <Link to="/terms">Syarat</Link>
-            <Link to="/terms#privacy-policy">Privasi</Link>
+            <Link to="/terms">Syarat &amp; Ketentuan</Link>
           </div>
 
           <div className="landing-nav-actions">
@@ -337,9 +336,6 @@ export default function Home() {
             </p>
             <p>
               <Link to="/terms#refund-policy">Kebijakan Refund</Link>
-            </p>
-            <p>
-              <Link to="/midtrans-review">Panduan Reviewer Midtrans</Link>
             </p>
           </div>
         </div>

@@ -85,19 +85,20 @@ export default function Home() {
         <div className="container landing-navbar-inner">
           <div className="landing-navbar-brand">
             <BrandLogo />
-            <button
-              type="button"
-              className={`mobile-nav-toggle ${isMobileMenuOpen ? 'mobile-nav-toggle-open' : ''}`}
-              aria-label={isMobileMenuOpen ? 'Tutup navigasi' : 'Buka navigasi'}
-              aria-expanded={isMobileMenuOpen}
-              aria-controls="landing-nav-panel"
-              onClick={() => setIsMobileMenuOpen((current) => !current)}
-            >
-              <span />
-              <span />
-              <span />
-            </button>
           </div>
+
+          <button
+            type="button"
+            className={`mobile-nav-toggle ${isMobileMenuOpen ? 'mobile-nav-toggle-open' : ''}`}
+            aria-label={isMobileMenuOpen ? 'Tutup navigasi' : 'Buka navigasi'}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="landing-nav-panel"
+            onClick={() => setIsMobileMenuOpen((current) => !current)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
 
           <div
             id="landing-nav-panel"

@@ -76,6 +76,7 @@ export default function Test() {
   const isSavingRef = useRef(false);
   const pendingAutoSaveRef = useRef(null);
   const loadedSectionCodeRef = useRef(null);
+  const currentQuestionIdRef = useRef(null);
 
   const [questions, setQuestions] = useState([]);
   const [savedAnswers, setSavedAnswers] = useState({});
@@ -197,6 +198,10 @@ export default function Test() {
     return initialCurrentQuestion ? Number(initialCurrentQuestion.id) : null;
   }, []);
 
+  useEffect(() => {
+    currentQuestionIdRef.current = currentQuestionId;
+  }, [currentQuestionId]);
+
   const loadQuestions = useCallback(async (nextAttemptId, { preserveCurrentQuestion = false } = {}) => {
     const questionsResponse = await apiClient.get(
       `/questions/list?package_id=${numericPackageId}&attempt_id=${nextAttemptId}`
@@ -207,11 +212,12 @@ export default function Test() {
     const nextWorkflow = payload.workflow || null;
     const nextSections = payload.sections || [];
     const nextElapsedSeconds = Number(payload.attempt?.state?.elapsed_seconds || 0);
+    const currentQuestionIdValue = currentQuestionIdRef.current;
     const canPreserveCurrentQuestion = preserveCurrentQuestion && nextQuestions.some(
-      (question) => Number(question.id) === Number(currentQuestionId)
+      (question) => Number(question.id) === Number(currentQuestionIdValue)
     );
     const nextCurrentQuestionId = canPreserveCurrentQuestion
-      ? currentQuestionId
+      ? currentQuestionIdValue
       : pickInitialQuestionId(nextQuestions, nextSavedAnswers, nextWorkflow, nextElapsedSeconds);
 
     setQuestions(nextQuestions);
@@ -223,7 +229,7 @@ export default function Test() {
     setElapsedSeconds(nextElapsedSeconds);
     setCurrentQuestionId(nextCurrentQuestionId);
     loadedSectionCodeRef.current = payload.attempt?.state?.active_section_code || '__all__';
-  }, [currentQuestionId, numericPackageId, pickInitialQuestionId]);
+  }, [numericPackageId, pickInitialQuestionId]);
 
   const saveAnswer = useCallback(async (questionId, optionId, nextQuestionId = null) => {
     if (!attemptId || !questionId || !optionId) {
@@ -735,6 +741,7 @@ export default function Test() {
                       return (
                         <button
                           key={question.id}
+                          type="button"
                           onClick={() => goToQuestion(question.id)}
                           className={`test-nav-chip test-nav-chip-button ${
                             Number(question.id) === Number(currentQuestion?.id)
@@ -761,6 +768,7 @@ export default function Test() {
                     return (
                       <button
                         key={question.id}
+                        type="button"
                         onClick={() => goToQuestion(question.id)}
                         className={`test-subtest-chip test-subtest-chip-inline ${
                           Number(question.id) === Number(currentQuestion?.id)

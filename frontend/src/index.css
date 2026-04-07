@@ -221,7 +221,7 @@ textarea:focus-visible {
 
 .landing-navbar-inner {
   position: relative;
-  min-height: 78px;
+  min-height: 58px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3067,9 +3067,16 @@ textarea:focus-visible {
     width: 100%;
   }
 
+  .brand-logo {
+    height: 72px;
+    overflow: visible;
+  }
+
   .brand-logo-image {
     height: 72px;
     max-width: min(74vw, 320px);
+    transform: scale(2);
+    transform-origin: left center;
   }
 
   .test-sidebar-metrics {

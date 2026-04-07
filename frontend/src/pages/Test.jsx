@@ -483,8 +483,7 @@ export default function Test() {
       const hasUnsavedCurrentAnswer = currentDraftAnswerValue > 0 && currentDraftAnswerValue !== currentSavedAnswerValue;
 
       if ((workflow?.save_behavior === 'auto' || workflow?.mode === MODE_CPNS) && hasUnsavedCurrentAnswer) {
-        saveAnswer(currentQuestion.id, currentDraftAnswerValue, questionId);
-        return;
+        saveAnswer(currentQuestion.id, currentDraftAnswerValue);
       }
     }
 

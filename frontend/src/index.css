@@ -2545,9 +2545,10 @@ textarea:focus-visible {
   .landing-navbar-inner {
     min-height: auto;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: auto auto auto;
     align-items: center;
-    gap: 0.9rem;
+    justify-content: space-between;
+    gap: 0.55rem;
     padding-top: 0.9rem;
     padding-bottom: 0.9rem;
   }
@@ -2559,13 +2560,13 @@ textarea:focus-visible {
   }
 
   .landing-logo {
-    min-height: 46px;
-    padding: 0 0.8rem;
-    justify-content: center;
-    border: 1px solid rgba(214, 226, 240, 0.95);
-    border-radius: 1rem;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: 0 12px 28px rgba(26, 44, 77, 0.08);
+    min-height: auto;
+    padding: 0;
+    justify-content: flex-start;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .mobile-nav-toggle {
@@ -2620,7 +2621,7 @@ textarea:focus-visible {
     justify-content: flex-end;
     flex-direction: row;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.35rem;
     flex-shrink: 0;
   }
 

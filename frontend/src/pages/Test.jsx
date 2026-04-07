@@ -167,6 +167,13 @@ export default function Test() {
   const answeredCount = useMemo(() => (
     Object.values(savedAnswers).filter(Boolean).length
   ), [savedAnswers]);
+  const allQuestionsAnswered = useMemo(() => (
+    questions.length > 0 && questions.every((question) => {
+      const questionDraft = Number(draftAnswers[String(question.id)] || draftAnswers[question.id] || 0);
+      const questionSaved = Number(savedAnswers[String(question.id)] || savedAnswers[question.id] || 0);
+      return questionDraft > 0 || questionSaved > 0;
+    })
+  ), [draftAnswers, questions, savedAnswers]);
 
   const totalQuestionCount = useMemo(() => {
     const packageCount = Number(packageMeta?.question_count || 0);
@@ -288,6 +295,11 @@ export default function Test() {
     }
 
     if (confirmManual) {
+      if (workflow?.mode === MODE_CPNS && !allQuestionsAnswered) {
+        setError('Jawab seluruh soal terlebih dahulu sebelum menyelesaikan ujian.');
+        return;
+      }
+
       const confirmationMessage = workflow?.mode === MODE_UTBK
         ? 'Yakin ingin menyelesaikan ujian sekarang? Sisa waktu subtes terakhir akan hangus dan nilai langsung diproses.'
         : 'Yakin ingin menyelesaikan ujian sekarang? Nilai akan langsung diproses.';
@@ -313,7 +325,7 @@ export default function Test() {
       setIsSubmitting(false);
       submitTriggeredRef.current = false;
     }
-  }, [attemptId, isSubmitting, navigate, unsavedAnswers, workflow]);
+  }, [allQuestionsAnswered, attemptId, isSubmitting, navigate, unsavedAnswers, workflow]);
 
   const handleAdvanceSection = useCallback(async () => {
     if (!attemptId || isAdvancingSection || !nextSection) {
@@ -463,6 +475,17 @@ export default function Test() {
   const goToQuestion = (questionId) => {
     if (!questionId) {
       return;
+    }
+
+    if (currentQuestion) {
+      const currentSavedAnswerValue = Number(savedAnswers[String(currentQuestion.id)] || savedAnswers[currentQuestion.id] || 0);
+      const currentDraftAnswerValue = Number(draftAnswers[String(currentQuestion.id)] || draftAnswers[currentQuestion.id] || 0);
+      const hasUnsavedCurrentAnswer = currentDraftAnswerValue > 0 && currentDraftAnswerValue !== currentSavedAnswerValue;
+
+      if ((workflow?.save_behavior === 'auto' || workflow?.mode === MODE_CPNS) && hasUnsavedCurrentAnswer) {
+        saveAnswer(currentQuestion.id, currentDraftAnswerValue, questionId);
+        return;
+      }
     }
 
     setCurrentQuestionId(Number(questionId));
@@ -631,7 +654,7 @@ export default function Test() {
                   </button>
                 )}
 
-                {isCpnsMode && (
+                {isCpnsMode && allQuestionsAnswered && (
                   <button
                     type="button"
                     onClick={() => handleSubmit({ confirmManual: true })}
@@ -706,7 +729,7 @@ export default function Test() {
 
               {isCpnsMode ? (
                 <>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  <div className="test-question-strip test-question-strip-grid" role="tablist" aria-label="Navigasi soal">
                     {questions.map((question, index) => {
                       const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
 
@@ -714,7 +737,7 @@ export default function Test() {
                         <button
                           key={question.id}
                           onClick={() => goToQuestion(question.id)}
-                          className={`w-full py-2 rounded font-semibold transition test-nav-chip ${
+                          className={`test-nav-chip test-nav-chip-button ${
                             Number(question.id) === Number(currentQuestion?.id)
                               ? 'bg-blue-600 text-white'
                               : savedValue
@@ -733,14 +756,14 @@ export default function Test() {
                   </div>
                 </>
               ) : (
-                <div className="space-y-3">
+                <div className="test-question-strip test-question-strip-stack" role="tablist" aria-label="Navigasi soal subtes aktif">
                   {activeQuestions.map((question, index) => {
                     const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
                     return (
                       <button
                         key={question.id}
                         onClick={() => goToQuestion(question.id)}
-                        className={`w-full rounded-lg border px-4 py-3 text-left test-subtest-chip ${
+                        className={`test-subtest-chip test-subtest-chip-inline ${
                           Number(question.id) === Number(currentQuestion?.id)
                             ? 'border-blue-500 bg-blue-50'
                             : savedValue

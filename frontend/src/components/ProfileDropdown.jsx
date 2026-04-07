@@ -29,6 +29,14 @@ export default function ProfileDropdown({ displayName, onLogout, isAdmin = false
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
       >
+        <span className="profile-dropdown-trigger-mobile" aria-hidden="true">
+          <span className="profile-dropdown-avatar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21a8 8 0 0 0-16 0" />
+              <circle cx="12" cy="8" r="4" />
+            </svg>
+          </span>
+        </span>
         <span className="landing-user-chip">Halo, {displayName}</span>
         <span className={`profile-dropdown-chevron ${open ? 'profile-dropdown-chevron-open' : ''}`}>
           ▾
@@ -37,6 +45,9 @@ export default function ProfileDropdown({ displayName, onLogout, isAdmin = false
 
       {open && (
         <div className="profile-dropdown-menu">
+          <div className="profile-dropdown-menu-header">
+            <strong>Halo, {displayName}</strong>
+          </div>
           {isAdmin && (
             <Link to="/admin" className="profile-dropdown-item profile-dropdown-admin">
               Panel Admin

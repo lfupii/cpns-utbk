@@ -404,6 +404,10 @@ textarea:focus-visible {
   gap: 1rem;
 }
 
+.landing-nav-actions {
+  margin-left: auto;
+}
+
 .mobile-nav-toggle {
   display: none;
   width: 46px;
@@ -454,6 +458,27 @@ textarea:focus-visible {
   background: transparent;
 }
 
+.profile-dropdown-trigger-mobile {
+  display: none;
+}
+
+.profile-dropdown-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(45, 140, 255, 0.12);
+  color: #21538b;
+  box-shadow: inset 0 0 0 1px rgba(45, 140, 255, 0.08);
+}
+
+.profile-dropdown-avatar svg {
+  width: 20px;
+  height: 20px;
+}
+
 .profile-dropdown-chevron {
   display: inline-flex;
   align-items: center;
@@ -483,6 +508,10 @@ textarea:focus-visible {
   box-shadow: 0 24px 54px rgba(31, 63, 109, 0.14);
   z-index: 20;
   animation: menuFloat 0.2s ease;
+}
+
+.profile-dropdown-menu-header {
+  display: none;
 }
 
 .profile-dropdown-item {
@@ -1944,6 +1973,38 @@ textarea:focus-visible {
   overflow: hidden;
 }
 
+.test-question-strip {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.test-question-strip-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.test-question-strip-stack {
+  grid-template-columns: 1fr;
+}
+
+.test-nav-chip-button {
+  width: 100%;
+  min-height: 42px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.8rem;
+  font-weight: 700;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.test-subtest-chip-inline {
+  width: 100%;
+  min-width: 180px;
+  max-width: 220px;
+  border-radius: 0.9rem;
+  border-width: 1px;
+  padding: 0.85rem 1rem;
+  text-align: left;
+}
+
 .test-nav-chip:hover,
 .test-subtest-chip:hover {
   transform: translateY(-2px);
@@ -2485,13 +2546,13 @@ textarea:focus-visible {
     min-height: auto;
     align-items: center;
     gap: 0.75rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     padding-top: 0.9rem;
     padding-bottom: 0.9rem;
   }
 
   .landing-navbar-brand {
-    width: 100%;
+    flex: 1;
     align-items: center;
   }
 
@@ -2545,14 +2606,17 @@ textarea:focus-visible {
   }
 
   .landing-nav-actions {
-    width: 100%;
-    justify-content: stretch;
-    flex-direction: column;
-    align-items: stretch;
+    width: auto;
+    margin-left: 0;
+    justify-content: flex-end;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
   }
 
   .landing-nav-actions .btn {
-    width: 100%;
+    width: auto;
     justify-content: center;
   }
 
@@ -2561,19 +2625,47 @@ textarea:focus-visible {
   }
 
   .profile-dropdown {
-    width: 100%;
+    width: auto;
   }
 
   .profile-dropdown-trigger {
-    width: 100%;
-    justify-content: space-between;
+    width: auto;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0;
   }
 
   .profile-dropdown-menu {
-    width: 100%;
-    min-width: 0;
+    width: min(88vw, 280px);
     right: 0;
     transform: none;
+  }
+
+  .profile-dropdown-trigger-mobile {
+    display: inline-flex;
+  }
+
+  .landing-user-chip {
+    display: none;
+  }
+
+  .profile-dropdown-chevron {
+    width: 30px;
+    height: 30px;
+    font-size: 0.86rem;
+  }
+
+  .profile-dropdown-menu-header {
+    display: block;
+    padding: 0.55rem 0.9rem 0.75rem;
+    margin-bottom: 0.35rem;
+    border-bottom: 1px solid rgba(214, 226, 240, 0.95);
+    color: #1f2d44;
+  }
+
+  .profile-dropdown-menu-header strong {
+    display: block;
+    font-size: 1rem;
   }
 
   .brand-logo-mark {
@@ -2695,6 +2787,30 @@ textarea:focus-visible {
   .account-history-action .btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .test-sidebar-column {
+    order: -1;
+  }
+
+  .test-sidebar-card {
+    overflow: hidden;
+  }
+
+  .test-question-strip {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    grid-template-columns: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.35rem;
+    margin-bottom: -0.1rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .test-nav-chip-button {
+    min-width: 46px;
   }
 
   .test-action-button {

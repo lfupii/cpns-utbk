@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import ProfileDropdown from './ProfileDropdown';
+import BrandLogo from './BrandLogo';
 import { businessProfile } from '../siteContent';
 
 const footerLinks = [
@@ -18,10 +19,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
     <div className="landing-shell policy-shell">
       <nav className="landing-navbar">
         <div className="container landing-navbar-inner">
-          <Link to="/" className="landing-logo" aria-label="AYO CPNS">
-            <span className="landing-logo-badge">AYO</span>
-            <span>CPNS</span>
-          </Link>
+          <BrandLogo />
 
           <div className="landing-nav-links">
             <Link to="/#tentang">Tentang</Link>

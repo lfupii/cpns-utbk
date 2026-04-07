@@ -229,10 +229,6 @@ textarea:focus-visible {
 .landing-logo {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  font-size: 1.85rem;
-  font-weight: 800;
-  letter-spacing: -0.05em;
   color: #12203a;
 }
 
@@ -241,18 +237,147 @@ textarea:focus-visible {
   transform: translateY(-1px);
 }
 
-.landing-logo-badge {
+.brand-logo {
+  position: relative;
+  padding: 0.2rem 0;
+}
+
+.brand-logo-mark {
+  position: relative;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 62px;
-  height: 36px;
-  padding: 0 0.7rem;
-  border-radius: 0.6rem;
-  background: linear-gradient(135deg, #0f172f 0%, #2d8cff 100%);
-  color: white;
-  font-size: 1.4rem;
-  line-height: 1;
+  min-width: 260px;
+  padding: 0.15rem 0.6rem 0.8rem;
+}
+
+.brand-logo-word {
+  position: relative;
+  z-index: 3;
+  display: block;
+  line-height: 0.9;
+  font-weight: 900;
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-display);
+  -webkit-text-stroke: 1px rgba(12, 32, 68, 0.18);
+  text-shadow:
+    0 6px 22px rgba(28, 74, 151, 0.2),
+    0 2px 0 rgba(255, 255, 255, 0.28);
+}
+
+.brand-logo-word-top {
+  font-size: 3rem;
+  color: #1154c4;
+  background: linear-gradient(180deg, #2f82ff 0%, #0d4eb9 42%, #083688 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-logo-word-bottom {
+  margin-top: -0.12rem;
+  font-size: 2.78rem;
+  color: #ff4b14;
+  background: linear-gradient(180deg, #ff9148 0%, #ff4d17 28%, #f12800 72%, #bf1300 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-logo-mark::before {
+  content: '';
+  position: absolute;
+  inset: 0.1rem 0.8rem 0.45rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 28% 64%, rgba(255, 175, 53, 0.45), transparent 30%),
+    radial-gradient(circle at 74% 48%, rgba(52, 177, 255, 0.32), transparent 26%),
+    radial-gradient(circle at 50% 35%, rgba(17, 84, 196, 0.18), transparent 38%);
+  filter: blur(18px);
+  z-index: 0;
+}
+
+.brand-logo-swoosh {
+  position: absolute;
+  left: 50%;
+  bottom: 0.08rem;
+  width: 205px;
+  height: 48px;
+  border-radius: 999px;
+  transform-origin: center;
+  filter: drop-shadow(0 7px 20px rgba(25, 98, 216, 0.18));
+}
+
+.brand-logo-swoosh::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform: skewX(-20deg);
+}
+
+.brand-logo-swoosh-back {
+  z-index: 1;
+  transform: translateX(-50%) rotate(-10deg);
+}
+
+.brand-logo-swoosh-back::before {
+  background: linear-gradient(90deg, #0f67e5 0%, #32b5ff 100%);
+}
+
+.brand-logo-swoosh-middle {
+  z-index: 2;
+  width: 222px;
+  height: 40px;
+  bottom: 0.34rem;
+  transform: translateX(-50%) rotate(-9deg);
+}
+
+.brand-logo-swoosh-middle::before {
+  background: linear-gradient(90deg, #ff9a00 0%, #ffd13f 100%);
+}
+
+.brand-logo-swoosh-front {
+  z-index: 2;
+  width: 170px;
+  height: 26px;
+  bottom: 0.6rem;
+  transform: translateX(-58%) rotate(-7deg);
+}
+
+.brand-logo-swoosh-front::before {
+  background: linear-gradient(90deg, #1f7ef0 0%, #0d55c8 100%);
+}
+
+.brand-logo-spark {
+  position: absolute;
+  z-index: 2;
+  border-radius: 999px;
+  background: radial-gradient(circle, #ffb300 0%, #ff8b00 72%, transparent 74%);
+  box-shadow: 0 0 14px rgba(255, 174, 0, 0.4);
+}
+
+.brand-logo-spark-1 {
+  top: 1.6rem;
+  right: 1.8rem;
+  width: 7px;
+  height: 7px;
+}
+
+.brand-logo-spark-2 {
+  top: 1.15rem;
+  right: 2.5rem;
+  width: 5px;
+  height: 5px;
+}
+
+.brand-logo-spark-3 {
+  top: 1.95rem;
+  right: 2.85rem;
+  width: 4px;
+  height: 4px;
 }
 
 .landing-nav-links,
@@ -2296,7 +2421,49 @@ textarea:focus-visible {
 
   .landing-logo {
     justify-content: center;
-    font-size: 1.7rem;
+  }
+
+  .brand-logo-mark {
+    min-width: 212px;
+    padding-bottom: 0.65rem;
+  }
+
+  .brand-logo-word-top {
+    font-size: 2.3rem;
+  }
+
+  .brand-logo-word-bottom {
+    font-size: 2.14rem;
+  }
+
+  .brand-logo-swoosh-back {
+    width: 168px;
+    height: 38px;
+  }
+
+  .brand-logo-swoosh-middle {
+    width: 184px;
+    height: 31px;
+  }
+
+  .brand-logo-swoosh-front {
+    width: 138px;
+    height: 21px;
+  }
+
+  .brand-logo-spark-1 {
+    top: 1.2rem;
+    right: 1.35rem;
+  }
+
+  .brand-logo-spark-2 {
+    top: 0.92rem;
+    right: 2rem;
+  }
+
+  .brand-logo-spark-3 {
+    top: 1.55rem;
+    right: 2.3rem;
   }
 
   .landing-hero {

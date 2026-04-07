@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import ProfileDropdown from './ProfileDropdown';
@@ -13,35 +13,62 @@ const footerLinks = [
 
 export default function PublicSiteChrome({ eyebrow, title, subtitle, children }) {
   const { user, logout, isAdmin } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
+
+  const handleLogout = () => {
+    setIsMobileMenuOpen(false);
+    logout();
+  };
+
+  const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
   return (
     <div className="landing-shell policy-shell">
       <nav className="landing-navbar">
         <div className="container landing-navbar-inner">
-          <BrandLogo />
-
-          <div className="landing-nav-links">
-            <Link to="/#tentang">Tentang</Link>
-            <Link to="/#keunggulan">Fitur</Link>
-            <Link to="/#paket">Program</Link>
-            <Link to="/contact">Kontak</Link>
-            <Link to="/terms">Syarat &amp; Ketentuan</Link>
+          <div className="landing-navbar-brand">
+            <BrandLogo />
+            <button
+              type="button"
+              className={`mobile-nav-toggle ${isMobileMenuOpen ? 'mobile-nav-toggle-open' : ''}`}
+              aria-label={isMobileMenuOpen ? 'Tutup navigasi' : 'Buka navigasi'}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="public-nav-panel"
+              onClick={() => setIsMobileMenuOpen((current) => !current)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
           </div>
 
-          <div className="landing-nav-actions">
-            {user ? (
-              <ProfileDropdown displayName={displayName} onLogout={logout} isAdmin={isAdmin} />
-            ) : (
-              <>
-                <Link to="/login" className="btn btn-outline">
-                  Masuk
-                </Link>
-                <Link to="/register" className="btn btn-primary">
-                  Daftar
-                </Link>
-              </>
-            )}
+          <div
+            id="public-nav-panel"
+            className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
+          >
+            <div className="landing-nav-links">
+              <Link to="/#tentang" onClick={closeMobileMenu}>Tentang</Link>
+              <Link to="/#keunggulan" onClick={closeMobileMenu}>Fitur</Link>
+              <Link to="/#paket" onClick={closeMobileMenu}>Program</Link>
+              <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
+              <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
+            </div>
+
+            <div className="landing-nav-actions">
+              {user ? (
+                <ProfileDropdown displayName={displayName} onLogout={handleLogout} isAdmin={isAdmin} />
+              ) : (
+                <>
+                  <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>
+                    Masuk
+                  </Link>
+                  <Link to="/register" className="btn btn-primary" onClick={closeMobileMenu}>
+                    Daftar
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </nav>

@@ -226,6 +226,21 @@ textarea:focus-visible {
   gap: 1.25rem;
 }
 
+.landing-navbar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.landing-navbar-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
 .landing-logo {
   display: inline-flex;
   align-items: center;
@@ -385,6 +400,43 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.mobile-nav-toggle {
+  display: none;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.94);
+  color: #23344d;
+  box-shadow: 0 12px 28px rgba(26, 44, 77, 0.08);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.26rem;
+}
+
+.mobile-nav-toggle span {
+  display: block;
+  width: 20px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: currentColor;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.mobile-nav-toggle-open span:nth-child(1) {
+  transform: translateY(4.8px) rotate(45deg);
+}
+
+.mobile-nav-toggle-open span:nth-child(2) {
+  opacity: 0;
+}
+
+.mobile-nav-toggle-open span:nth-child(3) {
+  transform: translateY(-4.8px) rotate(-45deg);
 }
 
 .profile-dropdown {
@@ -2427,12 +2479,36 @@ textarea:focus-visible {
     align-self: flex-start;
   }
 
-  .landing-logo {
-    justify-content: center;
+  .landing-navbar-inner {
+    align-items: stretch;
+    gap: 0.9rem;
+    flex-direction: column;
   }
 
-  .landing-navbar-inner {
+  .landing-navbar-brand {
+    width: 100%;
+  }
+
+  .landing-logo {
+    justify-content: flex-start;
+  }
+
+  .mobile-nav-toggle {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .landing-navbar-panel {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
     gap: 0.9rem;
+    padding-top: 0.2rem;
+  }
+
+  .landing-navbar-panel-open {
+    display: flex;
   }
 
   .landing-nav-links {
@@ -2455,10 +2531,12 @@ textarea:focus-visible {
 
   .landing-nav-actions {
     width: 100%;
+    justify-content: stretch;
+    flex-direction: column;
   }
 
   .landing-nav-actions .btn {
-    flex: 1 1 160px;
+    width: 100%;
     justify-content: center;
   }
 

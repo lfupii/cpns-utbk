@@ -37,13 +37,6 @@ export const contactChannels = [
     description:
       'Seluruh informasi paket, harga, alur pendaftaran, login, pembayaran, dan akses tryout tersedia di domain resmi ini.',
   },
-  {
-    title: 'Keperluan Review Midtrans',
-    value: 'Kredensial dikirim terpisah',
-    href: '/terms',
-    description:
-      'Akun dummy/reviewer tidak ditampilkan publik demi keamanan. Kredensial login dikirim melalui kanal review Midtrans.',
-  },
 ];
 
 export const termsSections = [

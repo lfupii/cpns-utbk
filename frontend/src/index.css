@@ -213,12 +213,14 @@ textarea:focus-visible {
 }
 
 .landing-navbar {
+  position: relative;
   background: rgba(247, 251, 255, 0.8);
   border-bottom: 1px solid rgba(210, 223, 238, 0.72);
   backdrop-filter: blur(16px);
 }
 
 .landing-navbar-inner {
+  position: relative;
   min-height: 78px;
   display: flex;
   align-items: center;
@@ -237,7 +239,7 @@ textarea:focus-visible {
   flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 1.25rem;
 }
 
@@ -2480,13 +2482,17 @@ textarea:focus-visible {
   }
 
   .landing-navbar-inner {
-    align-items: stretch;
-    gap: 0.9rem;
-    flex-direction: column;
+    min-height: auto;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
   }
 
   .landing-navbar-brand {
     width: 100%;
+    align-items: center;
   }
 
   .landing-logo {
@@ -2500,11 +2506,18 @@ textarea:focus-visible {
 
   .landing-navbar-panel {
     display: none;
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.9rem;
-    padding-top: 0.2rem;
+    position: absolute;
+    top: calc(100% - 0.15rem);
+    left: 1.5rem;
+    right: 1.5rem;
+    width: auto;
+    padding: 0.6rem;
+    border-radius: 1.2rem;
+    border: 1px solid rgba(214, 226, 240, 0.95);
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 24px 54px rgba(31, 63, 109, 0.14);
+    z-index: 24;
+    animation: menuFloat 0.2s ease;
   }
 
   .landing-navbar-panel-open {
@@ -2514,30 +2527,53 @@ textarea:focus-visible {
   .landing-nav-links {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.7rem;
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
   }
 
   .landing-nav-links a {
-    min-height: 42px;
-    display: inline-flex;
+    min-height: 46px;
+    display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     padding: 0 0.9rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.82);
-    border: 1px solid rgba(214, 226, 240, 0.95);
+    border-radius: 0.9rem;
+    background: transparent;
+    border: none;
+    color: #24344c;
+    font-weight: 600;
   }
 
   .landing-nav-actions {
     width: 100%;
     justify-content: stretch;
     flex-direction: column;
+    align-items: stretch;
   }
 
   .landing-nav-actions .btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .landing-nav-links a:hover {
+    background: #eef6ff;
+  }
+
+  .profile-dropdown {
+    width: 100%;
+  }
+
+  .profile-dropdown-trigger {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .profile-dropdown-menu {
+    width: 100%;
+    min-width: 0;
+    right: 0;
+    transform: none;
   }
 
   .brand-logo-mark {
@@ -2612,15 +2648,6 @@ textarea:focus-visible {
   .landing-package-footer {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .profile-dropdown-trigger {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .profile-dropdown-menu {
-    min-width: min(88vw, 280px);
   }
 
   .account-package-stats {

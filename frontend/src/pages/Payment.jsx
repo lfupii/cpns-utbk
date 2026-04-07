@@ -160,8 +160,8 @@ export default function Payment() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-12">
-      <div className="container mx-auto px-4 max-w-2xl">
+    <div className="min-h-screen bg-gray-100 py-8 sm:py-12">
+      <div className="container mx-auto max-w-2xl px-4">
         <button
           onClick={() => navigate('/#paket')}
           className="mb-8 text-blue-600 hover:underline"
@@ -170,7 +170,7 @@ export default function Payment() {
         </button>
 
         <div className="card">
-          <h1 className="text-3xl font-bold mb-8">{isAdmin ? 'Akses Test Admin' : 'Konfirmasi Pembayaran'}</h1>
+          <h1 className="mb-8 text-2xl font-bold sm:text-3xl">{isAdmin ? 'Akses Test Admin' : 'Konfirmasi Pembayaran'}</h1>
 
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
@@ -182,35 +182,35 @@ export default function Payment() {
           <div className="bg-gray-50 rounded-lg p-6 mb-8">
             <h2 className="text-xl font-bold mb-4">Ringkasan Pesanan</h2>
             <div className="space-y-3 mb-4 pb-4 border-b border-gray-200">
-              <div className="flex justify-between">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-700">Paket:</span>
-                <span className="font-semibold">{packageData.name}</span>
+                <span className="font-semibold sm:text-right">{packageData.name}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-700">Kategori:</span>
-                <span className="font-semibold">{packageData.category_name}</span>
+                <span className="font-semibold sm:text-right">{packageData.category_name}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-700">Jumlah Soal:</span>
-                <span className="font-semibold">{packageData.question_count} soal</span>
+                <span className="font-semibold sm:text-right">{packageData.question_count} soal</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-700">Waktu Test:</span>
-                <span className="font-semibold">{packageData.time_limit} menit</span>
+                <span className="font-semibold sm:text-right">{packageData.time_limit} menit</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-700">Percobaan:</span>
-                <span className="font-semibold">{packageData.max_attempts}x</span>
+                <span className="font-semibold sm:text-right">{packageData.max_attempts}x</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-gray-700">Akses:</span>
-                <span className="font-semibold">{packageData.duration_days} hari</span>
+                <span className="font-semibold sm:text-right">{packageData.duration_days} hari</span>
               </div>
             </div>
 
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-lg font-bold">Total Harga:</span>
-              <span className="text-3xl font-bold text-green-600">
+              <span className="text-2xl font-bold text-green-600 sm:text-3xl sm:text-right">
                 Rp {packageData.price.toLocaleString('id-ID')}
               </span>
             </div>
@@ -234,7 +234,7 @@ export default function Payment() {
                 </p>
               </div>
 
-              <div className="flex gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row">
                 <button
                   onClick={() => navigate('/#paket')}
                   className="flex-1 btn-outline"
@@ -284,7 +284,7 @@ export default function Payment() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row">
                 <button
                   onClick={() => navigate('/#paket')}
                   className="flex-1 btn-outline"

@@ -1880,6 +1880,10 @@ textarea:focus-visible {
   min-height: 48px;
 }
 
+.test-action-button-primary {
+  margin-left: auto;
+}
+
 .test-nav-chip,
 .test-subtest-chip {
   position: relative;
@@ -1903,6 +1907,10 @@ textarea:focus-visible {
   .test-hero {
     padding: 1.15rem 1.1rem;
     border-radius: 1.2rem;
+  }
+
+  .test-sidebar-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .test-sidebar-card {
@@ -2423,6 +2431,37 @@ textarea:focus-visible {
     justify-content: center;
   }
 
+  .landing-navbar-inner {
+    gap: 0.9rem;
+  }
+
+  .landing-nav-links {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+
+  .landing-nav-links a {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(214, 226, 240, 0.95);
+  }
+
+  .landing-nav-actions {
+    width: 100%;
+  }
+
+  .landing-nav-actions .btn {
+    flex: 1 1 160px;
+    justify-content: center;
+  }
+
   .brand-logo-mark {
     min-width: 212px;
     padding-bottom: 0.65rem;
@@ -2545,6 +2584,20 @@ textarea:focus-visible {
 
   .landing-showcase-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .account-package-actions .btn,
+  .account-history-action .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .test-action-button {
+    width: 100%;
+  }
+
+  .test-action-button-primary {
+    margin-left: 0;
   }
 }
 
@@ -2897,6 +2950,65 @@ textarea:focus-visible {
   .policy-section,
   .policy-step,
   .review-checklist-item {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-anchor-nav a {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .landing-hero-actions .btn,
+  .landing-package-action {
+    width: 100%;
+  }
+
+  .brand-logo-mark {
+    min-width: 184px;
+    padding-left: 0.15rem;
+    padding-right: 0.15rem;
+  }
+
+  .brand-logo-word-top {
+    font-size: 1.96rem;
+  }
+
+  .brand-logo-word-bottom {
+    font-size: 1.8rem;
+  }
+
+  .brand-logo-swoosh-back {
+    width: 148px;
+    height: 33px;
+  }
+
+  .brand-logo-swoosh-middle {
+    width: 162px;
+    height: 27px;
+  }
+
+  .brand-logo-swoosh-front {
+    width: 122px;
+    height: 18px;
+  }
+
+  .brand-logo-spark-1 {
+    top: 1.05rem;
+    right: 1rem;
+  }
+
+  .brand-logo-spark-2 {
+    top: 0.8rem;
+    right: 1.52rem;
+  }
+
+  .brand-logo-spark-3 {
+    top: 1.3rem;
+    right: 1.82rem;
+  }
+
+  .test-sidebar-metrics {
     grid-template-columns: 1fr;
   }
 }

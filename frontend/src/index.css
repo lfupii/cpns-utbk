@@ -264,146 +264,15 @@ textarea:focus-visible {
 }
 
 .brand-logo {
-  position: relative;
-  padding: 0.1rem 0;
+  padding: 0.15rem 0;
 }
 
-.brand-logo-mark {
-  position: relative;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 142px;
-  padding: 0.08rem 0.35rem 0.46rem;
-}
-
-.brand-logo-word {
-  position: relative;
-  z-index: 3;
+.brand-logo-image {
   display: block;
-  line-height: 0.9;
-  font-weight: 900;
-  letter-spacing: -0.06em;
-  text-transform: uppercase;
-  font-family: var(--font-display);
-  -webkit-text-stroke: 1px rgba(12, 32, 68, 0.18);
-  text-shadow:
-    0 3px 12px rgba(28, 74, 151, 0.2),
-    0 1px 0 rgba(255, 255, 255, 0.28);
-}
-
-.brand-logo-word-top {
-  font-size: 1.65rem;
-  color: #1154c4;
-  background: linear-gradient(180deg, #2f82ff 0%, #0d4eb9 42%, #083688 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.brand-logo-word-bottom {
-  margin-top: -0.12rem;
-  font-size: 1.52rem;
-  color: #ff4b14;
-  background: linear-gradient(180deg, #ff9148 0%, #ff4d17 28%, #f12800 72%, #bf1300 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.brand-logo-mark::before {
-  content: '';
-  position: absolute;
-  inset: 0.08rem 0.45rem 0.24rem;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 28% 64%, rgba(255, 175, 53, 0.45), transparent 30%),
-    radial-gradient(circle at 74% 48%, rgba(52, 177, 255, 0.32), transparent 26%),
-    radial-gradient(circle at 50% 35%, rgba(17, 84, 196, 0.18), transparent 38%);
-  filter: blur(12px);
-  z-index: 0;
-}
-
-.brand-logo-swoosh {
-  position: absolute;
-  left: 50%;
-  bottom: 0.04rem;
-  width: 112px;
-  height: 26px;
-  border-radius: 999px;
-  transform-origin: center;
-  filter: drop-shadow(0 4px 12px rgba(25, 98, 216, 0.18));
-}
-
-.brand-logo-swoosh::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  transform: skewX(-20deg);
-}
-
-.brand-logo-swoosh-back {
-  z-index: 1;
-  transform: translateX(-50%) rotate(-10deg);
-}
-
-.brand-logo-swoosh-back::before {
-  background: linear-gradient(90deg, #0f67e5 0%, #32b5ff 100%);
-}
-
-.brand-logo-swoosh-middle {
-  z-index: 2;
-  width: 122px;
-  height: 22px;
-  bottom: 0.18rem;
-  transform: translateX(-50%) rotate(-9deg);
-}
-
-.brand-logo-swoosh-middle::before {
-  background: linear-gradient(90deg, #ff9a00 0%, #ffd13f 100%);
-}
-
-.brand-logo-swoosh-front {
-  z-index: 2;
-  width: 94px;
-  height: 14px;
-  bottom: 0.34rem;
-  transform: translateX(-58%) rotate(-7deg);
-}
-
-.brand-logo-swoosh-front::before {
-  background: linear-gradient(90deg, #1f7ef0 0%, #0d55c8 100%);
-}
-
-.brand-logo-spark {
-  position: absolute;
-  z-index: 2;
-  border-radius: 999px;
-  background: radial-gradient(circle, #ffb300 0%, #ff8b00 72%, transparent 74%);
-  box-shadow: 0 0 9px rgba(255, 174, 0, 0.4);
-}
-
-.brand-logo-spark-1 {
-  top: 0.9rem;
-  right: 0.95rem;
-  width: 4px;
-  height: 4px;
-}
-
-.brand-logo-spark-2 {
-  top: 0.66rem;
-  right: 1.34rem;
-  width: 3px;
-  height: 3px;
-}
-
-.brand-logo-spark-3 {
-  top: 1.08rem;
-  right: 1.56rem;
-  width: 2px;
-  height: 2px;
+  width: auto;
+  height: 44px;
+  max-width: min(28vw, 180px);
+  object-fit: contain;
 }
 
 .landing-nav-links,
@@ -2719,47 +2588,9 @@ textarea:focus-visible {
     font-size: 1rem;
   }
 
-  .brand-logo-mark {
-    min-width: 132px;
-    padding-bottom: 0.4rem;
-  }
-
-  .brand-logo-word-top {
-    font-size: 1.5rem;
-  }
-
-  .brand-logo-word-bottom {
-    font-size: 1.38rem;
-  }
-
-  .brand-logo-swoosh-back {
-    width: 102px;
-    height: 23px;
-  }
-
-  .brand-logo-swoosh-middle {
-    width: 112px;
-    height: 19px;
-  }
-
-  .brand-logo-swoosh-front {
-    width: 84px;
-    height: 13px;
-  }
-
-  .brand-logo-spark-1 {
-    top: 0.82rem;
-    right: 0.86rem;
-  }
-
-  .brand-logo-spark-2 {
-    top: 0.6rem;
-    right: 1.2rem;
-  }
-
-  .brand-logo-spark-3 {
-    top: 1rem;
-    right: 1.42rem;
+  .brand-logo-image {
+    height: 40px;
+    max-width: min(42vw, 156px);
   }
 
   .landing-hero {
@@ -3236,48 +3067,9 @@ textarea:focus-visible {
     width: 100%;
   }
 
-  .brand-logo-mark {
-    min-width: 120px;
-    padding-left: 0.15rem;
-    padding-right: 0.15rem;
-  }
-
-  .brand-logo-word-top {
-    font-size: 1.34rem;
-  }
-
-  .brand-logo-word-bottom {
-    font-size: 1.22rem;
-  }
-
-  .brand-logo-swoosh-back {
-    width: 92px;
-    height: 20px;
-  }
-
-  .brand-logo-swoosh-middle {
-    width: 100px;
-    height: 17px;
-  }
-
-  .brand-logo-swoosh-front {
-    width: 74px;
-    height: 12px;
-  }
-
-  .brand-logo-spark-1 {
-    top: 0.74rem;
-    right: 0.72rem;
-  }
-
-  .brand-logo-spark-2 {
-    top: 0.54rem;
-    right: 1rem;
-  }
-
-  .brand-logo-spark-3 {
-    top: 0.9rem;
-    right: 1.18rem;
+  .brand-logo-image {
+    height: 34px;
+    max-width: min(48vw, 138px);
   }
 
   .test-sidebar-metrics {

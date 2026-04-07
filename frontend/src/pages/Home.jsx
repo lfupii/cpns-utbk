@@ -12,6 +12,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
 
@@ -33,10 +34,21 @@ export default function Home() {
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
+    setIsProfileMenuOpen(false);
     logout();
   };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+  const handleMobileMenuToggle = () => {
+    setIsProfileMenuOpen(false);
+    setIsMobileMenuOpen((current) => !current);
+  };
+  const handleProfileMenuChange = (nextOpen) => {
+    setIsProfileMenuOpen(nextOpen);
+    if (nextOpen) {
+      setIsMobileMenuOpen(false);
+    }
+  };
 
   const cpnsSource = packages.find((pkg) => pkg.name === 'CPNS Intensif') || null;
   const utbkSource = packages.find((pkg) => pkg.name === 'UTBK Intensif') || null;
@@ -87,35 +99,43 @@ export default function Home() {
             <BrandLogo />
           </div>
 
-          <button
-            type="button"
-            className={`mobile-nav-toggle ${isMobileMenuOpen ? 'mobile-nav-toggle-open' : ''}`}
-            aria-label={isMobileMenuOpen ? 'Tutup navigasi' : 'Buka navigasi'}
-            aria-expanded={isMobileMenuOpen}
-            aria-controls="landing-nav-panel"
-            onClick={() => setIsMobileMenuOpen((current) => !current)}
-          >
-            <span />
-            <span />
-            <span />
-          </button>
+          <div className="landing-nav-menu-slot">
+            <button
+              type="button"
+              className={`mobile-nav-toggle ${isMobileMenuOpen ? 'mobile-nav-toggle-open' : ''}`}
+              aria-label={isMobileMenuOpen ? 'Tutup navigasi' : 'Buka navigasi'}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="landing-nav-panel"
+              onClick={handleMobileMenuToggle}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
 
-          <div
-            id="landing-nav-panel"
-            className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
-          >
-            <div className="landing-nav-links">
-              <a href="#tentang" onClick={closeMobileMenu}>Tentang</a>
-              <a href="#keunggulan" onClick={closeMobileMenu}>Fitur</a>
-              <a href="#paket" onClick={closeMobileMenu}>Program</a>
-              <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
-              <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
+            <div
+              id="landing-nav-panel"
+              className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
+            >
+              <div className="landing-nav-links">
+                <a href="#tentang" onClick={closeMobileMenu}>Tentang</a>
+                <a href="#keunggulan" onClick={closeMobileMenu}>Fitur</a>
+                <a href="#paket" onClick={closeMobileMenu}>Program</a>
+                <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
+                <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
+              </div>
             </div>
           </div>
 
           <div className="landing-nav-actions">
             {user ? (
-              <ProfileDropdown displayName={displayName} onLogout={handleLogout} isAdmin={isAdmin} />
+              <ProfileDropdown
+                displayName={displayName}
+                onLogout={handleLogout}
+                isAdmin={isAdmin}
+                open={isProfileMenuOpen}
+                onOpenChange={handleProfileMenuChange}
+              />
             ) : (
               <>
                 <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>

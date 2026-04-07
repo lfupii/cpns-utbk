@@ -59,13 +59,19 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
       </main>
 
       <footer className="landing-footer-note">
-        <div className="container policy-footer-grid">
-          <div>
-            <p className="landing-footer-note-title">{businessProfile.brandName}</p>
-            <p>{businessProfile.serviceSummary}</p>
+        <div className="container landing-footer-note-grid">
+          <div className="landing-footer-note-inner">
+            <p className="landing-footer-note-title">Informasi Kontak</p>
+            <p>
+              Butuh bantuan atau verifikasi informasi layanan? Hubungi kami di{' '}
+              <a href={businessProfile.supportMailto}>{businessProfile.supportEmail}</a>.
+            </p>
+            <p>
+              Website resmi: <a href={businessProfile.websiteUrl}>{businessProfile.websiteUrl}</a>
+            </p>
           </div>
 
-          <div>
+          <div className="landing-footer-note-inner">
             <p className="landing-footer-note-title">Kebijakan</p>
             <div className="policy-link-list">
               {footerLinks.map((link) => (
@@ -74,16 +80,6 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
                 </Link>
               ))}
             </div>
-          </div>
-
-          <div>
-            <p className="landing-footer-note-title">Kontak</p>
-            <p>
-              Email: <a href={businessProfile.supportMailto}>{businessProfile.supportEmail}</a>
-            </p>
-            <p>
-              Website: <a href={businessProfile.websiteUrl}>{businessProfile.websiteUrl}</a>
-            </p>
           </div>
         </div>
       </footer>

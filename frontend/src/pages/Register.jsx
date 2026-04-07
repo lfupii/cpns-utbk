@@ -123,6 +123,22 @@ export default function Register() {
           >
             {loading ? 'Memproses...' : 'Daftar'}
           </button>
+
+          <p className="text-sm text-gray-500 text-center mb-4">
+            Dengan mendaftar, Anda menyetujui{' '}
+            <Link to="/terms" className="text-blue-600 font-semibold hover:underline">
+              Syarat &amp; Ketentuan
+            </Link>{' '}
+            ,{' '}
+            <Link to="/privacy-policy" className="text-blue-600 font-semibold hover:underline">
+              Kebijakan Privasi
+            </Link>
+            , dan memahami{' '}
+            <Link to="/refund-policy" className="text-blue-600 font-semibold hover:underline">
+              Kebijakan Refund
+            </Link>
+            .
+          </p>
         </form>
 
         {registeredEmail && (

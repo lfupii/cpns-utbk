@@ -126,11 +126,11 @@ export default function Login() {
               Syarat
             </Link>
             ,{' '}
-            <Link to="/refund-policy" className="text-blue-600 font-semibold hover:underline">
+            <Link to="/terms#refund-policy" className="text-blue-600 font-semibold hover:underline">
               Kebijakan Refund
             </Link>
             ,{' '}
-            <Link to="/privacy-policy" className="text-blue-600 font-semibold hover:underline">
+            <Link to="/terms#privacy-policy" className="text-blue-600 font-semibold hover:underline">
               Kebijakan Privasi
             </Link>
             , dan{' '}

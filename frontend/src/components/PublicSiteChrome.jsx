@@ -9,8 +9,8 @@ const footerLinks = [
   { label: 'Program', to: '/#paket' },
   { label: 'Kontak', to: '/contact' },
   { label: 'Syarat', to: '/terms' },
-  { label: 'Privasi', to: '/privacy-policy' },
-  { label: 'Refund', to: '/refund-policy' },
+  { label: 'Privasi', to: '/terms#privacy-policy' },
+  { label: 'Refund', to: '/terms#refund-policy' },
   { label: 'Reviewer', to: '/midtrans-review' },
 ];
 
@@ -32,8 +32,8 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
             <Link to="/#paket">Program</Link>
             <Link to="/contact">Kontak</Link>
             <Link to="/terms">Syarat</Link>
-            <Link to="/privacy-policy">Privasi</Link>
-            <Link to="/refund-policy">Refund</Link>
+            <Link to="/terms#privacy-policy">Privasi</Link>
+            <Link to="/terms#refund-policy">Refund</Link>
           </div>
 
           <div className="landing-nav-actions">

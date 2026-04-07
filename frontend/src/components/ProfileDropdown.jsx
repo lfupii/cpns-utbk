@@ -1,10 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-export default function ProfileDropdown({ displayName, onLogout, isAdmin = false }) {
-  const [open, setOpen] = useState(false);
+export default function ProfileDropdown({
+  displayName,
+  onLogout,
+  isAdmin = false,
+  open: controlledOpen,
+  onOpenChange,
+}) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const wrapperRef = useRef(null);
   const location = useLocation();
+  const open = typeof controlledOpen === 'boolean' ? controlledOpen : uncontrolledOpen;
+
+  const setOpen = (nextValue) => {
+    if (typeof controlledOpen !== 'boolean') {
+      setUncontrolledOpen(nextValue);
+    }
+
+    if (onOpenChange) {
+      onOpenChange(nextValue);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -26,7 +43,7 @@ export default function ProfileDropdown({ displayName, onLogout, isAdmin = false
       <button
         type="button"
         className="profile-dropdown-trigger"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen(!open)}
         aria-expanded={open}
       >
         <span className="profile-dropdown-trigger-mobile" aria-hidden="true">
@@ -62,7 +79,14 @@ export default function ProfileDropdown({ displayName, onLogout, isAdmin = false
           <Link to="/test-history" className="profile-dropdown-item">
             Riwayat Test
           </Link>
-          <button type="button" className="profile-dropdown-item profile-dropdown-danger" onClick={onLogout}>
+          <button
+            type="button"
+            className="profile-dropdown-item profile-dropdown-danger"
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
+          >
             Logout
           </button>
         </div>

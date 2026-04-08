@@ -2327,13 +2327,9 @@ textarea:focus-visible {
 
   .landing-navbar-inner {
     min-height: auto;
-    display: grid;
-    grid-template-columns: 48px minmax(0, 1fr) 48px;
-    grid-template-areas:
-      '. brand menu'
-      'actions actions actions';
+    display: flex;
     align-items: center;
-    justify-items: center;
+    justify-content: space-between;
     gap: 0.75rem 1rem;
     padding-top: 1rem;
     padding-bottom: 1rem;
@@ -2341,21 +2337,20 @@ textarea:focus-visible {
 
   .landing-navbar-brand,
   .landing-navbar-inner > .landing-logo {
-    grid-area: brand;
     width: auto;
     min-width: 0;
-    justify-self: center;
   }
 
   .landing-navbar-brand {
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    margin-left: -0.25rem;
   }
 
   .landing-logo {
     min-height: auto;
     padding: 0;
-    justify-content: center;
+    justify-content: flex-start;
     border: none;
     border-radius: 0;
     background: transparent;
@@ -2368,10 +2363,9 @@ textarea:focus-visible {
   }
 
   .landing-nav-menu-slot {
-    grid-area: menu;
-    width: 48px;
+    width: auto;
     flex: none;
-    justify-self: end;
+    justify-self: auto;
     justify-content: flex-end;
   }
 
@@ -2425,15 +2419,14 @@ textarea:focus-visible {
   }
 
   .landing-nav-actions {
-    grid-area: actions;
-    width: 100%;
-    margin-left: 0;
-    justify-content: center;
-    justify-self: center;
+    width: auto;
+    margin-left: auto;
+    justify-content: flex-end;
+    justify-self: auto;
     flex-direction: row;
     align-items: center;
-    gap: 0.35rem;
-    flex-wrap: wrap;
+    gap: 0.45rem;
+    flex-wrap: nowrap;
     min-width: 0;
   }
 
@@ -2596,10 +2589,17 @@ textarea:focus-visible {
   }
 
   .landing-navbar-inner {
-    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    min-height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.65rem 0.8rem;
     padding-top: 0.85rem;
     padding-bottom: 0.85rem;
+  }
+
+  .landing-navbar-brand {
+    margin-left: -0.25rem;
   }
 
   .mobile-nav-toggle {
@@ -2608,7 +2608,8 @@ textarea:focus-visible {
   }
 
   .landing-nav-menu-slot {
-    width: 42px;
+    width: auto;
+    flex: none;
   }
 
   .landing-navbar-panel {
@@ -2618,6 +2619,9 @@ textarea:focus-visible {
 
   .landing-nav-actions {
     gap: 0.25rem;
+    width: auto;
+    margin-left: auto;
+    flex-wrap: nowrap;
   }
 
   .landing-nav-actions .btn {

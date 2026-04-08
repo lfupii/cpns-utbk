@@ -2365,8 +2365,13 @@ textarea:focus-visible {
   .landing-nav-menu-slot {
     width: auto;
     flex: none;
+    margin-left: auto;
     justify-self: auto;
     justify-content: flex-end;
+  }
+
+  .landing-navbar-brand {
+    margin-right: 0.75rem;
   }
 
   .landing-navbar-panel {
@@ -2600,6 +2605,7 @@ textarea:focus-visible {
 
   .landing-navbar-brand {
     margin-left: -0.25rem;
+    margin-right: 0.75rem;
   }
 
   .mobile-nav-toggle {
@@ -2610,6 +2616,7 @@ textarea:focus-visible {
   .landing-nav-menu-slot {
     width: auto;
     flex: none;
+    margin-left: auto;
   }
 
   .landing-navbar-panel {

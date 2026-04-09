@@ -2625,6 +2625,8 @@ textarea:focus-visible {
   .landing-navbar-panel {
     max-width: min(78vw, 280px);
     min-width: min(72vw, 180px);
+    left: auto;
+    right: 0;
   }
 
   .landing-nav-actions {

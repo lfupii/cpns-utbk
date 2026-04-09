@@ -2379,10 +2379,10 @@ textarea:focus-visible {
     position: absolute;
     top: calc(100% + 0.5rem);
     left: auto;
-    right: calc(50% + 25px);
-    width: min(84vw, 300px);
-    min-width: 200px;
-    max-width: 300px;
+    right: 0;
+    width: min(78vw, 280px);
+    min-width: 180px;
+    max-width: 280px;
     padding: 0.6rem;
     border-radius: 1.2rem;
     border: 1px solid rgba(214, 226, 240, 0.95);
@@ -2620,8 +2620,8 @@ textarea:focus-visible {
   }
 
   .landing-navbar-panel {
-    max-width: min(78vw, 252px);
-    min-width: min(72vw, 220px);
+    max-width: min(78vw, 280px);
+    min-width: min(72vw, 180px);
   }
 
   .landing-nav-actions {

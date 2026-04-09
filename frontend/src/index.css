@@ -2368,6 +2368,7 @@ textarea:focus-visible {
     margin-left: auto;
     justify-self: auto;
     justify-content: flex-end;
+    position: relative;
   }
 
   .landing-navbar-brand {

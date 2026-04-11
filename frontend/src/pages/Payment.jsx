@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
 
@@ -7,16 +7,104 @@ export default function Payment() {
   const { packageId } = useParams();
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const numericPackageId = Number(packageId);
   const [packageData, setPackageData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [pendingOrderId, setPendingOrderId] = useState('');
   const [error, setError] = useState('');
+  const autoCheckedOrderRef = useRef('');
   const isProduction = import.meta.env.VITE_IS_PRODUCTION === 'true';
   const midtransClientKey = import.meta.env.VITE_MIDTRANS_CLIENT_KEY;
   const midtransSnapJsUrl = isProduction
     ? 'https://app.midtrans.com/snap/snap.js'
     : 'https://app.sandbox.midtrans.com/snap/snap.js';
+  const paymentSessionKey = `midtrans-payment-${numericPackageId}`;
+
+  const persistPendingPayment = (payload) => {
+    if (!payload?.orderId) {
+      return;
+    }
+
+    window.sessionStorage.setItem(paymentSessionKey, JSON.stringify(payload));
+    setPendingOrderId(payload.orderId);
+  };
+
+  const readPendingPayment = () => {
+    const rawValue = window.sessionStorage.getItem(paymentSessionKey);
+    if (!rawValue) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(rawValue);
+      return parsed?.orderId ? parsed : null;
+    } catch (_error) {
+      window.sessionStorage.removeItem(paymentSessionKey);
+      return null;
+    }
+  };
+
+  const clearPendingPayment = () => {
+    window.sessionStorage.removeItem(paymentSessionKey);
+    setPendingOrderId('');
+  };
+
+  const buildPaymentSuccessMessage = () =>
+    `Pembayaran untuk paket ${packageData?.name || 'tryout'} berhasil. Akses sudah aktif dan kamu bisa mulai test dari halaman Paket Aktif kapan saja.`;
+
+  const confirmPayment = async (orderId, transactionId = null, options = {}) => {
+    if (!orderId) {
+      return false;
+    }
+
+    const { silent = false } = options;
+    if (!silent) {
+      setCheckingStatus(true);
+    }
+
+    setError('');
+
+    try {
+      await apiClient.post('/payment/confirm', {
+        order_id: orderId,
+        transaction_id: transactionId,
+      });
+
+      clearPendingPayment();
+      window.sessionStorage.setItem('paymentSuccessMessage', buildPaymentSuccessMessage());
+      navigate('/active-packages');
+      return true;
+    } catch (confirmError) {
+      const statusCode = confirmError.response?.status;
+      const transactionStatus = confirmError.response?.data?.data?.transaction_status;
+      const message = confirmError.response?.data?.message;
+
+      if (statusCode === 409 && (transactionStatus === 'pending' || transactionStatus === 'capture')) {
+        persistPendingPayment({ orderId, transactionId });
+        setError(
+          message ||
+            'Pembayaran masih pending. Setelah pembayaran di simulator Midtrans selesai, tekan "Cek Status Pembayaran".'
+        );
+      } else if (statusCode === 401) {
+        setError('Sesi login Anda sudah habis. Silakan login ulang lalu cek status pembayaran lagi.');
+      } else {
+        clearPendingPayment();
+        setError(
+          message ||
+            'Status pembayaran belum bisa diverifikasi. Jika Anda sudah menyelesaikan pembayaran, coba cek status lagi sebentar.'
+        );
+      }
+
+      return false;
+    } finally {
+      if (!silent) {
+        setCheckingStatus(false);
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchPackageData = async () => {
@@ -44,6 +132,28 @@ export default function Payment() {
     fetchPackageData();
   }, [numericPackageId]);
 
+  useEffect(() => {
+    const pendingPayment = readPendingPayment();
+    if (pendingPayment?.orderId) {
+      setPendingOrderId(pendingPayment.orderId);
+    }
+  }, [paymentSessionKey]);
+
+  useEffect(() => {
+    const orderIdFromUrl = (searchParams.get('order_id') || '').trim();
+    const pendingPayment = readPendingPayment();
+    const orderId = orderIdFromUrl || pendingPayment?.orderId || '';
+
+    if (!orderId || autoCheckedOrderRef.current === orderId) {
+      return;
+    }
+
+    autoCheckedOrderRef.current = orderId;
+    setPendingOrderId(orderId);
+
+    confirmPayment(orderId, pendingPayment?.transactionId || null, { silent: false });
+  }, [paymentSessionKey, searchParams]);
+
   const handlePayment = async () => {
     setProcessing(true);
     setError('');
@@ -66,6 +176,11 @@ export default function Payment() {
         return;
       }
 
+      persistPendingPayment({
+        orderId,
+        packageId: numericPackageId,
+      });
+
       const openSnap = () => {
         if (!window.snap?.pay) {
           setError('Widget pembayaran Midtrans gagal dimuat.');
@@ -74,35 +189,36 @@ export default function Payment() {
 
         window.snap.pay(snapToken, {
           onSuccess: async (result) => {
-            try {
-              await apiClient.post('/payment/confirm', {
-                order_id: result?.order_id || orderId,
-                transaction_id: result?.transaction_id || null,
-              });
-              console.log('Payment successful:', result);
-              window.sessionStorage.setItem(
-                'paymentSuccessMessage',
-                `Pembayaran untuk paket ${packageData?.name || 'tryout'} berhasil. Akses sudah aktif dan kamu bisa mulai test dari halaman Paket Aktif kapan saja.`
-              );
-              navigate('/active-packages');
-            } catch (confirmError) {
-              setError(
-                confirmError.response?.data?.message ||
-                  'Pembayaran terdeteksi, tapi akses test belum aktif. Silakan tunggu konfirmasi atau cek lagi sebentar.'
-              );
-            }
+            console.log('Payment successful:', result);
+            persistPendingPayment({
+              orderId: result?.order_id || orderId,
+              transactionId: result?.transaction_id || null,
+              packageId: numericPackageId,
+            });
+            await confirmPayment(result?.order_id || orderId, result?.transaction_id || null);
           },
           onPending: (result) => {
+            persistPendingPayment({
+              orderId: result?.order_id || orderId,
+              transactionId: result?.transaction_id || null,
+              packageId: numericPackageId,
+            });
             setError(
               isProduction
-                ? 'Transaksi masih pending. Selesaikan pembayaran lalu cek kembali statusnya.'
-                : 'Transaksi sandbox masih pending. Untuk QRIS sandbox, selesaikan lewat QRIS Simulator Midtrans.'
+                ? 'Transaksi masih pending. Selesaikan pembayaran lalu tekan "Cek Status Pembayaran".'
+                : 'Transaksi sandbox masih pending. Di mobile, Midtrans sandbox memang bisa mengarahkan Anda ke halaman simulator. Selesaikan simulasi lalu tekan "Cek Status Pembayaran".'
             );
             console.log('Payment pending:', result);
           },
           onError: (result) => {
+            clearPendingPayment();
             setError('Pembayaran gagal. Silakan coba lagi.');
             console.log('Payment error:', result);
+          },
+          onClose: () => {
+            setError(
+              'Jendela pembayaran ditutup sebelum transaksi selesai. Jika Anda tadi melanjutkan ke Midtrans, tekan "Cek Status Pembayaran" setelah kembali ke halaman ini.'
+            );
           }
         });
       };
@@ -262,8 +378,9 @@ export default function Payment() {
                 </ul>
                 {!isProduction && (
                   <p className="mt-4 text-sm text-amber-800">
-                    Mode sandbox aktif. Untuk uji coba QRIS, jangan bayar pakai aplikasi QRIS asli.
-                    Gunakan QRIS Simulator Midtrans.
+                    Mode sandbox aktif. Untuk uji coba QRIS/GoPay di mobile, Midtrans bisa mengarahkan Anda ke halaman simulator,
+                    bukan menampilkan QR code statis seperti di desktop. Itu normal pada sandbox. Selesaikan simulasi, lalu kembali
+                    ke halaman ini untuk cek status pembayaran.
                   </p>
                 )}
                 <p className="mt-4 text-sm text-slate-700">
@@ -291,9 +408,18 @@ export default function Payment() {
                 >
                   Batal
                 </button>
+                {pendingOrderId && (
+                  <button
+                    onClick={() => confirmPayment(pendingOrderId)}
+                    disabled={processing || checkingStatus}
+                    className="flex-1 btn-outline disabled:opacity-50"
+                  >
+                    {checkingStatus ? 'Memeriksa Status...' : 'Cek Status Pembayaran'}
+                  </button>
+                )}
                 <button
                   onClick={handlePayment}
-                  disabled={processing}
+                  disabled={processing || checkingStatus}
                   className="flex-1 btn-primary disabled:opacity-50"
                 >
                   {processing ? 'Processing...' : 'Lanjut ke Pembayaran'}

@@ -96,7 +96,7 @@ class MidtransHandler {
         return $decoded;
     }
 
-    public static function getSnapToken($orderId, $grossAmount, $customerDetails, $itemDetails) {
+    public static function getSnapToken($orderId, $grossAmount, $customerDetails, $itemDetails, ?string $finishUrl = null) {
         require_once __DIR__ . '/../config/Database.php';
 
         $params = [
@@ -108,6 +108,12 @@ class MidtransHandler {
             'item_details' => $itemDetails,
             'enabled_payments' => ['credit_card', 'bank_transfer', 'echannel', 'gopay', 'qris', 'permata']
         ];
+
+        if ($finishUrl) {
+            $params['callbacks'] = [
+                'finish' => $finishUrl,
+            ];
+        }
 
         $curl = curl_init();
         curl_setopt_array($curl, [

@@ -59,17 +59,40 @@ function sendResponse($status, $message, $data = null, $httpCode = 200) {
 // Get JWT Token from Headers
 function getBearerToken() {
     $headers = function_exists('getallheaders') ? getallheaders() : [];
-    $authorizationHeader = $headers['Authorization']
-        ?? $headers['authorization']
-        ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? null)
-        ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null);
+    $normalizedHeaders = [];
 
-    if ($authorizationHeader) {
+    foreach ($headers as $key => $value) {
+        $normalizedHeaders[strtolower((string) $key)] = $value;
+    }
+
+    $candidateHeaders = [
+        $normalizedHeaders['authorization'] ?? null,
+        $_SERVER['HTTP_AUTHORIZATION'] ?? null,
+        $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null,
+        $_SERVER['Authorization'] ?? null,
+    ];
+
+    foreach ($_SERVER as $key => $value) {
+        if (!is_string($value)) {
+            continue;
+        }
+
+        if (stripos($key, 'AUTHORIZATION') !== false) {
+            $candidateHeaders[] = $value;
+        }
+    }
+
+    foreach ($candidateHeaders as $authorizationHeader) {
+        if (!is_string($authorizationHeader) || trim($authorizationHeader) === '') {
+            continue;
+        }
+
         $matches = [];
-        if (preg_match('/Bearer\s(\S+)/', $authorizationHeader, $matches)) {
+        if (preg_match('/^\s*Bearer\s+(\S+)\s*$/i', $authorizationHeader, $matches)) {
             return $matches[1];
         }
     }
+
     return null;
 }
 

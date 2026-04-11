@@ -4,6 +4,7 @@ import apiClient from '../api';
 
 const MODE_CPNS = 'cpns_cat';
 const MODE_UTBK = 'utbk_sectioned';
+const RESULT_EMAIL_STATUS_KEY = 'resultEmailStatusMessage';
 
 function formatTime(seconds) {
   const safeSeconds = Math.max(0, Number(seconds || 0));
@@ -320,10 +321,15 @@ export default function Test() {
     setError('');
 
     try {
-      await apiClient.post('/test/submit', {
+      const response = await apiClient.post('/test/submit', {
         attempt_id: attemptId,
         answers: unsavedAnswers,
       });
+
+      const responseMessage = response.data?.message;
+      if (responseMessage) {
+        window.sessionStorage.setItem(RESULT_EMAIL_STATUS_KEY, responseMessage);
+      }
 
       navigate(`/results/${attemptId}`);
     } catch (err) {

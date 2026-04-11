@@ -2,12 +2,29 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api';
 
+const RESULT_EMAIL_STATUS_KEY = 'resultEmailStatusMessage';
+
 export default function Results() {
   const { attemptId } = useParams();
   const navigate = useNavigate();
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [statusTone, setStatusTone] = useState('info');
+  const [resendingEmail, setResendingEmail] = useState(false);
+
+  useEffect(() => {
+    const flashMessage = window.sessionStorage.getItem(RESULT_EMAIL_STATUS_KEY);
+    if (!flashMessage) {
+      return;
+    }
+
+    const normalized = flashMessage.toLowerCase();
+    setStatusMessage(flashMessage);
+    setStatusTone(normalized.includes('belum berhasil') ? 'warning' : 'success');
+    window.sessionStorage.removeItem(RESULT_EMAIL_STATUS_KEY);
+  }, []);
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -57,10 +74,42 @@ export default function Results() {
   const score = Number.isFinite(results.score) ? results.score : 0;
   const scoreColor = percentage >= 75 ? 'text-green-600' :
     percentage >= 50 ? 'text-yellow-600' : 'text-red-600';
+  const statusClasses = statusTone === 'warning'
+    ? 'mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800'
+    : 'mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800';
+
+  const handleResendEmail = async () => {
+    setResendingEmail(true);
+    setError('');
+
+    try {
+      const response = await apiClient.post('/test/resend-result-email', {
+        attempt_id: Number(attemptId),
+      });
+      setStatusMessage(response.data?.message || 'Hasil tryout berhasil dikirim ulang ke email Anda.');
+      setStatusTone('success');
+    } catch (err) {
+      setStatusMessage(
+        err.response?.data?.message ||
+          'Email hasil tryout belum berhasil dikirim ulang. Silakan coba lagi sebentar.'
+      );
+      setStatusTone('warning');
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 py-8 sm:py-12">
       <div className="container mx-auto max-w-2xl px-4">
+        {statusMessage && (
+          <div className={statusClasses}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p>{statusMessage}</p>
+            </div>
+          </div>
+        )}
+
         {/* Result Card */}
         <div className="card text-center mb-8">
           <h1 className="mb-8 text-3xl font-bold sm:text-4xl">Test Selesai!</h1>
@@ -121,6 +170,14 @@ export default function Results() {
 
           {/* Action Buttons */}
           <div className="flex gap-4 flex-col sm:flex-row">
+            <button
+              type="button"
+              onClick={handleResendEmail}
+              disabled={resendingEmail}
+              className="btn-outline flex-1 disabled:opacity-50"
+            >
+              {resendingEmail ? 'Mengirim Ulang...' : 'Kirim Ulang Hasil ke Email'}
+            </button>
             <button
               onClick={() => navigate('/')}
               className="btn-primary flex-1"

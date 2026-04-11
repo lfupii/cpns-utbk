@@ -729,6 +729,40 @@ class TestController {
 
         sendResponse('success', 'Hasil test berhasil diambil', $result);
     }
+
+    public function resendResultEmail() {
+        $tokenData = verifyToken();
+        $data = json_decode(file_get_contents('php://input'), true);
+        $attemptId = (int) ($data['attempt_id'] ?? 0);
+        $userId = (int) ($tokenData['userId'] ?? 0);
+
+        if ($attemptId <= 0) {
+            sendResponse('error', 'Attempt ID harus diisi', null, 400);
+        }
+
+        $attempt = $this->getAttemptForUser($attemptId, $userId);
+        if (!$attempt) {
+            sendResponse('error', 'Attempt tidak ditemukan', null, 404);
+        }
+
+        $result = $this->getExistingResult($attemptId, $userId);
+        if (!$result) {
+            sendResponse('error', 'Hasil test tidak ditemukan', null, 404);
+        }
+
+        $emailDelivery = $this->sendTryoutResultNotification($attemptId);
+        if (!empty($emailDelivery['success'])) {
+            sendResponse('success', 'Hasil tryout berhasil dikirim ulang ke email Anda.', [
+                'attempt_id' => $attemptId,
+                'email_delivery' => $emailDelivery,
+            ]);
+        }
+
+        sendResponse('error', $emailDelivery['message'] ?? 'Email hasil tryout belum berhasil dikirim ulang.', [
+            'attempt_id' => $attemptId,
+            'email_delivery' => $emailDelivery,
+        ], 502);
+    }
 }
 
 $requestMethod = $_SERVER['REQUEST_METHOD'];
@@ -748,6 +782,8 @@ if (strpos($requestPath, '/api/test/check-access') !== false && $requestMethod =
     $controller->submitAnswers();
 } elseif (strpos($requestPath, '/api/test/results') !== false && $requestMethod === 'GET') {
     $controller->getResults();
+} elseif (strpos($requestPath, '/api/test/resend-result-email') !== false && $requestMethod === 'POST') {
+    $controller->resendResultEmail();
 } else {
     sendResponse('error', 'Endpoint tidak ditemukan', null, 404);
 }

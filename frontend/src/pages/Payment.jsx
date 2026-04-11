@@ -14,6 +14,8 @@ export default function Payment() {
   const [processing, setProcessing] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState('');
+  const [paymentMethodSummaries, setPaymentMethodSummaries] = useState([]);
+  const [paymentMethodsLoaded, setPaymentMethodsLoaded] = useState(false);
   const [error, setError] = useState('');
   const autoCheckedOrderRef = useRef('');
   const isProduction = import.meta.env.VITE_IS_PRODUCTION === 'true';
@@ -133,6 +135,21 @@ export default function Payment() {
   }, [numericPackageId]);
 
   useEffect(() => {
+    const fetchPaymentMethods = async () => {
+      try {
+        const response = await apiClient.get('/payment/methods');
+        setPaymentMethodSummaries(response.data?.data?.payment_method_summaries || []);
+      } catch (_err) {
+        setPaymentMethodSummaries([]);
+      } finally {
+        setPaymentMethodsLoaded(true);
+      }
+    };
+
+    fetchPaymentMethods();
+  }, []);
+
+  useEffect(() => {
     const pendingPayment = readPendingPayment();
     if (pendingPayment?.orderId) {
       setPendingOrderId(pendingPayment.orderId);
@@ -171,9 +188,14 @@ export default function Payment() {
 
       const snapToken = response.data.data?.snap_token;
       const orderId = response.data.data?.order_id;
+      const latestPaymentSummaries = response.data.data?.payment_method_summaries;
       if (!snapToken) {
         setError('Snap token tidak tersedia. Coba ulangi proses pembayaran.');
         return;
+      }
+
+      if (Array.isArray(latestPaymentSummaries) && latestPaymentSummaries.length > 0) {
+        setPaymentMethodSummaries(latestPaymentSummaries);
       }
 
       persistPendingPayment({
@@ -371,10 +393,15 @@ export default function Payment() {
               <div className="bg-yellow-50 rounded-lg p-6 mb-8 border border-yellow-200">
                 <h3 className="font-bold mb-2">Metode Pembayaran Tersedia:</h3>
                 <ul className="text-sm space-y-1 text-gray-700">
-                  <li>✓ Kartu Kredit / Debit</li>
-                  <li>✓ Transfer Bank</li>
-                  <li>✓ E-Wallet (GoPay, OVO, Dana)</li>
-                  <li>✓ QRIS</li>
+                  {paymentMethodSummaries.length > 0 ? (
+                    paymentMethodSummaries.map((method) => (
+                      <li key={method.code}>✓ {method.label}</li>
+                    ))
+                  ) : !paymentMethodsLoaded ? (
+                    <li>Metode pembayaran aktif sedang dimuat.</li>
+                  ) : (
+                    <li>Metode pembayaran aktif belum tersedia saat ini.</li>
+                  )}
                 </ul>
                 {!isProduction && (
                   <p className="mt-4 text-sm text-amber-800">

@@ -90,11 +90,17 @@ Setup yang terbukti jalan di hosting ini:
 
 ### Frontend
 
-- `VITE_API_URL`
-- `VITE_MIDTRANS_CLIENT_KEY`
+- `PROD_VITE_API_URL`
+- `PROD_VITE_IS_PRODUCTION`
+- `PROD_VITE_MIDTRANS_CLIENT_KEY`
 
 Nilai tetap untuk project ini:
-- `VITE_API_URL=https://api.tocpnsutbk.com`
+- `PROD_VITE_API_URL=https://api.tocpnsutbk.com`
+- `PROD_VITE_IS_PRODUCTION=true`
+
+Catatan kompatibilitas:
+- workflow masih menerima secret lama `VITE_API_URL` dan `VITE_MIDTRANS_CLIENT_KEY`
+- tetapi untuk setup baru, pakai prefix `PROD_` agar tidak rancu dengan sandbox/local
 
 ### Backend Database
 
@@ -151,8 +157,9 @@ FTP_PORT=21
 FTP_USERNAME=ISI_USERNAME_FTP
 FTP_PASSWORD=ISI_PASSWORD_FTP
 
-VITE_API_URL=https://api.tocpnsutbk.com
-VITE_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY
+PROD_VITE_API_URL=https://api.tocpnsutbk.com
+PROD_VITE_IS_PRODUCTION=true
+PROD_VITE_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY_PRODUCTION
 
 PROD_DB_HOST=localhost
 PROD_DB_USER=ISI_DB_USER
@@ -186,8 +193,10 @@ PROD_FROM_NAME=TO CPNS UTBK
 Kalau Midtrans Production belum selesai verifikasi, isi:
 
 ```text
+PROD_VITE_API_URL=https://api.tocpnsutbk.com
+PROD_VITE_IS_PRODUCTION=false
+PROD_VITE_MIDTRANS_CLIENT_KEY=CLIENT_KEY_SANDBOX
 PROD_MIDTRANS_IS_PRODUCTION=false
-VITE_MIDTRANS_CLIENT_KEY=CLIENT_KEY_SANDBOX
 PROD_MIDTRANS_SERVER_KEY=SERVER_KEY_SANDBOX
 PROD_MIDTRANS_CLIENT_KEY=CLIENT_KEY_SANDBOX
 PROD_MERCHANT_ID=MERCHANT_ID_SANDBOX
@@ -204,12 +213,52 @@ Efeknya:
 Ganti jadi:
 
 ```text
+PROD_VITE_API_URL=https://api.tocpnsutbk.com
+PROD_VITE_IS_PRODUCTION=true
+PROD_VITE_MIDTRANS_CLIENT_KEY=CLIENT_KEY_PRODUCTION
 PROD_MIDTRANS_IS_PRODUCTION=true
-VITE_MIDTRANS_CLIENT_KEY=CLIENT_KEY_PRODUCTION
 PROD_MIDTRANS_SERVER_KEY=SERVER_KEY_PRODUCTION
 PROD_MIDTRANS_CLIENT_KEY=CLIENT_KEY_PRODUCTION
 PROD_MERCHANT_ID=MERCHANT_ID_PRODUCTION
 ```
+
+## Checklist transisi Sandbox ke Production
+
+Urutan yang paling aman untuk repo ini:
+
+1. Pastikan perubahan code payment terbaru sudah ada di branch yang akan dideploy.
+2. Di dashboard Midtrans production, siapkan:
+   - `Server Key`
+   - `Client Key`
+   - `Merchant ID`
+3. Ubah GitHub Actions secrets berikut ke nilai production:
+   - `PROD_VITE_IS_PRODUCTION=true`
+   - `PROD_VITE_MIDTRANS_CLIENT_KEY=Mid-client-...` production
+   - `PROD_MIDTRANS_IS_PRODUCTION=true`
+   - `PROD_MIDTRANS_SERVER_KEY=Mid-server-...` production
+   - `PROD_MIDTRANS_CLIENT_KEY=Mid-client-...` production
+   - `PROD_MERCHANT_ID=M...` production
+4. Pastikan URL aplikasi production tetap benar:
+   - `PROD_VITE_API_URL=https://api.tocpnsutbk.com`
+   - `PROD_API_URL=https://api.tocpnsutbk.com`
+   - `PROD_FRONTEND_URL=https://tocpnsutbk.com`
+   - `PROD_CORS_ALLOWED_ORIGINS=https://tocpnsutbk.com,https://www.tocpnsutbk.com`
+5. Di dashboard Midtrans production, set HTTP Notification / Payment Notification URL ke:
+   - `https://api.tocpnsutbk.com/api/payment/notification`
+6. Push ke `main` atau jalankan `Deploy Live` secara manual dari tab Actions.
+7. Setelah deploy selesai, verifikasi:
+   - `https://api.tocpnsutbk.com/api/health` mengembalikan `environment: production`
+   - halaman payment memuat Snap production
+   - satu transaksi real nominal kecil bisa membuat row `transactions` menjadi `completed`
+   - row `user_access` terbentuk
+   - paket muncul di halaman `Paket Aktif`
+   - user bisa masuk test
+
+## Secret lama yang boleh dibersihkan
+
+Kalau workflow baru sudah dipakai dan secret baru sudah terisi, secret frontend lama ini boleh dihapus agar konfigurasi lebih bersih:
+- `VITE_API_URL`
+- `VITE_MIDTRANS_CLIENT_KEY`
 
 ## Cara deploy
 

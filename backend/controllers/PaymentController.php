@@ -160,8 +160,18 @@ class PaymentController {
             ]
         ];
 
+        $finishUrl = rtrim(FRONTEND_URL, '/') . '/payment/' . rawurlencode((string) $packageId)
+            . '?order_id=' . rawurlencode($orderId)
+            . '&payment=finish';
+
         // Get Snap Token dari Midtrans
-        $midtransResponse = MidtransHandler::getSnapToken($orderId, $package['price'], $customerDetails, $itemDetails);
+        $midtransResponse = MidtransHandler::getSnapToken(
+            $orderId,
+            $package['price'],
+            $customerDetails,
+            $itemDetails,
+            $finishUrl
+        );
 
         if (!isset($midtransResponse['token'])) {
             $errorMessage = $midtransResponse['error_messages'][0]
@@ -184,7 +194,8 @@ class PaymentController {
         sendResponse('success', 'Snap token berhasil dibuat', [
             'transaction_id' => $transactionId,
             'snap_token' => $midtransResponse['token'],
-            'order_id' => $orderId
+            'order_id' => $orderId,
+            'finish_url' => $finishUrl,
         ]);
     }
 
@@ -314,16 +325,6 @@ class PaymentController {
 
         if ($orderId === '') {
             sendResponse('error', 'Order ID harus diisi', null, 400);
-        }
-
-        if (!MIDTRANS_IS_PRODUCTION) {
-            $result = $this->completeTransactionAccess(
-                $orderId,
-                (int) $tokenData['userId'],
-                $data['transaction_id'] ?? null
-            );
-
-            sendResponse('success', 'Pembayaran sandbox berhasil dikonfirmasi', $result);
         }
 
         $statusData = MidtransHandler::checkTransactionStatus($orderId);

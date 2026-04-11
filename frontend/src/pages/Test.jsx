@@ -393,7 +393,11 @@ export default function Test() {
         setWorkflow(startData.workflow || null);
         await loadQuestions(nextAttemptId);
       } catch (err) {
-        setError(err.response?.data?.message || 'Gagal mengakses test ini');
+        if (err.response?.status === 401) {
+          setError('Sesi login Anda sudah habis atau tidak valid. Silakan login ulang lalu coba masuk ke test lagi.');
+        } else {
+          setError(err.response?.data?.message || 'Gagal mengakses test ini');
+        }
       } finally {
         setLoading(false);
       }

@@ -43,9 +43,9 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-          VITE_IS_PRODUCTION: ${{ secrets.PROD_MIDTRANS_IS_PRODUCTION }}
-          VITE_MIDTRANS_CLIENT_KEY: ${{ secrets.VITE_MIDTRANS_CLIENT_KEY }}
+          VITE_API_URL: ${{ secrets.PROD_VITE_API_URL || secrets.VITE_API_URL || secrets.PROD_API_URL }}
+          VITE_IS_PRODUCTION: ${{ secrets.PROD_VITE_IS_PRODUCTION || secrets.PROD_MIDTRANS_IS_PRODUCTION }}
+          VITE_MIDTRANS_CLIENT_KEY: ${{ secrets.PROD_VITE_MIDTRANS_CLIENT_KEY || secrets.VITE_MIDTRANS_CLIENT_KEY || secrets.PROD_MIDTRANS_CLIENT_KEY }}
         run: npm run build
 
       - name: Install backend dependencies

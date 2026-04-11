@@ -1,6 +1,38 @@
 <?php
 // Midtrans Payment Handler
 class MidtransHandler {
+    private const ENABLED_PAYMENTS = ['credit_card', 'bank_transfer', 'echannel', 'gopay', 'qris', 'permata'];
+
+    public static function getEnabledPayments(): array {
+        return self::ENABLED_PAYMENTS;
+    }
+
+    public static function getPaymentMethodSummaries(?array $enabledPayments = null): array {
+        $enabledPayments = $enabledPayments ?? self::getEnabledPayments();
+        $paymentLabels = [
+            'credit_card' => 'Kartu Kredit / Debit',
+            'bank_transfer' => 'Transfer Bank',
+            'echannel' => 'Bank Mandiri / Mandiri Bill',
+            'gopay' => 'GoPay',
+            'qris' => 'QRIS',
+            'permata' => 'PermataBank / Permata VA',
+        ];
+
+        $summaries = [];
+        foreach ($enabledPayments as $paymentCode) {
+            if (!isset($paymentLabels[$paymentCode])) {
+                continue;
+            }
+
+            $summaries[] = [
+                'code' => $paymentCode,
+                'label' => $paymentLabels[$paymentCode],
+            ];
+        }
+
+        return $summaries;
+    }
+
     public static function createTransaction($orderId, $grossAmount, $customerDetails, $itemDetails) {
         require_once __DIR__ . '/../config/Database.php';
 
@@ -106,7 +138,7 @@ class MidtransHandler {
             ],
             'customer_details' => $customerDetails,
             'item_details' => $itemDetails,
-            'enabled_payments' => ['credit_card', 'bank_transfer', 'echannel', 'gopay', 'qris', 'permata']
+            'enabled_payments' => self::getEnabledPayments()
         ];
 
         if ($finishUrl) {

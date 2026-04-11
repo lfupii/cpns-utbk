@@ -196,6 +196,15 @@ class PaymentController {
             'snap_token' => $midtransResponse['token'],
             'order_id' => $orderId,
             'finish_url' => $finishUrl,
+            'enabled_payments' => MidtransHandler::getEnabledPayments(),
+            'payment_method_summaries' => MidtransHandler::getPaymentMethodSummaries(),
+        ]);
+    }
+
+    public function getPaymentMethods() {
+        sendResponse('success', 'Metode pembayaran aktif berhasil diambil', [
+            'enabled_payments' => MidtransHandler::getEnabledPayments(),
+            'payment_method_summaries' => MidtransHandler::getPaymentMethodSummaries(),
         ]);
     }
 
@@ -379,6 +388,8 @@ $controller = new PaymentController($mysqli);
 
 if (strpos($requestPath, '/api/payment/create') !== false && $requestMethod === 'POST') {
     $controller->createTransaction();
+} elseif (strpos($requestPath, '/api/payment/methods') !== false && $requestMethod === 'GET') {
+    $controller->getPaymentMethods();
 } elseif (strpos($requestPath, '/api/payment/confirm') !== false && $requestMethod === 'POST') {
     $controller->confirmTransaction();
 } elseif (strpos($requestPath, '/api/payment/complete-sandbox') !== false && $requestMethod === 'POST') {

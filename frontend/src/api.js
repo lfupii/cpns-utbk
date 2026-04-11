@@ -11,7 +11,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const method = (config.method || 'get').toLowerCase();
-    const publicPaths = ['/questions/packages'];
+    const publicPaths = ['/questions/packages', '/payment/methods'];
     const requestUrl = config.url || '';
 
     if (['post', 'put', 'patch', 'delete'].includes(method)) {

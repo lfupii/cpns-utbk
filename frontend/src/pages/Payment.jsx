@@ -55,7 +55,7 @@ export default function Payment() {
   };
 
   const buildPaymentSuccessMessage = () =>
-    `Pembayaran untuk paket ${packageData?.name || 'tryout'} berhasil. Akses sudah aktif dan kamu bisa mulai test dari halaman Paket Aktif kapan saja.`;
+    `Pembayaran untuk paket ${packageData?.name || 'tryout'} berhasil. Akses sudah aktif dan kamu bisa masuk ke Ruang Belajar dari halaman Paket Aktif kapan saja.`;
 
   const confirmPayment = async (orderId, transactionId = null, options = {}) => {
     if (!orderId) {
@@ -368,7 +368,7 @@ export default function Payment() {
               <div className="bg-green-50 rounded-lg p-6 mb-8 border border-green-200 text-green-800">
                 <h3 className="font-bold mb-2">Bypass Pembayaran Admin Aktif</h3>
                 <p>
-                  Role admin bisa langsung mengakses test ini tanpa transaksi pembayaran.
+                  Role admin bisa langsung mengakses ruang belajar dan test ini tanpa transaksi pembayaran.
                 </p>
               </div>
 
@@ -380,10 +380,10 @@ export default function Payment() {
                   Kembali
                 </button>
                 <Link
-                  to={`/test/${numericPackageId}`}
+                  to={`/learning/${numericPackageId}`}
                   className="flex-1 btn btn-primary text-center"
                 >
-                  Mulai Test
+                  Buka Ruang Belajar
                 </Link>
               </div>
             </>
@@ -457,7 +457,8 @@ export default function Payment() {
               <div className="mt-8 p-4 bg-blue-100 rounded-lg border border-blue-300 text-sm text-blue-800">
                 <p>
                   💡 <strong>Penting:</strong> Setelah pembayaran berhasil, Anda akan mendapatkan akses untuk mengerjakan test ini.
-                  Anda hanya bisa mengerjakan {packageData.max_attempts} kali. Untuk test ulang, Anda harus membayar lagi.
+                  Materi penuh dan milestone belajar ikut terbuka. Anda hanya bisa mengerjakan tryout keseluruhan {packageData.max_attempts} kali.
+                  Untuk test ulang, Anda harus membayar lagi.
                 </p>
               </div>
             </>

@@ -304,10 +304,10 @@ export default function Home() {
                   {pkg.source ? (
                     user ? (
                       <Link
-                        to={isAdmin ? `/test/${pkg.source.id}` : `/payment/${pkg.source.id}`}
+                        to={`/learning/${pkg.source.id}`}
                         className="btn btn-primary landing-package-action"
                       >
-                        {isAdmin ? `Mulai Test ${pkg.title}` : `Ambil ${pkg.title}`}
+                        {isAdmin ? `Buka ${pkg.title}` : `Ambil ${pkg.title}`}
                       </Link>
                     ) : (
                       <Link to="/login" className="btn btn-primary landing-package-action">

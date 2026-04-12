@@ -61,6 +61,25 @@ const createEmptyQuestionForm = (sectionCode = '') => ({
   ],
 });
 
+const createEmptyLearningQuestion = (order = 1) => ({
+  id: null,
+  question_text: '',
+  difficulty: 'medium',
+  question_order: order,
+  options: [
+    createOption(0),
+    createOption(1),
+    createOption(2),
+    createOption(3),
+  ],
+});
+
+const createEmptyMaterialPage = (order = 1) => ({
+  title: `Halaman ${order}`,
+  points: ['', '', ''],
+  closing: '',
+});
+
 function csvEscape(value) {
   const normalized = String(value ?? '');
   if (normalized.includes(',') || normalized.includes('"') || normalized.includes('\n')) {
@@ -236,6 +255,19 @@ export default function AdminPanel() {
   const [questionSectionFilter, setQuestionSectionFilter] = useState('');
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState('');
+  const [learningContent, setLearningContent] = useState([]);
+  const [loadingLearningContent, setLoadingLearningContent] = useState(false);
+  const [learningSectionCode, setLearningSectionCode] = useState('');
+  const [materialForm, setMaterialForm] = useState({ title: '', pages: [createEmptyMaterialPage()] });
+  const [learningQuestionsForm, setLearningQuestionsForm] = useState([
+    createEmptyLearningQuestion(1),
+    createEmptyLearningQuestion(2),
+    createEmptyLearningQuestion(3),
+    createEmptyLearningQuestion(4),
+    createEmptyLearningQuestion(5),
+  ]);
+  const [materialSaving, setMaterialSaving] = useState(false);
+  const [learningQuestionsSaving, setLearningQuestionsSaving] = useState(false);
 
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
@@ -254,10 +286,19 @@ export default function AdminPanel() {
 
     return defaultSectionCode;
   }, [defaultSectionCode, packageSections, questionSectionFilter]);
+  const activeLearningSection = useMemo(
+    () => learningContent.find((section) => section.code === learningSectionCode) || learningContent[0] || null,
+    [learningContent, learningSectionCode]
+  );
 
   const fetchAdminQuestions = useCallback(async (packageId) => {
     const response = await apiClient.get(`/admin/questions?package_id=${packageId}&_=${Date.now()}`);
     return response.data.data || [];
+  }, []);
+
+  const fetchLearningContent = useCallback(async (packageId) => {
+    const response = await apiClient.get(`/admin/learning-content?package_id=${packageId}&_=${Date.now()}`);
+    return response.data.data?.sections || [];
   }, []);
 
   const sectionStats = useMemo(() => {
@@ -349,36 +390,88 @@ export default function AdminPanel() {
       return;
     }
 
-    const [questionsResponse, packagesResponse] = await Promise.all([
+    const [questionsResponse, packagesResponse, learningResponse] = await Promise.all([
       fetchAdminQuestions(packageId),
       apiClient.get('/admin/packages'),
+      fetchLearningContent(packageId),
     ]);
 
     setQuestions(questionsResponse || []);
     setPackages(packagesResponse.data.data || []);
+    setLearningContent(learningResponse || []);
   };
 
   useEffect(() => {
     if (!selectedPackageId) {
       setQuestions([]);
+      setLearningContent([]);
       return;
     }
 
     const fetchQuestions = async () => {
       setLoadingQuestions(true);
+      setLoadingLearningContent(true);
       setError('');
       try {
-        const nextQuestions = await fetchAdminQuestions(selectedPackageId);
+        const [nextQuestions, nextLearningContent] = await Promise.all([
+          fetchAdminQuestions(selectedPackageId),
+          fetchLearningContent(selectedPackageId),
+        ]);
         setQuestions(nextQuestions);
+        setLearningContent(nextLearningContent);
+        setLearningSectionCode((current) => (
+          nextLearningContent.some((section) => section.code === current)
+            ? current
+            : nextLearningContent[0]?.code || ''
+        ));
       } catch (err) {
-        setError(err.response?.data?.message || 'Gagal memuat daftar soal');
+        setError(err.response?.data?.message || 'Gagal memuat daftar soal atau materi');
       } finally {
         setLoadingQuestions(false);
+        setLoadingLearningContent(false);
       }
     };
 
     fetchQuestions();
-  }, [fetchAdminQuestions, selectedPackageId]);
+  }, [fetchAdminQuestions, fetchLearningContent, selectedPackageId]);
+
+  useEffect(() => {
+    if (!activeLearningSection) {
+      return;
+    }
+
+    setMaterialForm({
+      title: activeLearningSection.material?.title || activeLearningSection.name || '',
+      pages: (activeLearningSection.material?.pages || [createEmptyMaterialPage()]).map((page, index) => ({
+        title: page.title || `Halaman ${index + 1}`,
+        points: Array.isArray(page.points) ? page.points : String(page.points || '').split('\n'),
+        closing: page.closing || '',
+      })),
+    });
+
+    const nextLearningQuestions = (activeLearningSection.questions || []).length > 0
+      ? activeLearningSection.questions
+      : [
+          createEmptyLearningQuestion(1),
+          createEmptyLearningQuestion(2),
+          createEmptyLearningQuestion(3),
+          createEmptyLearningQuestion(4),
+          createEmptyLearningQuestion(5),
+        ];
+
+    setLearningQuestionsForm(nextLearningQuestions.map((question, index) => ({
+      id: question.id || null,
+      question_text: question.question_text || '',
+      difficulty: question.difficulty || 'medium',
+      question_order: Number(question.question_order || index + 1),
+      options: (question.options || []).map((option, optionIndex) => ({
+        letter: option.letter || String.fromCharCode(65 + optionIndex),
+        text: option.text || '',
+        image_url: option.image_url || '',
+        is_correct: Boolean(Number(option.is_correct)),
+      })),
+    })));
+  }, [activeLearningSection]);
 
   useEffect(() => {
     setQuestionForm((current) => {
@@ -588,6 +681,126 @@ export default function AdminPanel() {
     }
   };
 
+  const updateMaterialPage = (pageIndex, field, value) => {
+    setMaterialForm((current) => ({
+      ...current,
+      pages: current.pages.map((page, index) => (
+        index === pageIndex ? { ...page, [field]: value } : page
+      )),
+    }));
+  };
+
+  const updateMaterialPagePoints = (pageIndex, value) => {
+    updateMaterialPage(pageIndex, 'points', value.split('\n'));
+  };
+
+  const addMaterialPage = () => {
+    setMaterialForm((current) => ({
+      ...current,
+      pages: [...current.pages, createEmptyMaterialPage(current.pages.length + 1)],
+    }));
+  };
+
+  const removeMaterialPage = (pageIndex) => {
+    setMaterialForm((current) => ({
+      ...current,
+      pages: current.pages.length <= 1
+        ? current.pages
+        : current.pages.filter((_, index) => index !== pageIndex),
+    }));
+  };
+
+  const handleMaterialSave = async () => {
+    if (!selectedPackageId || !activeLearningSection) return;
+
+    setMaterialSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await apiClient.put('/admin/learning-material', {
+        package_id: Number(selectedPackageId),
+        section_code: activeLearningSection.code,
+        title: materialForm.title,
+        pages: materialForm.pages,
+      });
+      await refreshAdminData(Number(selectedPackageId));
+      setSuccess('Materi subtest berhasil disimpan.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal menyimpan materi subtest');
+    } finally {
+      setMaterialSaving(false);
+    }
+  };
+
+  const updateLearningQuestion = (questionIndex, field, value) => {
+    setLearningQuestionsForm((current) => current.map((question, index) => (
+      index === questionIndex
+        ? {
+            ...question,
+            [field]: field === 'question_order' ? Number(value) : value,
+          }
+        : question
+    )));
+  };
+
+  const updateLearningQuestionOption = (questionIndex, optionIndex, field, value) => {
+    setLearningQuestionsForm((current) => current.map((question, index) => (
+      index === questionIndex
+        ? {
+            ...question,
+            options: question.options.map((option, currentOptionIndex) => (
+              currentOptionIndex === optionIndex ? { ...option, [field]: value } : option
+            )),
+          }
+        : question
+    )));
+  };
+
+  const setLearningQuestionCorrectOption = (questionIndex, optionIndex) => {
+    setLearningQuestionsForm((current) => current.map((question, index) => (
+      index === questionIndex
+        ? {
+            ...question,
+            options: question.options.map((option, currentOptionIndex) => ({
+              ...option,
+              is_correct: currentOptionIndex === optionIndex,
+            })),
+          }
+        : question
+    )));
+  };
+
+  const addLearningQuestion = () => {
+    setLearningQuestionsForm((current) => [...current, createEmptyLearningQuestion(current.length + 1)]);
+  };
+
+  const removeLearningQuestion = (questionIndex) => {
+    setLearningQuestionsForm((current) => current.length <= 1
+      ? current
+      : current.filter((_, index) => index !== questionIndex));
+  };
+
+  const handleLearningQuestionsSave = async () => {
+    if (!selectedPackageId || !activeLearningSection) return;
+
+    setLearningQuestionsSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await apiClient.put('/admin/learning-section-questions', {
+        package_id: Number(selectedPackageId),
+        section_code: activeLearningSection.code,
+        questions: learningQuestionsForm,
+      });
+      await refreshAdminData(Number(selectedPackageId));
+      setSuccess('Soal mini test subtest berhasil disimpan.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal menyimpan soal mini test subtest');
+    } finally {
+      setLearningQuestionsSaving(false);
+    }
+  };
+
   const handleDownloadTemplate = () => {
     const blob = new Blob([buildCsvTemplate()], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -768,6 +981,190 @@ export default function AdminPanel() {
               )}
             </section>
           </div>
+
+          <section className="account-card admin-main-card admin-panel-card admin-learning-card">
+            <div className="admin-section-header admin-list-toolbar">
+              <div>
+                <h2>Materi & Mini Test Subtest</h2>
+                <p className="text-muted">Edit materi ruang belajar dan 5 soal mini test per subtest.</p>
+              </div>
+              <div className="admin-list-toolbar-actions">
+                <select
+                  value={learningSectionCode}
+                  onChange={(event) => setLearningSectionCode(event.target.value)}
+                  className="admin-search-input admin-section-filter"
+                >
+                  {learningContent.map((section) => (
+                    <option key={section.code} value={section.code}>
+                      {section.session_name ? `${section.session_name} • ` : ''}
+                      {section.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {loadingLearningContent ? (
+              <p>Memuat materi subtest...</p>
+            ) : activeLearningSection ? (
+              <div className="admin-learning-grid">
+                <div className="admin-learning-column">
+                  <div className="admin-section-header admin-section-header-compact">
+                    <div>
+                      <h3>Materi {activeLearningSection.name}</h3>
+                      <p className="text-muted">Poin ditulis satu baris per poin.</p>
+                    </div>
+                    <button type="button" className="btn btn-outline" onClick={addMaterialPage}>
+                      Tambah Halaman
+                    </button>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Judul Materi</label>
+                    <input
+                      value={materialForm.title}
+                      onChange={(event) => setMaterialForm((current) => ({ ...current, title: event.target.value }))}
+                    />
+                  </div>
+
+                  <div className="admin-learning-page-list">
+                    {materialForm.pages.map((page, pageIndex) => (
+                      <div key={`material-page-${pageIndex}`} className="admin-learning-page-card">
+                        <div className="admin-option-editor-head">
+                          <strong>Halaman {pageIndex + 1}</strong>
+                          <button
+                            type="button"
+                            className="btn btn-outline admin-option-delete"
+                            onClick={() => removeMaterialPage(pageIndex)}
+                            disabled={materialForm.pages.length <= 1}
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                        <div className="form-group">
+                          <label>Judul Halaman</label>
+                          <input
+                            value={page.title}
+                            onChange={(event) => updateMaterialPage(pageIndex, 'title', event.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Poin Materi</label>
+                          <textarea
+                            rows="5"
+                            value={(page.points || []).join('\n')}
+                            onChange={(event) => updateMaterialPagePoints(pageIndex, event.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Kalimat Penutup</label>
+                          <textarea
+                            rows="2"
+                            value={page.closing}
+                            onChange={(event) => updateMaterialPage(pageIndex, 'closing', event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button type="button" className="btn btn-primary" onClick={handleMaterialSave} disabled={materialSaving}>
+                    {materialSaving ? 'Menyimpan Materi...' : 'Simpan Materi'}
+                  </button>
+                </div>
+
+                <div className="admin-learning-column">
+                  <div className="admin-section-header admin-section-header-compact">
+                    <div>
+                      <h3>Mini Test {activeLearningSection.name}</h3>
+                      <p className="text-muted">Disarankan 5 soal singkat untuk milestone subtest.</p>
+                    </div>
+                    <button type="button" className="btn btn-outline" onClick={addLearningQuestion}>
+                      Tambah Soal
+                    </button>
+                  </div>
+
+                  <div className="admin-learning-question-list">
+                    {learningQuestionsForm.map((question, questionIndex) => (
+                      <div key={`learning-question-${questionIndex}`} className="admin-learning-page-card">
+                        <div className="admin-option-editor-head">
+                          <strong>Soal {questionIndex + 1}</strong>
+                          <button
+                            type="button"
+                            className="btn btn-outline admin-option-delete"
+                            onClick={() => removeLearningQuestion(questionIndex)}
+                            disabled={learningQuestionsForm.length <= 1}
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                        <div className="form-group">
+                          <label>Pertanyaan</label>
+                          <textarea
+                            rows="3"
+                            value={question.question_text}
+                            onChange={(event) => updateLearningQuestion(questionIndex, 'question_text', event.target.value)}
+                          />
+                        </div>
+                        <div className="account-form-grid">
+                          <div className="form-group">
+                            <label>Kesulitan</label>
+                            <select
+                              value={question.difficulty}
+                              onChange={(event) => updateLearningQuestion(questionIndex, 'difficulty', event.target.value)}
+                            >
+                              <option value="easy">Mudah</option>
+                              <option value="medium">Sedang</option>
+                              <option value="hard">Sulit</option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Urutan</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={question.question_order}
+                              onChange={(event) => updateLearningQuestion(questionIndex, 'question_order', event.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="admin-options-editor-list">
+                          {(question.options || []).map((option, optionIndex) => (
+                            <div key={`learning-option-${questionIndex}-${optionIndex}`} className="admin-option-row">
+                              <button
+                                type="button"
+                                className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
+                                onClick={() => setLearningQuestionCorrectOption(questionIndex, optionIndex)}
+                              >
+                                {option.is_correct ? 'Benar' : 'Pilih'}
+                              </button>
+                              <strong>{option.letter}</strong>
+                              <input
+                                value={option.text}
+                                onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'text', event.target.value)}
+                                placeholder={`Opsi ${option.letter}`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleLearningQuestionsSave}
+                    disabled={learningQuestionsSaving}
+                  >
+                    {learningQuestionsSaving ? 'Menyimpan Mini Test...' : 'Simpan Mini Test'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted">Pilih paket untuk mengelola materi dan mini test.</p>
+            )}
+          </section>
 
           <div className={`admin-grid admin-grid-questions ${showQuestionEditor ? '' : 'admin-grid-questions-collapsed'}`}>
             <section className="account-card admin-main-card admin-panel-card admin-list-card">

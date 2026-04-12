@@ -104,6 +104,7 @@ if ($mysqli->connect_error) {
 $mysqli->set_charset('utf8mb4');
 
 require_once __DIR__ . '/../utils/TestWorkflow.php';
+require_once __DIR__ . '/../utils/LearningContent.php';
 
 function databaseTableExists(mysqli $mysqli, string $tableName): bool {
     $query = 'SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1';
@@ -292,6 +293,141 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
     if (!databaseColumnExists($mysqli, 'learning_progress', 'metadata')) {
         $mysqli->query("ALTER TABLE learning_progress ADD COLUMN metadata LONGTEXT NULL AFTER milestone_type");
     }
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS learning_materials (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            package_id INT NOT NULL,
+            section_code VARCHAR(100) NOT NULL,
+            title VARCHAR(150) NOT NULL,
+            content_json LONGTEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_learning_material (package_id, section_code),
+            INDEX (package_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS learning_section_questions (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            package_id INT NOT NULL,
+            section_code VARCHAR(100) NOT NULL,
+            question_text LONGTEXT NOT NULL,
+            difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+            question_order INT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+            INDEX (package_id, section_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS learning_section_question_options (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            question_id INT NOT NULL,
+            option_letter VARCHAR(5) NOT NULL,
+            option_text LONGTEXT NOT NULL,
+            is_correct BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (question_id) REFERENCES learning_section_questions(id) ON DELETE CASCADE,
+            INDEX (question_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    seedDefaultLearningContent($mysqli);
+}
+
+function seedDefaultLearningContent(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'test_packages')) {
+        return;
+    }
+
+    $schemaVersion = '20260412_learning_content_v2';
+    if (getSystemSetting($mysqli, 'learning_content_seed_version') === $schemaVersion) {
+        return;
+    }
+
+    $packageResult = $mysqli->query(
+        "SELECT tp.*, tc.name AS category_name
+         FROM test_packages tp
+         LEFT JOIN test_categories tc ON tc.id = tp.category_id
+         ORDER BY tp.id ASC"
+    );
+    if (!$packageResult) {
+        return;
+    }
+
+    $countMaterial = $mysqli->prepare(
+        'SELECT id FROM learning_materials WHERE package_id = ? AND section_code = ? LIMIT 1'
+    );
+    $insertMaterial = $mysqli->prepare(
+        'INSERT INTO learning_materials (package_id, section_code, title, content_json) VALUES (?, ?, ?, ?)'
+    );
+    $countQuestion = $mysqli->prepare(
+        'SELECT COUNT(*) AS total FROM learning_section_questions WHERE package_id = ? AND section_code = ?'
+    );
+    $insertQuestion = $mysqli->prepare(
+        'INSERT INTO learning_section_questions (package_id, section_code, question_text, difficulty, question_order)
+         VALUES (?, ?, ?, ?, ?)'
+    );
+    $insertOption = $mysqli->prepare(
+        'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, is_correct)
+         VALUES (?, ?, ?, ?)'
+    );
+
+    while ($package = $packageResult->fetch_assoc()) {
+        $workflow = TestWorkflow::buildPackageWorkflow($package);
+        $mode = (string) ($workflow['mode'] ?? '');
+
+        foreach ($workflow['sections'] as $section) {
+            $packageId = (int) $package['id'];
+            $sectionCode = (string) $section['code'];
+            $sectionName = (string) $section['name'];
+
+            $countMaterial->bind_param('is', $packageId, $sectionCode);
+            $countMaterial->execute();
+            $materialResult = $countMaterial->get_result();
+            $materialExists = (bool) $materialResult->fetch_assoc();
+            $materialResult->free();
+            if (!$materialExists) {
+                $pages = LearningContent::defaultMaterialPages($section, $mode);
+                $contentJson = json_encode($pages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $insertMaterial->bind_param('isss', $packageId, $sectionCode, $sectionName, $contentJson);
+                $insertMaterial->execute();
+            }
+
+            $countQuestion->bind_param('is', $packageId, $sectionCode);
+            $countQuestion->execute();
+            $questionResult = $countQuestion->get_result();
+            $questionCount = (int) (($questionResult->fetch_assoc()['total'] ?? 0));
+            $questionResult->free();
+            if ($questionCount >= 5) {
+                continue;
+            }
+
+            foreach (array_slice(LearningContent::defaultSectionQuestions($section, $mode), $questionCount) as $question) {
+                $difficulty = (string) ($question['difficulty'] ?? 'medium');
+                $questionOrder = (int) ($question['question_order'] ?? 1);
+                $questionText = (string) $question['question_text'];
+                $insertQuestion->bind_param('isssi', $packageId, $sectionCode, $questionText, $difficulty, $questionOrder);
+                $insertQuestion->execute();
+                $questionId = (int) $insertQuestion->insert_id;
+
+                foreach ($question['options'] as $option) {
+                    $letter = (string) $option['letter'];
+                    $text = (string) $option['text'];
+                    $isCorrect = (int) $option['is_correct'];
+                    $insertOption->bind_param('issi', $questionId, $letter, $text, $isCorrect);
+                    $insertOption->execute();
+                }
+            }
+        }
+    }
+
+    setSystemSetting($mysqli, 'learning_content_seed_version', $schemaVersion);
 }
 
 function backfillTestWorkflowData(mysqli $mysqli): void {

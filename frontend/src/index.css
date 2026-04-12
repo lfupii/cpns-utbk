@@ -1959,6 +1959,38 @@ textarea:focus-visible {
   min-width: 86px;
 }
 
+.admin-learning-card {
+  margin-top: 1.25rem;
+}
+
+.admin-learning-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.admin-learning-column {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-learning-page-list,
+.admin-learning-question-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-learning-page-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: #f8fbff;
+}
+
 .admin-question-list {
   margin-top: 0.95rem;
   display: grid;
@@ -2922,7 +2954,8 @@ textarea:focus-visible {
   .landing-highlight-grid,
   .landing-package-grid,
   .landing-package-grid-curated,
-  .landing-bottom-grid {
+  .landing-bottom-grid,
+  .admin-learning-grid {
     grid-template-columns: 1fr;
   }
 

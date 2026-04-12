@@ -76,6 +76,7 @@ class AdminController {
 
             $title = trim((string) ($page['title'] ?? ''));
             $closing = trim((string) ($page['closing'] ?? ''));
+            $contentHtml = trim((string) ($page['content_html'] ?? ''));
             $points = $page['points'] ?? [];
             if (!is_array($points)) {
                 $points = explode("\n", (string) $points);
@@ -85,7 +86,14 @@ class AdminController {
                 return trim((string) $point);
             }, $points)));
 
-            if ($title === '' || count($points) === 0) {
+            if (count($points) === 0 && $contentHtml !== '') {
+                $plainText = trim(preg_replace('/\s+/', "\n", strip_tags($contentHtml)) ?? '');
+                $points = array_values(array_filter(array_map(static function ($point): string {
+                    return trim((string) $point);
+                }, explode("\n", $plainText))));
+            }
+
+            if ($title === '' || (count($points) === 0 && $contentHtml === '')) {
                 sendResponse('error', 'Judul dan poin materi wajib diisi pada halaman ' . ($index + 1), null, 422);
             }
 
@@ -93,6 +101,7 @@ class AdminController {
                 'title' => $title,
                 'points' => $points,
                 'closing' => $closing,
+                'content_html' => $contentHtml,
             ];
         }
 

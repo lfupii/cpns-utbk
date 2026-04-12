@@ -13,6 +13,7 @@ import Profile from './pages/Profile';
 import ActivePackages from './pages/ActivePackages';
 import TestHistory from './pages/TestHistory';
 import AdminPanel from './pages/AdminPanel';
+import AdminLearningMaterialEditor from './pages/AdminLearningMaterialEditor';
 import Contact from './pages/Contact';
 import TermsConditions from './pages/TermsConditions';
 import './index.css';
@@ -144,6 +145,14 @@ function AppRoutes() {
             element={
               <AdminRoute>
                 <AdminPanel />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/learning-material/:packageId/:sectionCode"
+            element={
+              <AdminRoute>
+                <AdminLearningMaterialEditor />
               </AdminRoute>
             }
           />

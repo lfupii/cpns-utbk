@@ -353,12 +353,15 @@ class LearningController {
                 $points = array_filter(array_map('trim', explode("\n", (string) $points)));
             }
 
+            $contentHtml = trim((string) ($page['content_html'] ?? ''));
+
             $normalized[] = [
                 'title' => trim((string) ($page['title'] ?? 'Materi')),
                 'points' => array_values(array_filter(array_map(static function ($point): string {
                     return trim((string) $point);
                 }, $points))),
                 'closing' => trim((string) ($page['closing'] ?? '')),
+                'content_html' => $contentHtml,
             ];
         }
 

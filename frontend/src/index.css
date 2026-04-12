@@ -1661,6 +1661,36 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+.learning-rich-content {
+  margin-top: 0.9rem;
+  color: #526178;
+  line-height: 1.75;
+}
+
+.learning-rich-content :is(p, ul, ol, blockquote) {
+  margin-top: 0.75rem;
+}
+
+.learning-rich-content ul,
+.learning-rich-content ol {
+  padding-left: 1.25rem;
+}
+
+.learning-rich-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: #fff;
+}
+
+.learning-rich-content a {
+  color: #1b5fbf;
+  font-weight: 800;
+}
+
 .learning-locked-pages {
   margin-top: 1rem;
   display: grid;
@@ -2341,6 +2371,23 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
+.admin-doc-outline button {
+  min-height: 38px;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.65rem;
+  background: #f6faff;
+  color: #52647e;
+  text-align: left;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.admin-doc-outline button:hover,
+.admin-doc-outline-item-active {
+  background: #e6f7f4;
+  color: #0f766e;
+}
+
 .admin-doc-page-stack {
   display: grid;
   gap: 1rem;
@@ -2442,6 +2489,131 @@ textarea:focus-visible {
   border-top: 1px solid rgba(214, 226, 240, 0.95);
   color: #40516a;
   font-weight: 700;
+}
+
+.admin-material-editor-topbar {
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-material-editor-shell {
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(247, 251, 255, 0.96) 0%, rgba(239, 246, 255, 0.96) 100%);
+}
+
+.admin-doc-toolbar-sticky,
+.admin-word-ribbon {
+  position: sticky;
+  z-index: 5;
+}
+
+.admin-doc-toolbar-sticky {
+  top: 0.75rem;
+}
+
+.admin-word-ribbon {
+  top: 6.4rem;
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 14px 30px rgba(31, 63, 109, 0.08);
+}
+
+.admin-word-ribbon button,
+.admin-word-ribbon select,
+.admin-color-control {
+  min-height: 36px;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: #ffffff;
+  color: #263850;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.admin-word-ribbon button {
+  padding: 0 0.7rem;
+}
+
+.admin-word-ribbon button:hover {
+  border-color: rgba(20, 184, 166, 0.38);
+  background: #ecfdf5;
+  color: #0f766e;
+}
+
+.admin-word-ribbon select {
+  padding: 0 0.6rem;
+}
+
+.admin-color-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.55rem;
+}
+
+.admin-color-control input {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.admin-material-doc-editor {
+  margin-top: 1.1rem;
+}
+
+.admin-word-page {
+  max-width: 880px;
+  min-height: 680px;
+  margin: 0 auto;
+}
+
+.admin-word-editable {
+  margin-top: 1rem;
+  min-height: 430px;
+  padding: 1rem 0;
+  color: #263850;
+  line-height: 1.75;
+  outline: none;
+}
+
+.admin-word-editable:focus {
+  box-shadow: inset 4px 0 0 rgba(20, 184, 166, 0.28);
+}
+
+.admin-word-editable :is(p, ul, ol, blockquote, h2, h3) {
+  margin-top: 0.75rem;
+}
+
+.admin-word-editable ul,
+.admin-word-editable ol {
+  padding-left: 1.35rem;
+}
+
+.admin-word-editable img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+}
+
+.admin-word-editable a {
+  color: #1b5fbf;
+  font-weight: 800;
 }
 
 .admin-question-list {

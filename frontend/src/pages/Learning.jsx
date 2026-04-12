@@ -15,6 +15,22 @@ function formatScore(result) {
   return `${score.toLocaleString('id-ID')} - ${correct}/${total} benar`;
 }
 
+function sanitizeMaterialHtml(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(String(html || ''), 'text/html');
+  doc.querySelectorAll('script, iframe, object, embed, link, meta, style').forEach((node) => node.remove());
+  doc.body.querySelectorAll('*').forEach((node) => {
+    [...node.attributes].forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim().toLowerCase();
+      if (name.startsWith('on') || value.startsWith('javascript:')) {
+        node.removeAttribute(attribute.name);
+      }
+    });
+  });
+  return doc.body.innerHTML;
+}
+
 export default function Learning() {
   const { packageId } = useParams();
   const navigate = useNavigate();
@@ -449,12 +465,21 @@ export default function Learning() {
                   <section key={page.title} className="learning-page">
                     <span>Halaman {index + 1}</span>
                     <h3>{page.title}</h3>
-                    <ul>
-                      {page.points.map((point) => (
-                        <li key={point}>{point}</li>
-                      ))}
-                    </ul>
-                    <p>{page.closing}</p>
+                    {page.content_html ? (
+                      <div
+                        className="learning-rich-content"
+                        dangerouslySetInnerHTML={{ __html: sanitizeMaterialHtml(page.content_html) }}
+                      />
+                    ) : (
+                      <>
+                        <ul>
+                          {page.points.map((point) => (
+                            <li key={point}>{point}</li>
+                          ))}
+                        </ul>
+                        <p>{page.closing}</p>
+                      </>
+                    )}
                   </section>
                 ))}
               </div>

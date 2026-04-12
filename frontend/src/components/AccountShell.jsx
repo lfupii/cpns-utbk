@@ -13,7 +13,7 @@ export default function AccountShell({ title, subtitle, children }) {
         <div className="container landing-navbar-inner">
           <BrandLogo />
 
-          <div className="landing-nav-actions">
+          <div className="landing-nav-actions landing-nav-actions-authenticated">
             <ProfileDropdown displayName={displayName} onLogout={logout} isAdmin={isAdmin} />
           </div>
         </div>

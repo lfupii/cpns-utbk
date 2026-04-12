@@ -81,7 +81,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
             </div>
           </div>
 
-          <div className="landing-nav-actions">
+          <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
             {user ? (
               <ProfileDropdown
                 displayName={displayName}

@@ -198,38 +198,42 @@ export default function Home() {
               </div>
 
               <div className="landing-hero-actions">
-                {user ? (
-                  <a href="#paket" className="btn btn-primary landing-cta-secondary">
-                    Lihat Paket
-                  </a>
-                ) : (
-                  <a href="#paket" className="btn btn-primary landing-cta-secondary">
-                    Lihat Paket
-                  </a>
-                )}
+                <a href="#paket" className="btn btn-primary landing-cta-secondary">
+                  Lihat Paket
+                </a>
               </div>
             </div>
 
             <div className="landing-hero-showcase">
               <div className="landing-showcase-panel">
                 <div className="landing-showcase-badge">Belajar lebih fokus</div>
-                <h3>Ritme latihan harian yang gampang dibaca.</h3>
+                <h3>Ritme latihan harian yang langsung kelihatan arahnya.</h3>
 
-                <div className="landing-showcase-board">
-                  <div className="landing-showcase-board-head">
-                    <div>
-                      <span>Target Hari Ini</span>
-                      <strong>3 sesi ringan</strong>
+                <div className="landing-showcase-bento">
+                  <div className="landing-showcase-plan">
+                    <div className="landing-showcase-board-head">
+                      <div>
+                        <span>Target Minggu Ini</span>
+                        <strong>Naikkan akurasi inti</strong>
+                      </div>
+                      <span className="landing-showcase-status">68%</span>
                     </div>
-                    <span className="landing-showcase-status">Aktif</span>
+                    <div className="landing-showcase-progress">
+                      <span style={{ width: '68%' }} />
+                    </div>
+                    <div className="landing-showcase-task-list">
+                      <span>Baca materi prioritas</span>
+                      <span>Kerjakan mini test</span>
+                      <span>Review hasil tryout</span>
+                    </div>
                   </div>
-                  <div className="landing-showcase-progress">
-                    <span style={{ width: '68%' }} />
+                  <div className="landing-showcase-mini-stat">
+                    <strong>2</strong>
+                    <span>Paket inti</span>
                   </div>
-                  <div className="landing-showcase-task-list">
-                    <span>Materi prioritas</span>
-                    <span>Mini test subtest</span>
-                    <span>Review hasil</span>
+                  <div className="landing-showcase-mini-stat">
+                    <strong>Instan</strong>
+                    <span>Hasil evaluasi</span>
                   </div>
                 </div>
 
@@ -293,17 +297,10 @@ export default function Home() {
                 <p className="landing-package-description">{pkg.subtitle}</p>
 
                 <div className="landing-package-visual">
-                  <div className="landing-package-meter">
-                    <span style={{ width: pkg.title === 'UTBK' ? '58%' : '76%' }} />
-                  </div>
+                  <div className="landing-package-orb"></div>
                   <div className="landing-package-mini-card">
                     <span>Smart Focus</span>
                     <strong>{pkg.title === 'UTBK' ? 'TPS + drill cepat' : 'TWK • TIU • TKP'}</strong>
-                  </div>
-                  <div className="landing-package-topic-list">
-                    <span>Preview materi</span>
-                    <span>Evaluasi cepat</span>
-                    <span>Progress belajar</span>
                   </div>
                 </div>
 

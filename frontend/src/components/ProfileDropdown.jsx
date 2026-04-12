@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 export default function ProfileDropdown({
@@ -10,43 +10,40 @@ export default function ProfileDropdown({
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const wrapperRef = useRef(null);
+  const controlledModeRef = useRef(typeof controlledOpen === 'boolean');
+  const onOpenChangeRef = useRef(onOpenChange);
   const location = useLocation();
   const open = typeof controlledOpen === 'boolean' ? controlledOpen : uncontrolledOpen;
 
-  const setOpen = (nextValue) => {
-    if (typeof controlledOpen !== 'boolean') {
+  useEffect(() => {
+    controlledModeRef.current = typeof controlledOpen === 'boolean';
+    onOpenChangeRef.current = onOpenChange;
+  }, [controlledOpen, onOpenChange]);
+
+  const setOpen = useCallback((nextValue) => {
+    if (!controlledModeRef.current) {
       setUncontrolledOpen(nextValue);
     }
 
-    if (onOpenChange) {
-      onOpenChange(nextValue);
+    if (onOpenChangeRef.current) {
+      onOpenChangeRef.current(nextValue);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-        if (typeof controlledOpen !== 'boolean') {
-          setUncontrolledOpen(false);
-        }
-        if (onOpenChange) {
-          onOpenChange(false);
-        }
+        setOpen(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [controlledOpen, onOpenChange]);
+  }, [setOpen]);
 
   useEffect(() => {
-    if (typeof controlledOpen !== 'boolean') {
-      setUncontrolledOpen(false);
-    }
-    if (onOpenChange) {
-      onOpenChange(false);
-    }
-  }, [location.pathname, location.search, location.hash, controlledOpen, onOpenChange]);
+    setOpen(false);
+  }, [location.pathname, location.search, location.hash, setOpen]);
 
   return (
     <div className="profile-dropdown" ref={wrapperRef}>

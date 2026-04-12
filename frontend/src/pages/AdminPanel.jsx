@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 
@@ -72,12 +73,6 @@ const createEmptyLearningQuestion = (order = 1) => ({
     createOption(2),
     createOption(3),
   ],
-});
-
-const createEmptyMaterialPage = (order = 1) => ({
-  title: `Halaman ${order}`,
-  points: ['', '', ''],
-  closing: '',
 });
 
 function csvEscape(value) {
@@ -259,7 +254,6 @@ export default function AdminPanel() {
   const [loadingLearningContent, setLoadingLearningContent] = useState(false);
   const [learningSectionCode, setLearningSectionCode] = useState('');
   const [learningEditorMode, setLearningEditorMode] = useState('');
-  const [materialForm, setMaterialForm] = useState({ title: '', pages: [createEmptyMaterialPage()] });
   const [learningQuestionsForm, setLearningQuestionsForm] = useState([
     createEmptyLearningQuestion(1),
     createEmptyLearningQuestion(2),
@@ -267,7 +261,6 @@ export default function AdminPanel() {
     createEmptyLearningQuestion(4),
     createEmptyLearningQuestion(5),
   ]);
-  const [materialSaving, setMaterialSaving] = useState(false);
   const [learningQuestionsSaving, setLearningQuestionsSaving] = useState(false);
 
   const selectedPackage = useMemo(
@@ -440,15 +433,6 @@ export default function AdminPanel() {
     if (!activeLearningSection) {
       return;
     }
-
-    setMaterialForm({
-      title: activeLearningSection.material?.title || activeLearningSection.name || '',
-      pages: (activeLearningSection.material?.pages || [createEmptyMaterialPage()]).map((page, index) => ({
-        title: page.title || `Halaman ${index + 1}`,
-        points: Array.isArray(page.points) ? page.points : String(page.points || '').split('\n'),
-        closing: page.closing || '',
-      })),
-    });
 
     const nextLearningQuestions = (activeLearningSection.questions || []).length > 0
       ? activeLearningSection.questions
@@ -686,57 +670,6 @@ export default function AdminPanel() {
       setSuccess('Soal berhasil dihapus.');
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menghapus soal');
-    }
-  };
-
-  const updateMaterialPage = (pageIndex, field, value) => {
-    setMaterialForm((current) => ({
-      ...current,
-      pages: current.pages.map((page, index) => (
-        index === pageIndex ? { ...page, [field]: value } : page
-      )),
-    }));
-  };
-
-  const updateMaterialPagePoints = (pageIndex, value) => {
-    updateMaterialPage(pageIndex, 'points', value.split('\n'));
-  };
-
-  const addMaterialPage = () => {
-    setMaterialForm((current) => ({
-      ...current,
-      pages: [...current.pages, createEmptyMaterialPage(current.pages.length + 1)],
-    }));
-  };
-
-  const removeMaterialPage = (pageIndex) => {
-    setMaterialForm((current) => ({
-      ...current,
-      pages: current.pages.length <= 1
-        ? current.pages
-        : current.pages.filter((_, index) => index !== pageIndex),
-    }));
-  };
-
-  const handleMaterialSave = async () => {
-    if (!selectedPackageId || !activeLearningSection) return;
-
-    setMaterialSaving(true);
-    setError('');
-    setSuccess('');
-    try {
-      await apiClient.put('/admin/learning-material', {
-        package_id: Number(selectedPackageId),
-        section_code: activeLearningSection.code,
-        title: materialForm.title,
-        pages: materialForm.pages,
-      });
-      await refreshAdminData(Number(selectedPackageId));
-      setSuccess('Materi subtest berhasil disimpan.');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Gagal menyimpan materi subtest');
-    } finally {
-      setMaterialSaving(false);
     }
   };
 
@@ -1036,9 +969,12 @@ export default function AdminPanel() {
                           <span>{questionCount} soal mini test</span>
                         </div>
                         <div className="admin-learning-overview-actions">
-                          <button type="button" className="btn btn-primary" onClick={() => openLearningEditor(section.code, 'material')}>
+                          <Link
+                            to={`/admin/learning-material/${selectedPackageId}/${section.code}`}
+                            className="btn btn-primary"
+                          >
                             Edit Materi
-                          </button>
+                          </Link>
                           <button type="button" className="btn btn-outline" onClick={() => openLearningEditor(section.code, 'quiz')}>
                             Edit Mini Test
                           </button>
@@ -1047,91 +983,6 @@ export default function AdminPanel() {
                     );
                   })}
                 </div>
-
-                {learningEditorMode === 'material' && (
-                  <div className="admin-learning-editor-shell">
-                    <div className="admin-doc-toolbar">
-                      <div>
-                        <span className="account-package-tag">{activeLearningSection.name}</span>
-                        <h3>Editor Materi</h3>
-                      </div>
-                      <div className="admin-doc-toolbar-actions">
-                        <button type="button" className="btn btn-outline" onClick={addMaterialPage}>
-                          Tambah Halaman
-                        </button>
-                        <button type="button" className="btn btn-primary" onClick={handleMaterialSave} disabled={materialSaving}>
-                          {materialSaving ? 'Menyimpan...' : 'Simpan Materi'}
-                        </button>
-                        <button type="button" className="btn btn-outline" onClick={() => setLearningEditorMode('')}>
-                          Tutup Editor
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="admin-doc-format-bar" aria-label="Format dokumen materi">
-                      <span>Dokumen</span>
-                      <span>Bullet per baris</span>
-                      <span>{materialForm.pages.length} halaman</span>
-                    </div>
-
-                    <div className="admin-doc-editor">
-                      <aside className="admin-doc-outline">
-                        <strong>Daftar Halaman</strong>
-                        {materialForm.pages.map((page, pageIndex) => (
-                          <span key={`outline-${pageIndex}`}>
-                            {pageIndex + 1}. {page.title || `Halaman ${pageIndex + 1}`}
-                          </span>
-                        ))}
-                      </aside>
-
-                      <div className="admin-doc-page-stack">
-                        <div className="admin-doc-cover">
-                          <label>Judul Materi</label>
-                          <input
-                            value={materialForm.title}
-                            onChange={(event) => setMaterialForm((current) => ({ ...current, title: event.target.value }))}
-                          />
-                        </div>
-
-                        {materialForm.pages.map((page, pageIndex) => (
-                          <section key={`material-page-${pageIndex}`} className="admin-doc-page">
-                            <div className="admin-doc-page-head">
-                              <span>Halaman {pageIndex + 1}</span>
-                              <button
-                                type="button"
-                                className="btn btn-outline admin-option-delete"
-                                onClick={() => removeMaterialPage(pageIndex)}
-                                disabled={materialForm.pages.length <= 1}
-                              >
-                                Hapus
-                              </button>
-                            </div>
-                            <input
-                              className="admin-doc-title-input"
-                              value={page.title}
-                              onChange={(event) => updateMaterialPage(pageIndex, 'title', event.target.value)}
-                              placeholder="Judul halaman"
-                            />
-                            <textarea
-                              className="admin-doc-body-input"
-                              rows="9"
-                              value={(page.points || []).join('\n')}
-                              onChange={(event) => updateMaterialPagePoints(pageIndex, event.target.value)}
-                              placeholder="Tulis poin materi di sini, satu poin per baris."
-                            />
-                            <textarea
-                              className="admin-doc-closing-input"
-                              rows="3"
-                              value={page.closing}
-                              onChange={(event) => updateMaterialPage(pageIndex, 'closing', event.target.value)}
-                              placeholder="Kalimat penutup atau rangkuman singkat"
-                            />
-                          </section>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {learningEditorMode === 'quiz' && (
                   <div className="admin-learning-editor-shell">

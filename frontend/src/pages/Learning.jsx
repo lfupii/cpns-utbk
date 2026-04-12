@@ -60,6 +60,17 @@ export default function Learning() {
   const summary = learning?.summary || {};
   const packageData = learning?.package || null;
   const currentSectionTest = activeSection ? sectionTests[activeSection.code] || {} : {};
+  const completedTryout = Number(summary.completed_attempts || 0) > 0;
+  const materialDoneCount = sections.filter((section) => section.progress.material_read).length;
+  const subtestDoneCount = sections.filter((section) => section.progress.subtest_test_completed).length;
+  const totalMilestoneSteps = Math.max(1, sections.length * 2 + 1);
+  const completedMilestoneSteps = materialDoneCount + subtestDoneCount + (completedTryout ? 1 : 0);
+  const milestonePercent = Math.round((completedMilestoneSteps / totalMilestoneSteps) * 100);
+
+  const jumpToSectionMaterial = (sectionCode) => {
+    setActiveTab('materi');
+    setActiveSectionCode(sectionCode);
+  };
 
   const updateSectionProgress = (sectionCode, progressPatch) => {
     setLearning((current) => {
@@ -297,27 +308,65 @@ export default function Learning() {
 
       <section className="learning-dashboard">
         <div className="learning-milestone">
-          <div className="learning-section-title">
-            <p>Timeline belajar</p>
-            <h3>Milestone</h3>
+          <div className="learning-path-head">
+            <div className="learning-section-title">
+              <p>Timeline belajar</p>
+              <h3>Milestone</h3>
+            </div>
+            <div className="learning-path-score" aria-label={`Progress belajar ${milestonePercent} persen`}>
+              <strong>{milestonePercent}%</strong>
+              <span>progress</span>
+            </div>
           </div>
 
-          <div className="learning-timeline">
-            {sections.map((section) => (
-              <div key={section.code} className="learning-timeline-group">
-                <strong>{section.name}</strong>
-                <span className={section.progress.material_read ? 'learning-step-done' : ''}>
-                  Materi dibaca
+          <div className="learning-progress-track" aria-hidden="true">
+            <span style={{ width: `${milestonePercent}%` }} />
+          </div>
+
+          <div className="learning-path-list">
+            {sections.map((section, index) => {
+              const materialDone = Boolean(section.progress.material_read);
+              const subtestDone = Boolean(section.progress.subtest_test_completed);
+              const sectionDone = materialDone && subtestDone;
+              const isActive = section.code === activeSection?.code;
+
+              return (
+                <button
+                  type="button"
+                  key={section.code}
+                  className={[
+                    'learning-path-card',
+                    sectionDone ? 'learning-path-card-done' : '',
+                    isActive ? 'learning-path-card-active' : '',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => jumpToSectionMaterial(section.code)}
+                >
+                  <span className="learning-path-index">{index + 1}</span>
+                  <span className="learning-path-copy">
+                    <strong>{section.name}</strong>
+                    <small>{section.session_name || 'Subtest belajar'}</small>
+                  </span>
+                  <span className="learning-path-steps">
+                    <span className={materialDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
+                      Materi
+                    </span>
+                    <span className={subtestDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
+                      Mini test
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            <div className={`learning-path-card learning-path-card-final ${completedTryout ? 'learning-path-card-done' : ''}`}>
+              <span className="learning-path-index">T</span>
+              <span className="learning-path-copy">
+                <strong>Tryout keseluruhan</strong>
+                <small>{completedTryout ? 'Simulasi penuh sudah dikerjakan' : 'Terbuka setelah paket aktif'}</small>
+              </span>
+              <span className="learning-path-steps">
+                <span className={completedTryout ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
+                  {completedTryout ? 'Selesai' : 'Belum'}
                 </span>
-                <span className={section.progress.subtest_test_completed ? 'learning-step-done' : ''}>
-                  Mini test subtest
-                </span>
-              </div>
-            ))}
-            <div className="learning-timeline-group">
-              <strong>Tryout keseluruhan</strong>
-              <span className={Number(summary.completed_attempts || 0) > 0 ? 'learning-step-done' : ''}>
-                {Number(summary.completed_attempts || 0) > 0 ? 'Sudah dikerjakan' : 'Belum dikerjakan'}
               </span>
             </div>
           </div>
@@ -326,11 +375,11 @@ export default function Learning() {
         <div className="learning-summary-grid">
           <div>
             <span>Materi selesai</span>
-            <strong>{sections.filter((section) => section.progress.material_read).length}/{sections.length}</strong>
+            <strong>{materialDoneCount}/{sections.length}</strong>
           </div>
           <div>
             <span>Mini test selesai</span>
-            <strong>{sections.filter((section) => section.progress.subtest_test_completed).length}/{sections.length}</strong>
+            <strong>{subtestDoneCount}/{sections.length}</strong>
           </div>
           <div>
             <span>Sisa tryout</span>

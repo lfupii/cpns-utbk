@@ -38,7 +38,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
   return (
     <div className="landing-shell policy-shell">
       <nav className="landing-navbar">
-        <div className="container landing-navbar-inner">
+        <div className={`container landing-navbar-inner ${user ? 'landing-navbar-inner-authenticated' : ''}`}>
           <div className="landing-navbar-brand">
             <BrandLogo />
           </div>

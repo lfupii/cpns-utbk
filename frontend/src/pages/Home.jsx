@@ -94,7 +94,7 @@ export default function Home() {
   return (
     <div className="landing-shell">
       <nav className="landing-navbar">
-        <div className="container landing-navbar-inner">
+        <div className={`container landing-navbar-inner ${user ? 'landing-navbar-inner-authenticated' : ''}`}>
           <div className="landing-navbar-brand">
             <BrandLogo />
           </div>

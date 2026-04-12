@@ -284,6 +284,10 @@ textarea:focus-visible {
   gap: 1rem;
 }
 
+.landing-nav-panel-actions {
+  display: none;
+}
+
 .landing-nav-actions {
   margin-left: auto;
 }
@@ -2329,9 +2333,9 @@ textarea:focus-visible {
 
   .landing-navbar-inner {
     min-height: auto;
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
     gap: 0.75rem 1rem;
     padding-top: 1rem;
     padding-bottom: 1rem;
@@ -2347,6 +2351,7 @@ textarea:focus-visible {
     align-items: center;
     justify-content: flex-start;
     margin-left: -0.25rem;
+    grid-column: 1;
   }
 
   .landing-logo {
@@ -2369,32 +2374,35 @@ textarea:focus-visible {
     flex: none;
     margin-left: auto;
     justify-self: auto;
-    justify-content: flex-start;
-    position: relative;
+    justify-content: flex-end;
+    position: static;
+    grid-column: 3;
   }
 
   .landing-navbar-brand {
-    margin-right: 0.75rem;
+    margin-right: 0;
   }
 
   .landing-navbar-panel {
     display: none;
     position: absolute;
-    top: calc(100% + 0.5rem);
-    left: auto;
-    right: 0;
-    width: min(78vw, 280px);
-    min-width: 180px;
-    max-width: 280px;
-    padding: 0.6rem;
+    top: calc(100% + 0.35rem);
+    left: 1.5rem;
+    right: 1.5rem;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0.75rem;
     border-radius: 1.2rem;
     border: 1px solid rgba(214, 226, 240, 0.95);
-    background: rgba(239, 246, 255, 0.96);
+    background: rgba(248, 251, 255, 0.98);
     backdrop-filter: blur(16px);
     box-shadow: 0 24px 54px rgba(31, 63, 109, 0.14);
     z-index: 30;
     animation: menuFloat 0.2s ease;
     transform: none;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .landing-navbar-panel-open {
@@ -2436,6 +2444,7 @@ textarea:focus-visible {
     gap: 0.1rem;
     flex-wrap: nowrap;
     min-width: 0;
+    grid-column: 2;
   }
 
   .landing-nav-actions .btn {
@@ -2598,9 +2607,9 @@ textarea:focus-visible {
 
   .landing-navbar-inner {
     min-height: auto;
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
     gap: 0.65rem 0.8rem;
     padding-top: 0.85rem;
     padding-bottom: 0.85rem;
@@ -2608,7 +2617,7 @@ textarea:focus-visible {
 
   .landing-navbar-brand {
     margin-left: -0.25rem;
-    margin-right: 0.75rem;
+    margin-right: 0;
   }
 
   .mobile-nav-toggle {
@@ -2620,13 +2629,14 @@ textarea:focus-visible {
     width: auto;
     flex: none;
     margin-left: auto;
+    grid-column: 3;
   }
 
   .landing-navbar-panel {
-    max-width: min(78vw, 280px);
-    min-width: min(72vw, 180px);
-    left: auto;
-    right: 0;
+    left: 1rem;
+    right: 1rem;
+    max-width: none;
+    min-width: 0;
   }
 
   .landing-nav-actions {
@@ -2637,8 +2647,8 @@ textarea:focus-visible {
   }
 
   .landing-nav-actions .btn {
-    min-width: 0;
-    flex: 1 1 0;
+    min-width: 120px;
+    flex: 0 0 auto;
   }
 
   .profile-dropdown-trigger {
@@ -3136,15 +3146,45 @@ textarea:focus-visible {
   }
 
   .brand-logo {
-    height: 72px;
+    height: 56px;
     overflow: visible;
   }
 
   .brand-logo-image {
-    height: 72px;
-    max-width: min(74vw, 320px);
-    transform: scale(2);
-    transform-origin: left center;
+    height: 56px;
+    max-width: 132px;
+    transform: none;
+  }
+
+  .landing-navbar-inner > .landing-nav-actions {
+    display: none;
+  }
+
+  .landing-navbar-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .landing-nav-menu-slot {
+    grid-column: 2;
+  }
+
+  .landing-navbar-panel {
+    top: calc(100% + 0.25rem);
+    padding: 0.85rem;
+  }
+
+  .landing-nav-panel-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(214, 226, 240, 0.95);
+  }
+
+  .landing-nav-panel-actions .btn {
+    width: 100%;
+    min-height: 46px;
   }
 
   .test-sidebar-metrics {

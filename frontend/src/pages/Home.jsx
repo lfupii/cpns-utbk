@@ -302,18 +302,12 @@ export default function Home() {
                     </span>
                   </div>
                   {pkg.source ? (
-                    user ? (
-                      <Link
-                        to={`/learning/${pkg.source.id}`}
-                        className="btn btn-primary landing-package-action"
-                      >
-                        {isAdmin ? `Buka ${pkg.title}` : `Ambil ${pkg.title}`}
-                      </Link>
-                    ) : (
-                      <Link to="/login" className="btn btn-primary landing-package-action">
-                        Login untuk mulai
-                      </Link>
-                    )
+                    <Link
+                      to={`/learning/${pkg.source.id}`}
+                      className="btn btn-primary landing-package-action"
+                    >
+                      {user ? (isAdmin ? `Buka ${pkg.title}` : `Ambil ${pkg.title}`) : `Preview ${pkg.title}`}
+                    </Link>
                   ) : (
                     <button type="button" className="btn btn-outline landing-package-action" disabled>
                       Sedang disiapkan

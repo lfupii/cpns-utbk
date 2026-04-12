@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import BrandLogo from './BrandLogo';
 import ProfileDropdown from './ProfileDropdown';
@@ -14,7 +15,14 @@ export default function AccountShell({ title, subtitle, children }) {
           <BrandLogo />
 
           <div className="landing-nav-actions landing-nav-actions-authenticated">
-            <ProfileDropdown displayName={displayName} onLogout={logout} isAdmin={isAdmin} />
+            {user ? (
+              <ProfileDropdown displayName={displayName} onLogout={logout} isAdmin={isAdmin} />
+            ) : (
+              <>
+                <Link to="/login" className="btn btn-outline">Login</Link>
+                <Link to="/register" className="btn btn-primary">Daftar</Link>
+              </>
+            )}
           </div>
         </div>
       </nav>

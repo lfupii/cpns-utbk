@@ -82,6 +82,16 @@ export default function Home() {
       ],
     },
   ];
+  const heroPrograms = [
+    { label: 'UTBK', meta: 'Per subtes', detail: 'TPS, literasi, penalaran' },
+    { label: 'CPNS', meta: 'SKD lengkap', detail: 'TWK, TIU, TKP' },
+    { label: 'Preview', meta: 'Bisa dibuka dulu', detail: 'Materi awal sebelum paket aktif' },
+  ];
+  const heroFlow = [
+    { step: '01', title: 'Pilih subtes', text: 'Mulai dari area yang paling perlu dikejar.' },
+    { step: '02', title: 'Baca materi', text: 'Preview terbuka, full akses setelah paket aktif.' },
+    { step: '03', title: 'Kerjakan tryout', text: 'Skor dan evaluasi langsung tersimpan.' },
+  ];
 
   if (loading) {
     return (
@@ -186,6 +196,16 @@ export default function Home() {
                 </span>
               </div>
 
+              <div className="landing-program-strip" aria-label="Pilihan program belajar">
+                {heroPrograms.map((program) => (
+                  <div className="landing-program-chip" key={program.label}>
+                    <strong>{program.label}</strong>
+                    <span>{program.meta}</span>
+                    <small>{program.detail}</small>
+                  </div>
+                ))}
+              </div>
+
               <p>
                 Bukan cuma kumpulan soal. Kamu dapat paket latihan, pemetaan kemampuan, dan alur
                 belajar yang membantu fokus ke materi paling berdampak.
@@ -206,8 +226,13 @@ export default function Home() {
 
             <div className="landing-hero-showcase">
               <div className="landing-showcase-panel">
-                <div className="landing-showcase-badge">Belajar lebih fokus</div>
-                <h3>Ritme latihan harian yang langsung kelihatan arahnya.</h3>
+                <div className="landing-showcase-topline">
+                  <div>
+                    <div className="landing-showcase-badge">Belajar lebih fokus</div>
+                    <h3>Ritme harian dari materi sampai tryout.</h3>
+                  </div>
+                  <span className="landing-showcase-live">Live progress</span>
+                </div>
 
                 <div className="landing-showcase-bento">
                   <div className="landing-showcase-plan">
@@ -228,13 +253,25 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="landing-showcase-mini-stat">
-                    <strong>2</strong>
-                    <span>Paket inti</span>
+                    <strong>7</strong>
+                    <span>Subtes bisa dipilih</span>
                   </div>
                   <div className="landing-showcase-mini-stat">
                     <strong>Instan</strong>
                     <span>Hasil evaluasi</span>
                   </div>
+                </div>
+
+                <div className="landing-showcase-flow" aria-label="Alur belajar">
+                  {heroFlow.map((item) => (
+                    <div className="landing-showcase-flow-item" key={item.step}>
+                      <span>{item.step}</span>
+                      <div>
+                        <strong>{item.title}</strong>
+                        <p>{item.text}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="landing-showcase-stat-grid">

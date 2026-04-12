@@ -130,7 +130,7 @@ export default function Home() {
                     Masuk
                   </Link>
                   <Link to="/register" className="btn btn-primary" onClick={closeMobileMenu}>
-                    Coba Gratis →
+                    Daftar
                   </Link>
                 </div>
               )}
@@ -152,7 +152,7 @@ export default function Home() {
                   Masuk
                 </Link>
                 <Link to="/register" className="btn btn-primary" onClick={closeMobileMenu}>
-                  Coba Gratis →
+                  Daftar
                 </Link>
               </>
             )}
@@ -199,23 +199,13 @@ export default function Home() {
 
               <div className="landing-hero-actions">
                 {user ? (
-                  <>
-                    <a href="#paket" className="btn btn-primary landing-cta-main">
-                      Mulai Gratis Sekarang
-                    </a>
-                    <a href="#paket" className="btn btn-outline landing-cta-secondary">
-                      Lihat Paket
-                    </a>
-                  </>
+                  <a href="#paket" className="btn btn-outline landing-cta-secondary">
+                    Lihat Paket
+                  </a>
                 ) : (
-                  <>
-                    <Link to="/register" className="btn btn-primary landing-cta-main">
-                      Mulai Gratis Sekarang
-                    </Link>
-                    <Link to="/login" className="btn btn-outline landing-cta-secondary">
-                      Masuk
-                    </Link>
-                  </>
+                  <Link to="/login" className="btn btn-outline landing-cta-secondary">
+                    Masuk
+                  </Link>
                 )}
               </div>
             </div>

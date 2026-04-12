@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 export default function ProfileDropdown({
@@ -13,7 +13,7 @@ export default function ProfileDropdown({
   const location = useLocation();
   const open = typeof controlledOpen === 'boolean' ? controlledOpen : uncontrolledOpen;
 
-  const setOpen = useCallback((nextValue) => {
+  const setOpen = (nextValue) => {
     if (typeof controlledOpen !== 'boolean') {
       setUncontrolledOpen(nextValue);
     }
@@ -21,22 +21,32 @@ export default function ProfileDropdown({
     if (onOpenChange) {
       onOpenChange(nextValue);
     }
-  }, [controlledOpen, onOpenChange]);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-        setOpen(false);
+        if (typeof controlledOpen !== 'boolean') {
+          setUncontrolledOpen(false);
+        }
+        if (onOpenChange) {
+          onOpenChange(false);
+        }
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [setOpen]);
+  }, [controlledOpen, onOpenChange]);
 
   useEffect(() => {
-    setOpen(false);
-  }, [location.pathname, location.search, location.hash, setOpen]);
+    if (typeof controlledOpen !== 'boolean') {
+      setUncontrolledOpen(false);
+    }
+    if (onOpenChange) {
+      onOpenChange(false);
+    }
+  }, [location.pathname, location.search, location.hash, controlledOpen, onOpenChange]);
 
   return (
     <div className="profile-dropdown" ref={wrapperRef}>

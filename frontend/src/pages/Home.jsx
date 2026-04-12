@@ -137,7 +137,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="landing-nav-actions">
+          <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
             {user ? (
               <ProfileDropdown
                 displayName={displayName}

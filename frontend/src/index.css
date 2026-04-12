@@ -2597,7 +2597,7 @@ textarea:focus-visible {
 }
 
 @media (max-width: 820px) {
-  .landing-navbar-inner > .landing-nav-actions {
+  .landing-navbar-inner > .landing-nav-actions-guest {
     display: none;
   }
 

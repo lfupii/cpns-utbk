@@ -71,15 +71,11 @@ export default function ActivePackages() {
           </div>
 
           <div className="account-package-actions">
-            {pkg.can_start_test ? (
-              <Link to={`/test/${pkg.package_id}`} className="btn btn-primary">
-                {pkg.is_unused ? 'Mulai Test' : 'Gunakan Lagi'}
-              </Link>
-            ) : (
-              <button type="button" className="btn btn-outline" disabled>
-                Percobaan Habis
-              </button>
-            )}
+            <Link to={`/learning/${pkg.package_id}`} className="btn btn-primary">
+              {pkg.can_start_test
+                ? (pkg.is_unused ? 'Masuk Ruang Belajar' : 'Lanjut Belajar')
+                : 'Lihat Materi'}
+            </Link>
           </div>
         </article>
       ))}

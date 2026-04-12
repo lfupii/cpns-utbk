@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
 import Home from './pages/Home';
 import Payment from './pages/Payment';
+import Learning from './pages/Learning';
 import Test from './pages/Test';
 import Results from './pages/Results';
 import Profile from './pages/Profile';
@@ -87,6 +88,14 @@ function AppRoutes() {
             element={
               <ProtectedRoute>
                 <Payment />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/learning/:packageId"
+            element={
+              <ProtectedRoute>
+                <Learning />
               </ProtectedRoute>
             }
           />

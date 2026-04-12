@@ -2365,7 +2365,7 @@ textarea:focus-visible {
   }
 
   .brand-logo-image {
-    height: 92px;
+    height: 98px;
     max-width: min(40vw, 280px);
   }
 
@@ -2596,6 +2596,47 @@ textarea:focus-visible {
   }
 }
 
+@media (max-width: 820px) {
+  .landing-navbar-inner > .landing-nav-actions {
+    display: none;
+  }
+
+  .landing-navbar-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .landing-nav-menu-slot {
+    grid-column: 2;
+  }
+
+  .landing-nav-panel-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(214, 226, 240, 0.95);
+  }
+
+  .landing-nav-panel-actions .btn {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .brand-logo {
+    height: 62px;
+    width: 142px;
+    overflow: visible;
+  }
+
+  .brand-logo-image {
+    height: 92px;
+    max-width: 142px;
+    transform: scale(1.5);
+    transform-origin: left center;
+  }
+}
+
 @media (max-width: 720px) {
   .admin-editor-header {
     flex-direction: column;
@@ -2608,7 +2649,7 @@ textarea:focus-visible {
   .landing-navbar-inner {
     min-height: auto;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.65rem 0.8rem;
     padding-top: 0.85rem;
@@ -2629,7 +2670,7 @@ textarea:focus-visible {
     width: auto;
     flex: none;
     margin-left: auto;
-    grid-column: 3;
+    grid-column: 2;
   }
 
   .landing-navbar-panel {
@@ -3146,26 +3187,15 @@ textarea:focus-visible {
   }
 
   .brand-logo {
-    height: 56px;
+    height: 58px;
+    width: 132px;
     overflow: visible;
   }
 
   .brand-logo-image {
-    height: 56px;
+    height: 86px;
     max-width: 132px;
-    transform: none;
-  }
-
-  .landing-navbar-inner > .landing-nav-actions {
-    display: none;
-  }
-
-  .landing-navbar-inner {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .landing-nav-menu-slot {
-    grid-column: 2;
+    transform: scale(1.5);
   }
 
   .landing-navbar-panel {
@@ -3174,17 +3204,7 @@ textarea:focus-visible {
   }
 
   .landing-nav-panel-actions {
-    display: grid;
     grid-template-columns: 1fr;
-    gap: 0.65rem;
-    margin-top: 0.65rem;
-    padding-top: 0.65rem;
-    border-top: 1px solid rgba(214, 226, 240, 0.95);
-  }
-
-  .landing-nav-panel-actions .btn {
-    width: 100%;
-    min-height: 46px;
   }
 
   .test-sidebar-metrics {

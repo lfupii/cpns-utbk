@@ -2182,6 +2182,268 @@ textarea:focus-visible {
   box-shadow: 0 18px 32px rgba(31, 63, 109, 0.08);
 }
 
+.admin-learning-overview-grid {
+  margin-top: 1.15rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+}
+
+.admin-learning-overview-card {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 24px rgba(31, 63, 109, 0.05);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-learning-overview-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(45, 140, 255, 0.3);
+  box-shadow: 0 18px 34px rgba(31, 63, 109, 0.09);
+}
+
+.admin-learning-overview-card-active {
+  border-color: rgba(20, 184, 166, 0.38);
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+.admin-learning-overview-card h3 {
+  color: #16243c;
+  font-size: 1.05rem;
+}
+
+.admin-learning-overview-card p {
+  color: #607089;
+  line-height: 1.45;
+}
+
+.admin-learning-overview-stats,
+.admin-learning-overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.admin-learning-overview-stats span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #40516a;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.admin-learning-overview-actions {
+  margin-top: 0.15rem;
+}
+
+.admin-learning-overview-actions .btn {
+  min-height: 38px;
+  padding: 0.6rem 0.85rem;
+}
+
+.admin-learning-editor-shell {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background:
+    linear-gradient(180deg, rgba(248, 251, 255, 0.96) 0%, rgba(241, 247, 255, 0.96) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.admin-doc-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.admin-doc-toolbar h3 {
+  margin-top: 0.35rem;
+  color: #14213a;
+  font-size: 1.12rem;
+}
+
+.admin-doc-toolbar-actions,
+.admin-doc-format-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.admin-doc-toolbar-actions {
+  justify-content: flex-end;
+}
+
+.admin-doc-format-bar {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.admin-doc-format-bar span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 0.65rem;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #465a74;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.admin-doc-editor {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(160px, 210px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.admin-doc-outline {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  color: #52647e;
+}
+
+.admin-doc-outline strong {
+  color: #14213a;
+}
+
+.admin-doc-outline span {
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.65rem;
+  background: #f6faff;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.admin-doc-page-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-doc-cover,
+.admin-doc-page {
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgba(31, 63, 109, 0.1);
+}
+
+.admin-doc-cover {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1.2rem;
+  border-radius: 1rem;
+}
+
+.admin-doc-cover label {
+  color: #607089;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-doc-cover input,
+.admin-doc-title-input,
+.admin-doc-body-input,
+.admin-doc-closing-input {
+  width: 100%;
+  border: 0;
+  color: #16243c;
+}
+
+.admin-doc-cover input:focus,
+.admin-doc-title-input:focus,
+.admin-doc-body-input:focus,
+.admin-doc-closing-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.admin-doc-cover input {
+  min-height: 54px;
+  padding: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.admin-doc-page {
+  min-height: 560px;
+  padding: 2rem;
+  border-radius: 0.45rem;
+}
+
+.admin-doc-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid rgba(214, 226, 240, 0.95);
+}
+
+.admin-doc-page-head span {
+  color: #607089;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-doc-title-input {
+  min-height: 56px;
+  padding: 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.admin-doc-body-input,
+.admin-doc-closing-input {
+  resize: vertical;
+  padding: 0;
+  line-height: 1.75;
+  background: transparent;
+}
+
+.admin-doc-body-input {
+  margin-top: 0.75rem;
+  min-height: 260px;
+  font-size: 1rem;
+}
+
+.admin-doc-closing-input {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(214, 226, 240, 0.95);
+  color: #40516a;
+  font-weight: 700;
+}
+
 .admin-question-list {
   margin-top: 0.95rem;
   display: grid;
@@ -3809,6 +4071,23 @@ textarea:focus-visible {
   .admin-import-card {
     grid-template-columns: 1fr;
   }
+
+  .admin-doc-toolbar,
+  .admin-doc-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-doc-toolbar {
+    display: grid;
+  }
+
+  .admin-doc-toolbar-actions {
+    justify-content: flex-start;
+  }
+
+  .admin-doc-outline {
+    position: static;
+  }
 }
 
 @media (max-width: 720px) {
@@ -3848,6 +4127,21 @@ textarea:focus-visible {
 
   .learning-path-steps {
     justify-content: flex-start;
+  }
+
+  .admin-learning-overview-actions .btn,
+  .admin-doc-toolbar-actions .btn {
+    width: 100%;
+  }
+
+  .admin-doc-page {
+    min-height: auto;
+    padding: 1.2rem;
+  }
+
+  .admin-doc-page-head {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .learning-tabs,

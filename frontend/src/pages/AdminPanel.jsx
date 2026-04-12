@@ -258,6 +258,7 @@ export default function AdminPanel() {
   const [learningContent, setLearningContent] = useState([]);
   const [loadingLearningContent, setLoadingLearningContent] = useState(false);
   const [learningSectionCode, setLearningSectionCode] = useState('');
+  const [learningEditorMode, setLearningEditorMode] = useState('');
   const [materialForm, setMaterialForm] = useState({ title: '', pages: [createEmptyMaterialPage()] });
   const [learningQuestionsForm, setLearningQuestionsForm] = useState([
     createEmptyLearningQuestion(1),
@@ -656,6 +657,13 @@ export default function AdminPanel() {
     setShowQuestionEditor(true);
   };
 
+  const openLearningEditor = (sectionCode, mode) => {
+    setLearningSectionCode(sectionCode);
+    setLearningEditorMode(mode);
+    setSuccess('');
+    setError('');
+  };
+
   const handleQuestionDelete = async (questionId) => {
     const confirmed = window.confirm('Hapus soal ini? Semua opsi jawabannya juga akan dihapus.');
     if (!confirmed) return;
@@ -897,6 +905,7 @@ export default function AdminPanel() {
                       setSelectedPackageId(Number(pkg.id));
                       resetQuestionForm();
                       setExpandedQuestionId(null);
+                      setLearningEditorMode('');
                     }}
                   >
                     <strong>{pkg.name}</strong>
@@ -1007,160 +1016,219 @@ export default function AdminPanel() {
             {loadingLearningContent ? (
               <p>Memuat materi subtest...</p>
             ) : activeLearningSection ? (
-              <div className="admin-learning-grid">
-                <div className="admin-learning-column">
-                  <div className="admin-section-header admin-section-header-compact">
-                    <div>
-                      <h3>Materi {activeLearningSection.name}</h3>
-                      <p className="text-muted">Poin ditulis satu baris per poin.</p>
-                    </div>
-                    <button type="button" className="btn btn-outline" onClick={addMaterialPage}>
-                      Tambah Halaman
-                    </button>
-                  </div>
+              <>
+                <div className="admin-learning-overview-grid">
+                  {learningContent.map((section) => {
+                    const pageCount = section.material?.pages?.length || 0;
+                    const questionCount = section.questions?.length || 0;
+                    const isActive = section.code === activeLearningSection.code;
 
-                  <div className="form-group">
-                    <label>Judul Materi</label>
-                    <input
-                      value={materialForm.title}
-                      onChange={(event) => setMaterialForm((current) => ({ ...current, title: event.target.value }))}
-                    />
-                  </div>
-
-                  <div className="admin-learning-page-list">
-                    {materialForm.pages.map((page, pageIndex) => (
-                      <div key={`material-page-${pageIndex}`} className="admin-learning-page-card">
-                        <div className="admin-option-editor-head">
-                          <strong>Halaman {pageIndex + 1}</strong>
-                          <button
-                            type="button"
-                            className="btn btn-outline admin-option-delete"
-                            onClick={() => removeMaterialPage(pageIndex)}
-                            disabled={materialForm.pages.length <= 1}
-                          >
-                            Hapus
+                    return (
+                      <article
+                        key={section.code}
+                        className={`admin-learning-overview-card ${isActive ? 'admin-learning-overview-card-active' : ''}`}
+                      >
+                        <span className="account-package-tag">{section.session_name || 'Subtest'}</span>
+                        <h3>{section.name}</h3>
+                        <p>{section.material?.title || 'Materi belum diberi judul'}</p>
+                        <div className="admin-learning-overview-stats">
+                          <span>{pageCount} halaman materi</span>
+                          <span>{questionCount} soal mini test</span>
+                        </div>
+                        <div className="admin-learning-overview-actions">
+                          <button type="button" className="btn btn-primary" onClick={() => openLearningEditor(section.code, 'material')}>
+                            Edit Materi
+                          </button>
+                          <button type="button" className="btn btn-outline" onClick={() => openLearningEditor(section.code, 'quiz')}>
+                            Edit Mini Test
                           </button>
                         </div>
-                        <div className="form-group">
-                          <label>Judul Halaman</label>
-                          <input
-                            value={page.title}
-                            onChange={(event) => updateMaterialPage(pageIndex, 'title', event.target.value)}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Poin Materi</label>
-                          <textarea
-                            rows="5"
-                            value={(page.points || []).join('\n')}
-                            onChange={(event) => updateMaterialPagePoints(pageIndex, event.target.value)}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Kalimat Penutup</label>
-                          <textarea
-                            rows="2"
-                            value={page.closing}
-                            onChange={(event) => updateMaterialPage(pageIndex, 'closing', event.target.value)}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button type="button" className="btn btn-primary" onClick={handleMaterialSave} disabled={materialSaving}>
-                    {materialSaving ? 'Menyimpan Materi...' : 'Simpan Materi'}
-                  </button>
+                      </article>
+                    );
+                  })}
                 </div>
 
-                <div className="admin-learning-column">
-                  <div className="admin-section-header admin-section-header-compact">
-                    <div>
-                      <h3>Mini Test {activeLearningSection.name}</h3>
-                      <p className="text-muted">Disarankan 5 soal singkat untuk milestone subtest.</p>
+                {learningEditorMode === 'material' && (
+                  <div className="admin-learning-editor-shell">
+                    <div className="admin-doc-toolbar">
+                      <div>
+                        <span className="account-package-tag">{activeLearningSection.name}</span>
+                        <h3>Editor Materi</h3>
+                      </div>
+                      <div className="admin-doc-toolbar-actions">
+                        <button type="button" className="btn btn-outline" onClick={addMaterialPage}>
+                          Tambah Halaman
+                        </button>
+                        <button type="button" className="btn btn-primary" onClick={handleMaterialSave} disabled={materialSaving}>
+                          {materialSaving ? 'Menyimpan...' : 'Simpan Materi'}
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={() => setLearningEditorMode('')}>
+                          Tutup Editor
+                        </button>
+                      </div>
                     </div>
-                    <button type="button" className="btn btn-outline" onClick={addLearningQuestion}>
-                      Tambah Soal
-                    </button>
-                  </div>
 
-                  <div className="admin-learning-question-list">
-                    {learningQuestionsForm.map((question, questionIndex) => (
-                      <div key={`learning-question-${questionIndex}`} className="admin-learning-page-card">
-                        <div className="admin-option-editor-head">
-                          <strong>Soal {questionIndex + 1}</strong>
-                          <button
-                            type="button"
-                            className="btn btn-outline admin-option-delete"
-                            onClick={() => removeLearningQuestion(questionIndex)}
-                            disabled={learningQuestionsForm.length <= 1}
-                          >
-                            Hapus
-                          </button>
-                        </div>
-                        <div className="form-group">
-                          <label>Pertanyaan</label>
-                          <textarea
-                            rows="3"
-                            value={question.question_text}
-                            onChange={(event) => updateLearningQuestion(questionIndex, 'question_text', event.target.value)}
+                    <div className="admin-doc-format-bar" aria-label="Format dokumen materi">
+                      <span>Dokumen</span>
+                      <span>Bullet per baris</span>
+                      <span>{materialForm.pages.length} halaman</span>
+                    </div>
+
+                    <div className="admin-doc-editor">
+                      <aside className="admin-doc-outline">
+                        <strong>Daftar Halaman</strong>
+                        {materialForm.pages.map((page, pageIndex) => (
+                          <span key={`outline-${pageIndex}`}>
+                            {pageIndex + 1}. {page.title || `Halaman ${pageIndex + 1}`}
+                          </span>
+                        ))}
+                      </aside>
+
+                      <div className="admin-doc-page-stack">
+                        <div className="admin-doc-cover">
+                          <label>Judul Materi</label>
+                          <input
+                            value={materialForm.title}
+                            onChange={(event) => setMaterialForm((current) => ({ ...current, title: event.target.value }))}
                           />
                         </div>
-                        <div className="account-form-grid">
-                          <div className="form-group">
-                            <label>Kesulitan</label>
-                            <select
-                              value={question.difficulty}
-                              onChange={(event) => updateLearningQuestion(questionIndex, 'difficulty', event.target.value)}
-                            >
-                              <option value="easy">Mudah</option>
-                              <option value="medium">Sedang</option>
-                              <option value="hard">Sulit</option>
-                            </select>
-                          </div>
-                          <div className="form-group">
-                            <label>Urutan</label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={question.question_order}
-                              onChange={(event) => updateLearningQuestion(questionIndex, 'question_order', event.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="admin-options-editor-list">
-                          {(question.options || []).map((option, optionIndex) => (
-                            <div key={`learning-option-${questionIndex}-${optionIndex}`} className="admin-option-row">
+
+                        {materialForm.pages.map((page, pageIndex) => (
+                          <section key={`material-page-${pageIndex}`} className="admin-doc-page">
+                            <div className="admin-doc-page-head">
+                              <span>Halaman {pageIndex + 1}</span>
                               <button
                                 type="button"
-                                className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
-                                onClick={() => setLearningQuestionCorrectOption(questionIndex, optionIndex)}
+                                className="btn btn-outline admin-option-delete"
+                                onClick={() => removeMaterialPage(pageIndex)}
+                                disabled={materialForm.pages.length <= 1}
                               >
-                                {option.is_correct ? 'Benar' : 'Pilih'}
+                                Hapus
                               </button>
-                              <strong>{option.letter}</strong>
+                            </div>
+                            <input
+                              className="admin-doc-title-input"
+                              value={page.title}
+                              onChange={(event) => updateMaterialPage(pageIndex, 'title', event.target.value)}
+                              placeholder="Judul halaman"
+                            />
+                            <textarea
+                              className="admin-doc-body-input"
+                              rows="9"
+                              value={(page.points || []).join('\n')}
+                              onChange={(event) => updateMaterialPagePoints(pageIndex, event.target.value)}
+                              placeholder="Tulis poin materi di sini, satu poin per baris."
+                            />
+                            <textarea
+                              className="admin-doc-closing-input"
+                              rows="3"
+                              value={page.closing}
+                              onChange={(event) => updateMaterialPage(pageIndex, 'closing', event.target.value)}
+                              placeholder="Kalimat penutup atau rangkuman singkat"
+                            />
+                          </section>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {learningEditorMode === 'quiz' && (
+                  <div className="admin-learning-editor-shell">
+                    <div className="admin-section-header admin-section-header-compact">
+                      <div>
+                        <span className="account-package-tag">{activeLearningSection.name}</span>
+                        <h3>Editor Mini Test</h3>
+                        <p className="text-muted">Disarankan 5 soal singkat untuk milestone subtest.</p>
+                      </div>
+                      <div className="admin-list-toolbar-actions">
+                        <button type="button" className="btn btn-outline" onClick={addLearningQuestion}>
+                          Tambah Soal
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={() => setLearningEditorMode('')}>
+                          Tutup Editor
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="admin-learning-question-list">
+                      {learningQuestionsForm.map((question, questionIndex) => (
+                        <div key={`learning-question-${questionIndex}`} className="admin-learning-page-card">
+                          <div className="admin-option-editor-head">
+                            <strong>Soal {questionIndex + 1}</strong>
+                            <button
+                              type="button"
+                              className="btn btn-outline admin-option-delete"
+                              onClick={() => removeLearningQuestion(questionIndex)}
+                              disabled={learningQuestionsForm.length <= 1}
+                            >
+                              Hapus
+                            </button>
+                          </div>
+                          <div className="form-group">
+                            <label>Pertanyaan</label>
+                            <textarea
+                              rows="3"
+                              value={question.question_text}
+                              onChange={(event) => updateLearningQuestion(questionIndex, 'question_text', event.target.value)}
+                            />
+                          </div>
+                          <div className="account-form-grid">
+                            <div className="form-group">
+                              <label>Kesulitan</label>
+                              <select
+                                value={question.difficulty}
+                                onChange={(event) => updateLearningQuestion(questionIndex, 'difficulty', event.target.value)}
+                              >
+                                <option value="easy">Mudah</option>
+                                <option value="medium">Sedang</option>
+                                <option value="hard">Sulit</option>
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label>Urutan</label>
                               <input
-                                value={option.text}
-                                onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'text', event.target.value)}
-                                placeholder={`Opsi ${option.letter}`}
+                                type="number"
+                                min="1"
+                                value={question.question_order}
+                                onChange={(event) => updateLearningQuestion(questionIndex, 'question_order', event.target.value)}
                               />
                             </div>
-                          ))}
+                          </div>
+                          <div className="admin-options-editor-list">
+                            {(question.options || []).map((option, optionIndex) => (
+                              <div key={`learning-option-${questionIndex}-${optionIndex}`} className="admin-option-row">
+                                <button
+                                  type="button"
+                                  className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
+                                  onClick={() => setLearningQuestionCorrectOption(questionIndex, optionIndex)}
+                                >
+                                  {option.is_correct ? 'Benar' : 'Pilih'}
+                                </button>
+                                <strong>{option.letter}</strong>
+                                <input
+                                  value={option.text}
+                                  onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'text', event.target.value)}
+                                  placeholder={`Opsi ${option.letter}`}
+                                />
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
 
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleLearningQuestionsSave}
-                    disabled={learningQuestionsSaving}
-                  >
-                    {learningQuestionsSaving ? 'Menyimpan Mini Test...' : 'Simpan Mini Test'}
-                  </button>
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleLearningQuestionsSave}
+                      disabled={learningQuestionsSaving}
+                    >
+                      {learningQuestionsSaving ? 'Menyimpan Mini Test...' : 'Simpan Mini Test'}
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <p className="text-muted">Pilih paket untuk mengelola materi dan mini test.</p>
             )}

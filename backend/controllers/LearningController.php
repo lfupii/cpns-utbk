@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/Database.php';
 require_once __DIR__ . '/../utils/TestWorkflow.php';
+require_once __DIR__ . '/../utils/LearningContent.php';
 require_once __DIR__ . '/../middleware/Response.php';
 
 class LearningController {
@@ -290,7 +291,7 @@ class LearningController {
         $sections = [];
         foreach ($workflow['sections'] as $section) {
             $sectionCode = (string) $section['code'];
-            $allPages = $this->buildMaterialPages($package, $section);
+            $allPages = $this->getMaterialPages($package, $workflow, $section);
             $previewPageCount = min(2, count($allPages));
             $visiblePages = $hasAccess ? $allPages : array_slice($allPages, 0, $previewPageCount);
             $sectionProgress = $progress[$sectionCode] ?? [];
@@ -320,6 +321,50 @@ class LearningController {
         }
 
         return $sections;
+    }
+
+    private function getMaterialPages(array $package, array $workflow, array $section): array {
+        $packageId = (int) ($package['id'] ?? 0);
+        $sectionCode = (string) ($section['code'] ?? '');
+        if ($packageId > 0 && $sectionCode !== '') {
+            $query = 'SELECT content_json FROM learning_materials WHERE package_id = ? AND section_code = ? LIMIT 1';
+            $stmt = $this->mysqli->prepare($query);
+            $stmt->bind_param('is', $packageId, $sectionCode);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $pages = json_decode((string) ($row['content_json'] ?? ''), true);
+            if (is_array($pages) && count($pages) > 0) {
+                return $this->normalizeMaterialPages($pages);
+            }
+        }
+
+        return LearningContent::defaultMaterialPages($section, (string) ($workflow['mode'] ?? ''));
+    }
+
+    private function normalizeMaterialPages(array $pages): array {
+        $normalized = [];
+        foreach ($pages as $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+
+            $points = $page['points'] ?? [];
+            if (!is_array($points)) {
+                $points = array_filter(array_map('trim', explode("\n", (string) $points)));
+            }
+
+            $normalized[] = [
+                'title' => trim((string) ($page['title'] ?? 'Materi')),
+                'points' => array_values(array_filter(array_map(static function ($point): string {
+                    return trim((string) $point);
+                }, $points))),
+                'closing' => trim((string) ($page['closing'] ?? '')),
+            ];
+        }
+
+        return count($normalized) > 0 ? $normalized : [
+            $this->buildPage('Materi', ['Materi sedang disiapkan.'], 'Silakan cek kembali nanti.'),
+        ];
     }
 
     private function upsertProgress(int $userId, int $packageId, string $sectionCode, string $milestoneType, ?array $metadata = null): void {
@@ -463,18 +508,17 @@ class LearningController {
                 throw new RuntimeException('Subtest tidak ditemukan pada paket ini', 404);
             }
 
-            $query = "SELECT q.id, q.question_text, q.question_image_url, q.section_code, q.section_name,
+            $query = "SELECT q.id, q.question_text, q.section_code,
                              GROUP_CONCAT(
                                 JSON_OBJECT(
                                     'id', qo.id,
                                     'letter', qo.option_letter,
-                                    'text', qo.option_text,
-                                    'image_url', qo.option_image_url
+                                    'text', qo.option_text
                                 )
                                 ORDER BY qo.id SEPARATOR ','
                              ) AS options
-                      FROM questions q
-                      LEFT JOIN question_options qo ON qo.question_id = q.id
+                      FROM learning_section_questions q
+                      LEFT JOIN learning_section_question_options qo ON qo.question_id = q.id
                       WHERE q.package_id = ? AND q.section_code = ?
                       GROUP BY q.id
                       ORDER BY q.question_order ASC, q.id ASC
@@ -539,8 +583,8 @@ class LearningController {
             }
 
             $query = "SELECT q.id AS question_id, qo.id AS option_id, qo.is_correct
-                      FROM questions q
-                      JOIN question_options qo ON qo.question_id = q.id
+                      FROM learning_section_questions q
+                      JOIN learning_section_question_options qo ON qo.question_id = q.id
                       WHERE q.package_id = ? AND q.section_code = ?";
             $stmt = $this->mysqli->prepare($query);
             $stmt->bind_param('is', $packageId, $sectionCode);

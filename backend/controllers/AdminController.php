@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/Database.php';
 require_once __DIR__ . '/../utils/TestWorkflow.php';
+require_once __DIR__ . '/../utils/LearningContent.php';
 require_once __DIR__ . '/../middleware/Response.php';
 
 class AdminController {
@@ -48,6 +49,109 @@ class AdminController {
         }
 
         return $package;
+    }
+
+    private function getWorkflowSection(int $packageId, string $sectionCode): array {
+        $package = $this->getPackage($packageId);
+        $workflow = TestWorkflow::buildPackageWorkflow($package);
+        foreach ($workflow['sections'] as $section) {
+            if ((string) ($section['code'] ?? '') === $sectionCode) {
+                return [$package, $workflow, $section];
+            }
+        }
+
+        sendResponse('error', 'Subtest tidak ditemukan pada paket ini', null, 404);
+    }
+
+    private function normalizeMaterialPages(array $pages): array {
+        if (count($pages) === 0) {
+            sendResponse('error', 'Materi minimal memiliki 1 halaman', null, 422);
+        }
+
+        $normalized = [];
+        foreach ($pages as $index => $page) {
+            if (!is_array($page)) {
+                sendResponse('error', 'Format halaman materi tidak valid', null, 422);
+            }
+
+            $title = trim((string) ($page['title'] ?? ''));
+            $closing = trim((string) ($page['closing'] ?? ''));
+            $points = $page['points'] ?? [];
+            if (!is_array($points)) {
+                $points = explode("\n", (string) $points);
+            }
+
+            $points = array_values(array_filter(array_map(static function ($point): string {
+                return trim((string) $point);
+            }, $points)));
+
+            if ($title === '' || count($points) === 0) {
+                sendResponse('error', 'Judul dan poin materi wajib diisi pada halaman ' . ($index + 1), null, 422);
+            }
+
+            $normalized[] = [
+                'title' => $title,
+                'points' => $points,
+                'closing' => $closing,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeLearningQuestionPayload(array $data, int $order): array {
+        $questionText = trim((string) ($data['question_text'] ?? ''));
+        $difficulty = trim((string) ($data['difficulty'] ?? 'medium'));
+        $options = $data['options'] ?? [];
+
+        if ($questionText === '') {
+            sendResponse('error', 'Pertanyaan mini test wajib diisi', null, 422);
+        }
+
+        if (!in_array($difficulty, ['easy', 'medium', 'hard'], true)) {
+            sendResponse('error', 'Tingkat kesulitan mini test tidak valid', null, 422);
+        }
+
+        if (!is_array($options) || count($options) < 2) {
+            sendResponse('error', 'Mini test minimal memiliki 2 opsi', null, 422);
+        }
+
+        $normalizedOptions = [];
+        $correctCount = 0;
+        foreach ($options as $index => $option) {
+            $letter = strtoupper(substr(trim((string) ($option['letter'] ?? chr(65 + $index))), 0, 5));
+            $text = trim((string) ($option['text'] ?? ''));
+            $isCorrect = !empty($option['is_correct']);
+
+            if ($text === '') {
+                continue;
+            }
+
+            if ($isCorrect) {
+                $correctCount++;
+            }
+
+            $normalizedOptions[] = [
+                'letter' => $letter,
+                'text' => $text,
+                'is_correct' => $isCorrect ? 1 : 0,
+            ];
+        }
+
+        if (count($normalizedOptions) < 2) {
+            sendResponse('error', 'Mini test minimal memiliki 2 opsi berisi teks', null, 422);
+        }
+
+        if ($correctCount !== 1) {
+            sendResponse('error', 'Setiap soal mini test harus memiliki tepat 1 jawaban benar', null, 422);
+        }
+
+        return [
+            'question_text' => $questionText,
+            'difficulty' => $difficulty,
+            'question_order' => max(1, (int) ($data['question_order'] ?? $order)),
+            'options' => $normalizedOptions,
+        ];
     }
 
     private function normalizeMediaUrl($value): ?string {
@@ -449,6 +553,196 @@ class AdminController {
         $this->syncQuestionCount((int) $question['package_id']);
         sendResponse('success', 'Soal berhasil dihapus');
     }
+
+    public function getLearningContent() {
+        verifyAdmin();
+        $packageId = (int) ($_GET['package_id'] ?? 0);
+        if ($packageId <= 0) {
+            sendResponse('error', 'Package ID harus diisi', null, 400);
+        }
+
+        $package = $this->getPackage($packageId);
+        $workflow = TestWorkflow::buildPackageWorkflow($package);
+
+        $materialQuery = 'SELECT section_code, title, content_json FROM learning_materials WHERE package_id = ?';
+        $stmt = $this->mysqli->prepare($materialQuery);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $materialResult = $stmt->get_result();
+        $materialMap = [];
+        while ($row = $materialResult->fetch_assoc()) {
+            $pages = json_decode((string) ($row['content_json'] ?? ''), true);
+            $materialMap[(string) $row['section_code']] = [
+                'title' => $row['title'],
+                'pages' => is_array($pages) ? $pages : [],
+            ];
+        }
+
+        $questionQuery = "SELECT q.*,
+                            GROUP_CONCAT(
+                              JSON_OBJECT(
+                                'id', qo.id,
+                                'letter', qo.option_letter,
+                                'text', qo.option_text,
+                                'is_correct', qo.is_correct
+                              ) ORDER BY qo.id SEPARATOR ','
+                            ) AS options
+                          FROM learning_section_questions q
+                          LEFT JOIN learning_section_question_options qo ON qo.question_id = q.id
+                          WHERE q.package_id = ?
+                          GROUP BY q.id
+                          ORDER BY q.section_code ASC, q.question_order ASC, q.id ASC";
+        $stmt = $this->mysqli->prepare($questionQuery);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $questionResult = $stmt->get_result();
+        $questionMap = [];
+        while ($row = $questionResult->fetch_assoc()) {
+            $sectionCode = (string) $row['section_code'];
+            if (!isset($questionMap[$sectionCode])) {
+                $questionMap[$sectionCode] = [];
+            }
+
+            $row['id'] = (int) $row['id'];
+            $row['question_order'] = (int) $row['question_order'];
+            $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+            $questionMap[$sectionCode][] = $row;
+        }
+
+        $sections = [];
+        foreach ($workflow['sections'] as $section) {
+            $sectionCode = (string) $section['code'];
+            $defaultPages = LearningContent::defaultMaterialPages($section, (string) $workflow['mode']);
+            $sections[] = [
+                'code' => $sectionCode,
+                'name' => $section['name'],
+                'session_name' => $section['session_name'] ?? null,
+                'order' => $section['order'],
+                'material' => $materialMap[$sectionCode] ?? [
+                    'title' => (string) $section['name'],
+                    'pages' => $defaultPages,
+                ],
+                'questions' => $questionMap[$sectionCode] ?? LearningContent::defaultSectionQuestions($section, (string) $workflow['mode']),
+            ];
+        }
+
+        sendResponse('success', 'Konten belajar berhasil diambil', [
+            'package_id' => $packageId,
+            'sections' => $sections,
+        ]);
+    }
+
+    public function updateLearningMaterial() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        $packageId = (int) ($data['package_id'] ?? 0);
+        $sectionCode = trim((string) ($data['section_code'] ?? ''));
+        $pages = $data['pages'] ?? [];
+
+        if ($packageId <= 0 || $sectionCode === '') {
+            sendResponse('error', 'Package ID dan section harus diisi', null, 400);
+        }
+
+        [, , $section] = $this->getWorkflowSection($packageId, $sectionCode);
+        $normalizedPages = $this->normalizeMaterialPages(is_array($pages) ? $pages : []);
+        $title = trim((string) ($data['title'] ?? $section['name']));
+        if ($title === '') {
+            $title = (string) $section['name'];
+        }
+
+        $contentJson = json_encode($normalizedPages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $query = "INSERT INTO learning_materials (package_id, section_code, title, content_json)
+                  VALUES (?, ?, ?, ?)
+                  ON DUPLICATE KEY UPDATE
+                    title = VALUES(title),
+                    content_json = VALUES(content_json),
+                    updated_at = CURRENT_TIMESTAMP";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('isss', $packageId, $sectionCode, $title, $contentJson);
+        $stmt->execute();
+
+        sendResponse('success', 'Materi subtest berhasil disimpan');
+    }
+
+    public function updateLearningSectionQuestions() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        $packageId = (int) ($data['package_id'] ?? 0);
+        $sectionCode = trim((string) ($data['section_code'] ?? ''));
+        $questions = $data['questions'] ?? [];
+
+        if ($packageId <= 0 || $sectionCode === '') {
+            sendResponse('error', 'Package ID dan section harus diisi', null, 400);
+        }
+
+        $this->getWorkflowSection($packageId, $sectionCode);
+        if (!is_array($questions) || count($questions) < 1) {
+            sendResponse('error', 'Minimal isi 1 soal mini test', null, 422);
+        }
+
+        $normalizedQuestions = [];
+        foreach ($questions as $index => $question) {
+            if (!is_array($question)) {
+                sendResponse('error', 'Format soal mini test tidak valid', null, 422);
+            }
+
+            $normalizedQuestions[] = $this->normalizeLearningQuestionPayload($question, $index + 1);
+        }
+
+        $this->mysqli->begin_transaction();
+        try {
+            $fetchExisting = $this->mysqli->prepare(
+                'SELECT id FROM learning_section_questions WHERE package_id = ? AND section_code = ?'
+            );
+            $fetchExisting->bind_param('is', $packageId, $sectionCode);
+            $fetchExisting->execute();
+            $existingResult = $fetchExisting->get_result();
+            $deleteOptions = $this->mysqli->prepare('DELETE FROM learning_section_question_options WHERE question_id = ?');
+            while ($row = $existingResult->fetch_assoc()) {
+                $questionId = (int) $row['id'];
+                $deleteOptions->bind_param('i', $questionId);
+                $deleteOptions->execute();
+            }
+
+            $deleteQuestions = $this->mysqli->prepare(
+                'DELETE FROM learning_section_questions WHERE package_id = ? AND section_code = ?'
+            );
+            $deleteQuestions->bind_param('is', $packageId, $sectionCode);
+            $deleteQuestions->execute();
+
+            $insertQuestion = $this->mysqli->prepare(
+                'INSERT INTO learning_section_questions (package_id, section_code, question_text, difficulty, question_order)
+                 VALUES (?, ?, ?, ?, ?)'
+            );
+            $insertOption = $this->mysqli->prepare(
+                'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, is_correct)
+                 VALUES (?, ?, ?, ?)'
+            );
+
+            foreach ($normalizedQuestions as $question) {
+                $questionText = $question['question_text'];
+                $difficulty = $question['difficulty'];
+                $questionOrder = $question['question_order'];
+                $insertQuestion->bind_param('isssi', $packageId, $sectionCode, $questionText, $difficulty, $questionOrder);
+                $insertQuestion->execute();
+                $questionId = (int) $insertQuestion->insert_id;
+
+                foreach ($question['options'] as $option) {
+                    $letter = $option['letter'];
+                    $text = $option['text'];
+                    $isCorrect = $option['is_correct'];
+                    $insertOption->bind_param('issi', $questionId, $letter, $text, $isCorrect);
+                    $insertOption->execute();
+                }
+            }
+
+            $this->mysqli->commit();
+            sendResponse('success', 'Soal mini test subtest berhasil disimpan');
+        } catch (Throwable $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', 'Gagal menyimpan soal mini test', ['details' => $error->getMessage()], 500);
+        }
+    }
 }
 
 $requestMethod = $_SERVER['REQUEST_METHOD'];
@@ -470,6 +764,12 @@ if (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 
     $controller->updateQuestion();
 } elseif (strpos($requestPath, '/api/admin/questions') !== false && $requestMethod === 'DELETE') {
     $controller->deleteQuestion();
+} elseif (strpos($requestPath, '/api/admin/learning-content') !== false && $requestMethod === 'GET') {
+    $controller->getLearningContent();
+} elseif (strpos($requestPath, '/api/admin/learning-material') !== false && $requestMethod === 'PUT') {
+    $controller->updateLearningMaterial();
+} elseif (strpos($requestPath, '/api/admin/learning-section-questions') !== false && $requestMethod === 'PUT') {
+    $controller->updateLearningSectionQuestions();
 } else {
     sendResponse('error', 'Endpoint admin tidak ditemukan', null, 404);
 }

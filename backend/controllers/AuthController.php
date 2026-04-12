@@ -137,13 +137,13 @@ class AuthController {
 <body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
     <div style="max-width:560px;margin:32px auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 18px 48px rgba(15,23,42,0.08);">
         <div style="padding:28px 24px;background:' . $accent . ';color:#ffffff;">
-            <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;">TO CPNS UTBK</div>
+            <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;">Ujiin</div>
             <h1 style="margin:10px 0 0;font-size:28px;line-height:1.2;">' . $safeTitle . '</h1>
         </div>
         <div style="padding:28px 24px;font-size:15px;line-height:1.7;">
             <p>' . $safeMessage . '</p>
             <p style="margin:24px 0 0;">
-                <a href="' . $homeUrl . '" style="display:inline-block;background:' . $buttonColor . ';color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700;">Kembali ke TO CPNS UTBK</a>
+                <a href="' . $homeUrl . '" style="display:inline-block;background:' . $buttonColor . ';color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700;">Kembali ke Ujiin</a>
             </p>
         </div>
     </div>

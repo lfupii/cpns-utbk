@@ -9,14 +9,14 @@ class UserNotificationService {
     public static function sendVerificationEmail(array $user, string $token): array {
         $verificationUrl = rtrim(EMAIL_VERIFICATION_URL, '/') . '?token=' . rawurlencode($token);
         $fullName = trim((string) ($user['full_name'] ?? 'Peserta'));
-        $subject = 'Verifikasi Email Akun TO CPNS UTBK';
+        $subject = 'Verifikasi Email Akun Ujiin';
         $expiryLabel = EMAIL_VERIFICATION_EXPIRY_HOURS . ' jam';
 
         $htmlBody = self::wrapTemplate(
             'Verifikasi email akunmu',
             '
                 <p>Halo <strong>' . self::escape($fullName) . '</strong>,</p>
-                <p>Terima kasih sudah mendaftar di <strong>TO CPNS UTBK</strong>. Supaya akunmu aktif dan bisa dipakai untuk login, menerima hasil tryout, dan update penting lainnya, silakan verifikasi email terlebih dahulu.</p>
+                <p>Terima kasih sudah mendaftar di <strong>Ujiin</strong>. Supaya akunmu aktif dan bisa dipakai untuk login, menerima hasil tryout, dan update penting lainnya, silakan verifikasi email terlebih dahulu.</p>
                 <p style="margin:24px 0;">
                     <a href="' . self::escape($verificationUrl) . '" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;">Verifikasi Email</a>
                 </p>
@@ -28,7 +28,7 @@ class UserNotificationService {
         );
 
         $textBody = "Halo {$fullName},\n\n"
-            . "Terima kasih sudah mendaftar di TO CPNS UTBK.\n"
+            . "Terima kasih sudah mendaftar di Ujiin.\n"
             . "Silakan verifikasi email akunmu melalui link berikut:\n{$verificationUrl}\n\n"
             . "Link ini berlaku selama {$expiryLabel}.\n\n"
             . "Setelah email terverifikasi, akunmu bisa dipakai untuk login dan menerima hasil tryout.\n";
@@ -59,7 +59,7 @@ class UserNotificationService {
             'Hasil tryout kamu sudah siap',
             '
                 <p>Halo <strong>' . self::escape($fullName) . '</strong>,</p>
-                <p>Terima kasih sudah berlatih bersama <strong>TO CPNS UTBK</strong>. Berikut hasil tryout kamu untuk paket <strong>' . self::escape($packageName) . '</strong>.</p>
+                <p>Terima kasih sudah berlatih bersama <strong>Ujiin</strong>. Berikut hasil tryout kamu untuk paket <strong>' . self::escape($packageName) . '</strong>.</p>
                 <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#f8fafc;border-radius:14px;overflow:hidden;">
                     <tr>
                         <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Kategori</strong></td>
@@ -94,13 +94,13 @@ class UserNotificationService {
                         <td style="padding:12px 16px;">' . self::escape($completedAt !== '' ? $completedAt : '-') . '</td>
                     </tr>
                 </table>
-                <p>Terima kasih telah mempercayakan proses latihanmu bersama <strong>TO CPNS UTBK</strong>. Setiap tryout yang kamu kerjakan adalah langkah nyata untuk memperkuat kesiapanmu.</p>
+                <p>Terima kasih telah mempercayakan proses latihanmu bersama <strong>Ujiin</strong>. Setiap tryout yang kamu kerjakan adalah langkah nyata untuk memperkuat kesiapanmu.</p>
                 <p>' . self::escape($prayer) . '</p>
             '
         );
 
         $textBody = "Halo {$fullName},\n\n"
-            . "Terima kasih sudah berlatih bersama TO CPNS UTBK.\n"
+            . "Terima kasih sudah berlatih bersama Ujiin.\n"
             . "Berikut hasil tryout {$packageName}:\n"
             . "- Kategori: {$categoryName}\n"
             . "- Total soal: {$totalQuestions}\n"
@@ -110,13 +110,13 @@ class UserNotificationService {
             . "- Persentase: {$percentage}%\n"
             . "- Waktu pengerjaan: {$timeTaken}\n"
             . "- Selesai pada: " . ($completedAt !== '' ? $completedAt : '-') . "\n\n"
-            . "Terima kasih telah mempercayakan proses latihanmu bersama TO CPNS UTBK.\n"
+            . "Terima kasih telah mempercayakan proses latihanmu bersama Ujiin.\n"
             . $prayer . "\n";
 
         return EmailService::sendEmail(
             (string) ($payload['email'] ?? ''),
             $fullName,
-            'Hasil Tryout ' . $packageName . ' - TO CPNS UTBK',
+            'Hasil Tryout ' . $packageName . ' - Ujiin',
             $htmlBody,
             $textBody
         );
@@ -134,7 +134,7 @@ class UserNotificationService {
     <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
         <div style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 16px 40px rgba(15,23,42,0.08);">
             <div style="background:linear-gradient(135deg,#0f766e,#14b8a6);padding:28px 24px;color:#ffffff;">
-                <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.9;">TO CPNS UTBK</div>
+                <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.9;">Ujiin</div>
                 <h1 style="margin:10px 0 0;font-size:28px;line-height:1.2;">' . self::escape($title) . '</h1>
             </div>
             <div style="padding:28px 24px;font-size:15px;line-height:1.7;">

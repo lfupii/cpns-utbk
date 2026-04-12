@@ -21,7 +21,7 @@ INSERT INTO users (email, password, full_name, role, email_verified_at)
 VALUES (
   'fadhlurrohmanluthfi@gmail.com',
   '$2y$12$4.8bTUnKgsWR/Js3cW.04uaQc9aerTIew7nPSpCf7V7aB2I3KQ8S2',
-  'Admin TO CPNS UTBK',
+  'Admin Ujiin',
   'admin',
   NOW()
 );

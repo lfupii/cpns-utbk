@@ -1,7 +1,7 @@
 @echo off
 REM Development Mode Start Script for Windows
 
-echo 🚀 Starting CPNS UTBK 2026 Platform...
+echo 🚀 Starting Ujiin...
 echo.
 echo 📋 Instructions:
 echo 1. Terminal 1: Backend (PHP Server)

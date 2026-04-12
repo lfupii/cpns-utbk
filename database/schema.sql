@@ -1,4 +1,4 @@
--- Canonical database setup for CPNS UTBK 2026
+-- Canonical database setup for Ujiin
 -- This single file recreates the schema and inserts the initial data
 -- that matches the current app: 2 active packages (CPNS Intensif and UTBK Intensif).
 
@@ -465,4 +465,4 @@ INSERT INTO question_options (question_id, option_letter, option_text, is_correc
 (40, 'E', 'Rp84.000', 0);
 
 INSERT INTO users (email, password, full_name, role, email_verified_at) VALUES
-('fadhlurrohmanluthfi@gmail.com', '$2y$12$4.8bTUnKgsWR/Js3cW.04uaQc9aerTIew7nPSpCf7V7aB2I3KQ8S2', 'Admin TO CPNS UTBK', 'admin', NOW());
+('fadhlurrohmanluthfi@gmail.com', '$2y$12$4.8bTUnKgsWR/Js3cW.04uaQc9aerTIew7nPSpCf7V7aB2I3KQ8S2', 'Admin Ujiin', 'admin', NOW());

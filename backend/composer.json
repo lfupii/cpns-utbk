@@ -1,6 +1,6 @@
 {
   "name": "cpns-utbk/backend",
-  "description": "Backend API for CPNS UTBK 2026 tryout platform",
+  "description": "Backend API for Ujiin",
   "type": "project",
   "require": {
     "php": "^7.4 || ^8.0",

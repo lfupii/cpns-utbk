@@ -94,11 +94,7 @@ function AppRoutes() {
           />
           <Route
             path="/learning/:packageId"
-            element={
-              <ProtectedRoute>
-                <Learning />
-              </ProtectedRoute>
-            }
+            element={<Learning />}
           />
           <Route
             path="/test/:packageId"

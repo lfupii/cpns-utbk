@@ -52,6 +52,17 @@ class LearningController {
         }
     }
 
+    private function getOptionalTokenData(): ?array {
+        $token = getBearerToken();
+        if (!$token) {
+            return null;
+        }
+
+        require_once __DIR__ . '/../utils/JWTHandler.php';
+        $decoded = JWTHandler::verifyToken($token);
+        return is_array($decoded) ? $decoded : null;
+    }
+
     private function getAttemptStats(int $userId, int $packageId): array {
         $query = "SELECT
                     SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_attempts,
@@ -399,8 +410,8 @@ class LearningController {
     }
 
     public function getPackageLearning() {
-        $tokenData = verifyToken();
-        $userId = (int) $tokenData['userId'];
+        $tokenData = $this->getOptionalTokenData();
+        $userId = (int) ($tokenData['userId'] ?? 0);
         $packageId = (int) ($_GET['package_id'] ?? 0);
 
         if ($packageId <= 0) {
@@ -408,12 +419,15 @@ class LearningController {
         }
 
         try {
-            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            $isAuthenticated = $userId > 0;
+            $isAdmin = $isAuthenticated ? userHasRole($tokenData, $this->mysqli, 'admin') : false;
             $package = $this->getPackage($packageId);
             $workflow = TestWorkflow::buildPackageWorkflow($package);
-            $hasAccess = $this->hasActiveAccess($userId, $packageId, $isAdmin);
-            $progress = $this->getProgressMap($userId, $packageId);
-            $attemptStats = $this->getAttemptStats($userId, $packageId);
+            $hasAccess = $isAuthenticated && $this->hasActiveAccess($userId, $packageId, $isAdmin);
+            $progress = $isAuthenticated ? $this->getProgressMap($userId, $packageId) : [];
+            $attemptStats = $isAuthenticated
+                ? $this->getAttemptStats($userId, $packageId)
+                : ['completed_attempts' => 0, 'ongoing_attempts' => 0];
             $remainingAttempts = $isAdmin ? null : max(0, (int) $package['max_attempts'] - $attemptStats['completed_attempts']);
             $sections = $this->buildLearningSections($package, $workflow, $progress, $hasAccess);
             $materialDone = count($sections) > 0 && count(array_filter($sections, static function (array $section): bool {
@@ -425,6 +439,7 @@ class LearningController {
 
             sendResponse('success', 'Ruang belajar berhasil diambil', [
                 'has_access' => $hasAccess,
+                'is_authenticated' => $isAuthenticated,
                 'admin_bypass' => $isAdmin,
                 'package' => [
                     'id' => (int) $package['id'],

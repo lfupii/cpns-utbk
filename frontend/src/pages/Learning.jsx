@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
+import { useAuth } from '../AuthContext';
 
 function formatScore(result) {
   if (!result) {
@@ -34,6 +35,7 @@ function sanitizeMaterialHtml(html) {
 export default function Learning() {
   const { packageId } = useParams();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const numericPackageId = Number(packageId);
   const [learning, setLearning] = useState(null);
   const [activeTab, setActiveTab] = useState('materi');
@@ -73,6 +75,7 @@ export default function Learning() {
     [activeSectionCode, sections]
   );
   const hasAccess = Boolean(learning?.has_access);
+  const viewerIsAuthenticated = Boolean(learning?.is_authenticated ?? isAuthenticated);
   const summary = learning?.summary || {};
   const packageData = learning?.package || null;
   const currentSectionTest = activeSection ? sectionTests[activeSection.code] || {} : {};
@@ -301,6 +304,10 @@ export default function Learning() {
             <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
               Mulai Tryout Keseluruhan
             </Link>
+          ) : !viewerIsAuthenticated ? (
+            <Link to="/login" className="btn btn-primary">
+              Login untuk Buka Lengkap
+            </Link>
           ) : (
             <Link to={`/payment/${numericPackageId}`} className="btn btn-primary">
               Aktifkan Paket
@@ -316,8 +323,9 @@ export default function Learning() {
         <div className="learning-lock-notice">
           <strong>Mode preview aktif.</strong>
           <span>
-            Kamu bisa membaca halaman awal dari setiap subtest. Aktifkan paket untuk membuka seluruh materi,
-            mencatat milestone, mini test subtest, dan tryout keseluruhan.
+            {viewerIsAuthenticated
+              ? 'Kamu bisa membaca halaman awal dari setiap subtest. Beli paket untuk membuka seluruh materi, mencatat milestone, mini test subtest, dan tryout keseluruhan.'
+              : 'Kamu bisa membaca halaman awal dari setiap subtest. Login untuk melihat opsi akses penuh dan melanjutkan ke seluruh materi.'}
           </span>
         </div>
       )}
@@ -487,9 +495,13 @@ export default function Learning() {
               {!hasAccess && activeSection.locked_page_count > 0 && (
                 <div className="learning-locked-pages">
                   <strong>{activeSection.locked_page_count} halaman lanjutan terkunci.</strong>
-                  <p>Aktifkan paket untuk membuka pembahasan penuh dan milestone belajar.</p>
-                  <Link to={`/payment/${numericPackageId}`} className="btn btn-primary">
-                    Beli Paket
+                  <p>
+                    {viewerIsAuthenticated
+                      ? 'Beli paket untuk membuka pembahasan penuh dan milestone belajar.'
+                      : 'Login untuk melihat akses penuh dan membuka pembahasan materi setelah paket aktif.'}
+                  </p>
+                  <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
+                    {viewerIsAuthenticated ? 'Beli Paket' : 'Login untuk Lanjut'}
                   </Link>
                 </div>
               )}
@@ -608,8 +620,8 @@ export default function Learning() {
                 </button>
               )
             ) : (
-              <Link to={`/payment/${numericPackageId}`} className="btn btn-primary">
-                Aktifkan Paket untuk Tryout
+              <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
+                {viewerIsAuthenticated ? 'Aktifkan Paket untuk Tryout' : 'Login untuk Buka Tryout'}
               </Link>
             )}
             <button type="button" className="btn btn-outline" onClick={() => setActiveTab('materi')}>

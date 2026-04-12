@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
@@ -25,16 +25,16 @@ export default function Payment() {
     : 'https://app.sandbox.midtrans.com/snap/snap.js';
   const paymentSessionKey = `midtrans-payment-${numericPackageId}`;
 
-  const persistPendingPayment = (payload) => {
+  const persistPendingPayment = useCallback((payload) => {
     if (!payload?.orderId) {
       return;
     }
 
     window.sessionStorage.setItem(paymentSessionKey, JSON.stringify(payload));
     setPendingOrderId(payload.orderId);
-  };
+  }, [paymentSessionKey]);
 
-  const readPendingPayment = () => {
+  const readPendingPayment = useCallback(() => {
     const rawValue = window.sessionStorage.getItem(paymentSessionKey);
     if (!rawValue) {
       return null;
@@ -47,17 +47,19 @@ export default function Payment() {
       window.sessionStorage.removeItem(paymentSessionKey);
       return null;
     }
-  };
+  }, [paymentSessionKey]);
 
-  const clearPendingPayment = () => {
+  const clearPendingPayment = useCallback(() => {
     window.sessionStorage.removeItem(paymentSessionKey);
     setPendingOrderId('');
-  };
+  }, [paymentSessionKey]);
 
-  const buildPaymentSuccessMessage = () =>
-    `Pembayaran untuk paket ${packageData?.name || 'tryout'} berhasil. Akses sudah aktif dan kamu bisa masuk ke Ruang Belajar dari halaman Paket Aktif kapan saja.`;
+  const buildPaymentSuccessMessage = useCallback(
+    () => `Pembayaran untuk paket ${packageData?.name || 'tryout'} berhasil. Akses sudah aktif dan kamu bisa masuk ke Ruang Belajar dari halaman Paket Aktif kapan saja.`,
+    [packageData?.name]
+  );
 
-  const confirmPayment = async (orderId, transactionId = null, options = {}) => {
+  const confirmPayment = useCallback(async (orderId, transactionId = null, options = {}) => {
     if (!orderId) {
       return false;
     }
@@ -106,7 +108,7 @@ export default function Payment() {
         setCheckingStatus(false);
       }
     }
-  };
+  }, [buildPaymentSuccessMessage, clearPendingPayment, navigate, persistPendingPayment]);
 
   useEffect(() => {
     const fetchPackageData = async () => {
@@ -154,7 +156,7 @@ export default function Payment() {
     if (pendingPayment?.orderId) {
       setPendingOrderId(pendingPayment.orderId);
     }
-  }, [paymentSessionKey]);
+  }, [readPendingPayment]);
 
   useEffect(() => {
     const orderIdFromUrl = (searchParams.get('order_id') || '').trim();
@@ -169,7 +171,7 @@ export default function Payment() {
     setPendingOrderId(orderId);
 
     confirmPayment(orderId, pendingPayment?.transactionId || null, { silent: false });
-  }, [paymentSessionKey, searchParams]);
+  }, [confirmPayment, readPendingPayment, searchParams]);
 
   const handlePayment = async () => {
     setProcessing(true);

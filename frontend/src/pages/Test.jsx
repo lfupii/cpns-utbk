@@ -91,7 +91,6 @@ export default function Test() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [isAdvancingSection, setIsAdvancingSection] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -247,7 +246,6 @@ export default function Test() {
     }
 
     isSavingRef.current = true;
-    setIsSaving(true);
     setSaveMessage('');
 
     try {
@@ -280,7 +278,6 @@ export default function Test() {
       setError(err.response?.data?.message || 'Gagal menyimpan jawaban');
     } finally {
       isSavingRef.current = false;
-      setIsSaving(false);
 
       const pendingSave = pendingAutoSaveRef.current;
       pendingAutoSaveRef.current = null;

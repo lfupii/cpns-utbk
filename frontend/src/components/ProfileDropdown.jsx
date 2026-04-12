@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 export default function ProfileDropdown({
@@ -13,7 +13,7 @@ export default function ProfileDropdown({
   const location = useLocation();
   const open = typeof controlledOpen === 'boolean' ? controlledOpen : uncontrolledOpen;
 
-  const setOpen = (nextValue) => {
+  const setOpen = useCallback((nextValue) => {
     if (typeof controlledOpen !== 'boolean') {
       setUncontrolledOpen(nextValue);
     }
@@ -21,7 +21,7 @@ export default function ProfileDropdown({
     if (onOpenChange) {
       onOpenChange(nextValue);
     }
-  };
+  }, [controlledOpen, onOpenChange]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -32,11 +32,11 @@ export default function ProfileDropdown({
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [setOpen]);
 
   useEffect(() => {
     setOpen(false);
-  }, [location.pathname, location.search, location.hash]);
+  }, [location.pathname, location.search, location.hash, setOpen]);
 
   return (
     <div className="profile-dropdown" ref={wrapperRef}>

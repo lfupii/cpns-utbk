@@ -241,7 +241,10 @@ export default function AdminPanel() {
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
     [packages, selectedPackageId]
   );
-  const packageSections = selectedPackage?.workflow?.sections || [];
+  const packageSections = useMemo(
+    () => selectedPackage?.workflow?.sections || [],
+    [selectedPackage]
+  );
   const defaultSectionCode = packageSections[0]?.code || '';
   const preferredSectionCode = useMemo(() => {
     const validCodes = new Set(packageSections.map((section) => String(section.code)));

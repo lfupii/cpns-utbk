@@ -7,7 +7,7 @@ export default function RefundPolicy() {
     <PublicSiteChrome
       eyebrow="Dokumen kebijakan"
       title="Kebijakan Refund"
-      subtitle="Kebijakan pembatalan transaksi dan pengembalian dana untuk produk digital Tryout CPNS UTBK."
+      subtitle="Kebijakan pembatalan transaksi dan pengembalian dana untuk produk digital Ujiin."
     >
       <article className="policy-card">
         <p className="policy-meta-note">

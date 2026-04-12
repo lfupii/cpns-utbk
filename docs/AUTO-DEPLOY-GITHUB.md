@@ -145,7 +145,7 @@ Nilai tetap untuk project ini:
 - `PROD_FROM_NAME`
 
 Catatan:
-- value seperti `TO CPNS UTBK` yang mengandung spasi aman dipakai, karena workflow sekarang sudah meng-quote semua value saat membuat `.env`
+- value `PROD_FROM_NAME` aman dipakai, karena workflow sekarang sudah meng-quote semua value saat membuat `.env`
 
 ## Template secrets
 
@@ -183,7 +183,7 @@ PROD_SMTP_PORT=587
 PROD_SMTP_USER=ISI_SMTP_USER
 PROD_SMTP_PASSWORD=ISI_SMTP_PASSWORD
 PROD_FROM_EMAIL=ISI_FROM_EMAIL
-PROD_FROM_NAME=TO CPNS UTBK
+PROD_FROM_NAME=Ujiin
 ```
 
 ## Mode Midtrans

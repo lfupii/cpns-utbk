@@ -382,7 +382,7 @@ Response (200):
 }
 ```
 
-Setelah submit, backend otomatis mengirim email hasil tryout ke email user yang sudah diverifikasi. Isi email mencakup ringkasan hasil, ucapan terima kasih dari TO CPNS UTBK, dan doa sesuai jalur UTBK atau CPNS.
+Setelah submit, backend otomatis mengirim email hasil tryout ke email user yang sudah diverifikasi. Isi email mencakup ringkasan hasil, ucapan terima kasih dari Ujiin, dan doa sesuai jalur UTBK atau CPNS.
 
 #### Get Test Results
 ```

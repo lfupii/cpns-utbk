@@ -1,4 +1,4 @@
-# CPNS UTBK 2026 Platform Tryout
+# Ujiin
 
 Platform interaktif dan modern untuk tryout CPNS dan UTBK 2026 dengan sistem pembayaran terintegrasi Midtrans.
 

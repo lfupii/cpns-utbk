@@ -7,7 +7,7 @@ export default function PrivacyPolicy() {
     <PublicSiteChrome
       eyebrow="Dokumen kebijakan"
       title="Kebijakan Privasi"
-      subtitle="Kebijakan privasi penggunaan data pengguna pada layanan Tryout CPNS UTBK."
+      subtitle="Kebijakan privasi penggunaan data pengguna pada layanan Ujiin."
     >
       <article className="policy-card">
         <p className="policy-meta-note">

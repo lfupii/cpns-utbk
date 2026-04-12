@@ -21,7 +21,7 @@ INSERT INTO users (email, password, full_name, role, email_verified_at)
 VALUES (
   'REMOVED_ADMIN_EMAIL',
   'REMOVED_ADMIN_PASSWORD_HASH',
-  'Admin TO CPNS UTBK',
+  'Admin Ujiin',
   'admin',
   NOW()
 );

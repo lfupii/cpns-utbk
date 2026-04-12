@@ -2,7 +2,7 @@
 
 # Development Mode Start Script for macOS/Linux
 
-echo "🚀 Starting CPNS UTBK 2026 Platform..."
+echo "🚀 Starting Ujiin..."
 
 # Check if terminals are available
 command -v gnome-terminal &> /dev/null && TERMINAL="gnome-terminal"

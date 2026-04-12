@@ -1,6 +1,6 @@
 export const businessProfile = {
-  brandName: 'Tryout CPNS UTBK',
-  shortName: 'TO CPNS UTBK',
+  brandName: 'Ujiin',
+  shortName: 'Ujiin',
   websiteUrl: 'https://tocpnsutbk.com',
   supportEmail: 'support@tocpnsutbk.com',
   supportMailto: 'mailto:support@tocpnsutbk.com',
@@ -43,7 +43,7 @@ export const termsSections = [
   {
     title: 'Ketentuan Penggunaan',
     paragraphs: [
-      'Tryout CPNS UTBK disediakan kepada pengguna dengan syarat bahwa pengguna menerima ketentuan, syarat, pemberitahuan, dan aturan tambahan yang tercantum di website ini atau dirujuk oleh halaman tertentu pada website ini.',
+      'Ujiin disediakan kepada pengguna dengan syarat bahwa pengguna menerima ketentuan, syarat, pemberitahuan, dan aturan tambahan yang tercantum di website ini atau dirujuk oleh halaman tertentu pada website ini.',
       'Dokumen ini disusun dengan mengacu pada template Terms & Conditions Midtrans untuk kategori digital goods, lalu disesuaikan dengan model layanan tryout berbasis akun dan pembelian akses digital di platform ini.',
     ],
   },
@@ -65,7 +65,7 @@ export const termsSections = [
   {
     title: 'Pemberian Lisensi Terbatas',
     paragraphs: [
-      'Kami memberikan hak akses terbatas, non-eksklusif, tidak dapat dipindahtangankan, dan dapat dicabut sewaktu-waktu kepada Anda untuk mengakses dan menggunakan platform Tryout CPNS UTBK semata-mata untuk keperluan pribadi dan penggunaan yang sah sesuai fungsi layanan.',
+      'Kami memberikan hak akses terbatas, non-eksklusif, tidak dapat dipindahtangankan, dan dapat dicabut sewaktu-waktu kepada Anda untuk mengakses dan menggunakan platform Ujiin semata-mata untuk keperluan pribadi dan penggunaan yang sah sesuai fungsi layanan.',
       'Hak akses ini tidak memberikan kepada Anda kepemilikan atas software, konten, basis soal, desain, dokumentasi, atau materi lain yang tersedia di website ini.',
     ],
     items: [
@@ -76,7 +76,7 @@ export const termsSections = [
   {
     title: 'Hak Kepemilikan dan Hak Cipta',
     paragraphs: [
-      'Seluruh materi pada website ini, termasuk namun tidak terbatas pada tampilan, logo, merek, soal, struktur paket, hasil tryout, ilustrasi, teks, dan konten pendukung lainnya adalah milik Tryout CPNS UTBK atau pihak yang memberikan lisensi resmi kepada kami dan dilindungi oleh hukum yang berlaku di Indonesia.',
+      'Seluruh materi pada website ini, termasuk namun tidak terbatas pada tampilan, logo, merek, soal, struktur paket, hasil tryout, ilustrasi, teks, dan konten pendukung lainnya adalah milik Ujiin atau pihak yang memberikan lisensi resmi kepada kami dan dilindungi oleh hukum yang berlaku di Indonesia.',
       'Tidak ada materi yang dipublikasikan pada website ini yang boleh disalin, diperbanyak, diunggah ulang, dipublikasikan, dikirimkan, didistribusikan, diperjualbelikan, atau digunakan ulang tanpa izin tertulis dari kami.',
     ],
   },
@@ -146,7 +146,7 @@ export const termsSections = [
   {
     title: 'Ganti Rugi, Penafian, dan Batas Tanggung Jawab',
     paragraphs: [
-      'Anda setuju untuk membebaskan dan melindungi Tryout CPNS UTBK dari klaim, kerugian, tanggung jawab, biaya, atau tuntutan pihak ketiga yang timbul dari penggunaan website oleh Anda, pelanggaran Terms & Conditions ini, atau penyalahgunaan layanan oleh akun Anda.',
+      'Anda setuju untuk membebaskan dan melindungi Ujiin dari klaim, kerugian, tanggung jawab, biaya, atau tuntutan pihak ketiga yang timbul dari penggunaan website oleh Anda, pelanggaran Terms & Conditions ini, atau penyalahgunaan layanan oleh akun Anda.',
       'Kami berupaya menjaga keakuratan dan ketersediaan konten website, namun tidak menjamin bahwa seluruh materi akan selalu bebas dari kesalahan, keterlambatan pembaruan, atau gangguan. Website dan layanan disediakan sebagaimana adanya sesuai batas yang diperbolehkan hukum.',
       'Kami tidak bertanggung jawab atas kerugian yang timbul akibat kesalahan data dari pengguna, kelalaian menjaga akun, gangguan perangkat atau koneksi internet pengguna, atau gangguan layanan pihak ketiga di luar kendali wajar kami.',
     ],
@@ -169,7 +169,7 @@ export const privacySections = [
   {
     title: 'Pendahuluan',
     paragraphs: [
-      'Privasi pengguna merupakan hal yang penting bagi Tryout CPNS UTBK. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi data pribadi pengguna saat mengakses website, mendaftar akun, melakukan pembayaran, dan menggunakan layanan tryout digital kami.',
+      'Privasi pengguna merupakan hal yang penting bagi Ujiin. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi data pribadi pengguna saat mengakses website, mendaftar akun, melakukan pembayaran, dan menggunakan layanan tryout digital kami.',
       'Dengan menggunakan website dan layanan kami, Anda menyetujui pengumpulan dan penggunaan informasi sebagaimana dijelaskan dalam Kebijakan Privasi ini.',
     ],
   },

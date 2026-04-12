@@ -7,7 +7,7 @@ export default function TermsConditions() {
     <PublicSiteChrome
       eyebrow="Dokumen kebijakan"
       title="Syarat & Ketentuan"
-      subtitle="Satu halaman kebijakan untuk syarat penggunaan, privasi, dan refund layanan Tryout CPNS UTBK."
+      subtitle="Satu halaman kebijakan untuk syarat penggunaan, privasi, dan refund layanan Ujiin."
     >
       <nav className="policy-anchor-nav">
         <a href="#terms-policy">Syarat &amp; Ketentuan</a>

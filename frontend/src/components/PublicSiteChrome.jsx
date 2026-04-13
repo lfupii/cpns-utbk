@@ -62,7 +62,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
               className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
             >
               <div className="landing-nav-links">
-                <Link to="/#tentang" onClick={closeMobileMenu}>Tentang</Link>
+                <Link to="/tentang" onClick={closeMobileMenu}>Tentang</Link>
                 <Link to="/#keunggulan" onClick={closeMobileMenu}>Fitur</Link>
                 <Link to="/#paket" onClick={closeMobileMenu}>Program</Link>
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>

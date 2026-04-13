@@ -725,8 +725,7 @@ textarea:focus-visible {
   border: 1px solid rgba(214, 226, 240, 0.95);
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 20px 38px rgba(41, 87, 143, 0.14);
-  transition: transform 180ms ease, box-shadow 180ms ease;
-  animation: softRise 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: box-shadow 180ms ease;
 }
 
 .landing-hero-floating-card span,
@@ -1375,12 +1374,15 @@ textarea:focus-visible {
 
 .landing-package-mini-card {
   position: absolute;
+  top: 50%;
   right: 16px;
-  bottom: 16px;
+  left: calc(58% + 16px);
+  bottom: auto;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  min-width: 180px;
+  min-width: 0;
   padding: 0.95rem 1rem;
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.88);

@@ -656,10 +656,10 @@ textarea:focus-visible {
   border: 1px solid rgba(214, 226, 240, 0.95);
   background: rgba(255, 255, 255, 0.88);
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  animation: softRise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .landing-hero-dashboard-panel:hover,
-.landing-hero-floating-card:hover,
 .landing-benefit-pill:hover,
 .landing-hero-proof-card:hover {
   transform: translateY(-3px);
@@ -726,6 +726,7 @@ textarea:focus-visible {
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 20px 38px rgba(41, 87, 143, 0.14);
   transition: transform 180ms ease, box-shadow 180ms ease;
+  animation: softRise 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .landing-hero-floating-card span,
@@ -749,13 +750,11 @@ textarea:focus-visible {
 .landing-hero-floating-card-top {
   top: 0;
   left: 0;
-  animation: landingFloat 5s ease-in-out infinite;
 }
 
 .landing-hero-floating-card-bottom {
   right: 0;
   bottom: 0.25rem;
-  animation: landingFloat 5s ease-in-out infinite 1.4s;
 }
 
 .landing-hero-proof-grid {
@@ -774,6 +773,7 @@ textarea:focus-visible {
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 18px 34px rgba(21, 63, 116, 0.06);
   transition: transform 180ms ease, box-shadow 180ms ease;
+  animation: softRise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .landing-hero-proof-card strong,
@@ -820,6 +820,22 @@ textarea:focus-visible {
   font-size: 0.9rem;
   font-weight: 700;
   transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  animation: softRise 0.58s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.landing-benefit-pill:nth-child(2),
+.landing-hero-proof-card:nth-child(2),
+.landing-hero-dashboard-panel:nth-child(2),
+.landing-package-card:nth-child(2),
+.landing-highlight-card:nth-child(2),
+.landing-quote-card:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.landing-benefit-pill:nth-child(3),
+.landing-hero-proof-card:nth-child(3),
+.landing-highlight-card:nth-child(3) {
+  animation-delay: 220ms;
 }
 
 .landing-hero-actions {
@@ -1210,6 +1226,7 @@ textarea:focus-visible {
 
 .landing-highlight-card {
   padding: 1.5rem;
+  animation: softRise 0.72s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .landing-highlight-card h3 {
@@ -1253,6 +1270,7 @@ textarea:focus-visible {
 
 .landing-package-card {
   padding: 1.5rem;
+  animation: softRise 0.72s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .landing-package-featured {
@@ -1333,6 +1351,17 @@ textarea:focus-visible {
   overflow: hidden;
 }
 
+.landing-package-visual-media {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 58%;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  border-radius: 1.45rem 1rem 1rem 1.45rem;
+  box-shadow: inset -22px 0 30px rgba(255, 255, 255, 0.28);
+}
+
 .landing-package-orb {
   position: absolute;
   top: 18px;
@@ -1341,6 +1370,7 @@ textarea:focus-visible {
   height: 116px;
   border-radius: 50%;
   filter: blur(0.2px);
+  opacity: 0;
 }
 
 .landing-package-mini-card {
@@ -1356,6 +1386,7 @@ textarea:focus-visible {
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(214, 226, 240, 0.95);
   box-shadow: 0 18px 34px rgba(41, 87, 143, 0.1);
+  z-index: 1;
 }
 
 .landing-package-mini-card span {

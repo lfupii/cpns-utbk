@@ -104,6 +104,7 @@ export default function Home() {
       slug: 'utbk',
       title: 'UTBK',
       accent: 'landing-package-accent-utbk',
+      visualImage: 'https://images.pexels.com/photos/6146970/pexels-photo-6146970.jpeg?auto=compress&cs=tinysrgb&w=1200',
       price: Number(utbkSource?.price ?? 5000),
       source: utbkSource,
       badge: 'Paling Hemat',
@@ -118,6 +119,7 @@ export default function Home() {
       slug: 'cpns',
       title: 'CPNS',
       accent: 'landing-package-accent-cpns',
+      visualImage: 'https://images.pexels.com/photos/10041250/pexels-photo-10041250.jpeg?auto=compress&cs=tinysrgb&w=1200',
       price: Number(cpnsSource?.price ?? 10000),
       source: cpnsSource,
       badge: 'Favorit Peserta',
@@ -426,6 +428,11 @@ export default function Home() {
                 <p className="landing-package-description">{pkg.subtitle}</p>
 
                 <div className="landing-package-visual">
+                  <div
+                    className="landing-package-visual-media"
+                    style={{ backgroundImage: `linear-gradient(90deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url('${pkg.visualImage}')` }}
+                    aria-hidden="true"
+                  />
                   <div className="landing-package-orb"></div>
                   <div className="landing-package-mini-card">
                     <span>Smart Focus</span>

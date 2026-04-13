@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext';
 import apiClient from '../api';
 import ProfileDropdown from '../components/ProfileDropdown';
 import BrandLogo from '../components/BrandLogo';
+import ThemeToggle from '../components/ThemeToggle';
 import { businessProfile } from '../siteContent';
 
 export default function Home() {
@@ -11,6 +12,7 @@ export default function Home() {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [dashboardData, setDashboardData] = useState({
@@ -78,6 +80,19 @@ export default function Home() {
       ignore = true;
     };
   }, [user]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 12);
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -215,7 +230,7 @@ export default function Home() {
 
   return (
     <div className="landing-shell">
-      <nav className="landing-navbar">
+      <nav className={`landing-navbar ${isScrolled ? 'landing-navbar-scrolled' : ''}`}>
         <div className={`container landing-navbar-inner ${user ? 'landing-navbar-inner-authenticated' : ''}`}>
           <div className="landing-navbar-brand">
             <BrandLogo />
@@ -246,6 +261,7 @@ export default function Home() {
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
                 <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
+              <ThemeToggle mobile onToggle={closeMobileMenu} />
               {!user && (
                 <div className="landing-nav-panel-actions">
                   <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>
@@ -260,6 +276,7 @@ export default function Home() {
           </div>
 
           <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
+            <ThemeToggle />
             {user ? (
               <ProfileDropdown
                 displayName={displayName}
@@ -391,7 +408,9 @@ export default function Home() {
           <div className="container">
             <div className="landing-about-band">
               <div className="landing-about-copy">
-                <h2>Tentang Ujiin, tempat belajar yang bikin progres lebih kebaca.</h2>
+                <h2>
+                  Tentang <span>Ujiin</span>
+                </h2>
                 <p>
                   Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
                   latihan bertahap, simulasi tryout, dan hasil evaluasi yang langsung bisa dibaca
@@ -428,13 +447,6 @@ export default function Home() {
                 <div className="landing-about-stat landing-about-stat-bottom">
                   <span>Fokus utama</span>
                   <strong>CPNS dan UTBK dalam satu flow</strong>
-                </div>
-
-                <div className="landing-about-activity" aria-hidden="true">
-                  <span className="landing-about-activity-chip">Belajar harian</span>
-                  <div className="landing-about-activity-line landing-about-activity-line-wide" />
-                  <div className="landing-about-activity-line" />
-                  <div className="landing-about-activity-line landing-about-activity-line-short" />
                 </div>
               </div>
             </div>

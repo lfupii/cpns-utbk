@@ -288,144 +288,98 @@ export default function Home() {
         )}
 
         <section className="landing-hero" id="tentang">
-          <div className="container landing-hero-stack">
-            <div className="landing-hero-grid">
-              <div className="landing-hero-copy">
-                <span className="landing-kicker">UTBK dan CPNS dalam satu ritme belajar</span>
-                <h1>
-                  Skor Naik,
-                  <br />
-                  Arah Belajar
-                  <br />
-                  <span>Lebih Jelas</span>
-                </h1>
+          <div className="container landing-hero-asymmetric">
+            <div className="landing-hero-copy landing-hero-copy-modern">
+              <span className="landing-kicker">UTBK dan CPNS dalam satu ritme belajar</span>
+              <h1>
+                Belajar,
+                <br />
+                Latihan,
+                <br />
+                <span>Naikkan Skor.</span>
+              </h1>
 
-                <div className="landing-pill">
-                  <span className="landing-pill-icon">●</span>
-                  <span>Preview dulu, aktifkan saat siap.</span>
-                </div>
+              <p>
+                Preview dulu, simpan progres saat login, dan buka materi penuh saat paket aktif.
+              </p>
 
-                <p>
-                  Masuk dari materi, lanjut ke mini test, lalu tutup dengan tryout penuh.
-                </p>
-
-                <div className="landing-benefit-strip" aria-label="Fitur utama">
-                  {heroBenefits.map((item) => (
-                    <span key={item} className="landing-benefit-pill">{item}</span>
-                  ))}
-                </div>
-
-                <div className="landing-hero-actions">
-                  <a href="#paket" className="btn btn-primary landing-cta-secondary">
-                    Lihat Paket
-                  </a>
-                </div>
-
-                <div className="landing-hero-proof-grid" aria-label="Ringkasan layanan">
-                  {heroProofs.map((proof) => (
-                    <div className="landing-hero-proof-card" key={proof.label}>
-                      <strong>{proof.value}</strong>
-                      <span>{proof.label}</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="landing-benefit-strip" aria-label="Fitur utama">
+                {heroBenefits.map((item) => (
+                  <span key={item} className="landing-benefit-pill">{item}</span>
+                ))}
               </div>
 
-              <aside className="landing-hero-sidecard">
-                <div className="landing-showcase-badge">{user ? `Halo, ${firstName}` : 'Mode preview terbuka'}</div>
-                <h3>Satu flow. Dua target.</h3>
+              <div className="landing-hero-actions">
+                <a href="#paket" className="btn btn-primary landing-cta-secondary">
+                  Lihat Paket
+                </a>
+              </div>
 
-                <div className="landing-side-highlight-list">
-                  {sideHighlights.map((item) => (
-                    <div className="landing-side-highlight" key={item.title}>
-                      <strong>{item.title}</strong>
-                      <span>{item.detail}</span>
-                    </div>
-                  ))}
-                </div>
-              </aside>
+              <div className="landing-hero-proof-grid" aria-label="Ringkasan layanan">
+                {heroProofs.map((proof) => (
+                  <div className="landing-hero-proof-card" key={proof.label}>
+                    <strong>{proof.value}</strong>
+                    <span>{proof.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="landing-showcase-panel landing-showcase-panel-wide" key={user?.userId || 'guest'}>
-              <div className="landing-showcase-summary">
-                <div className="landing-showcase-summary-copy">
-                  <span className="landing-showcase-summary-label">{dashboardSummaryLabel}</span>
-                  <h3>{dashboardSummaryTitle}</h3>
-                  <p>{dashboardSummaryText}</p>
-                </div>
-
-                <div className="landing-showcase-progress-card">
-                  <span className="landing-showcase-progress-account">
-                    {dashboardData.loading ? 'Memuat data akun...' : user ? displayName : 'Guest preview'}
-                  </span>
-                  <strong>{dashboardPercent}%</strong>
-                  <div className="landing-showcase-progress">
-                    <span style={{ width: `${dashboardPercent}%` }} />
-                  </div>
-                  <small>
-                    {!user
-                      ? 'Logout kembali ke preview.'
-                      : hasActivePackage
-                        ? `${activePackageCount} paket aktif, ${completedTryoutCount} tryout.`
-                        : 'Belum ada paket aktif.'}
-                  </small>
-                </div>
+            <div className="landing-hero-visual" key={user?.userId || 'guest'}>
+              <div className="landing-hero-floating-card landing-hero-floating-card-top">
+                <span>{user ? 'Akun aktif' : 'Guest mode'}</span>
+                <strong>{user ? displayName : 'Preview materi terbuka'}</strong>
               </div>
 
-              <div className="landing-showcase-lanes">
-                <div className="landing-showcase-lane">
-                  <span className="landing-showcase-lane-label">Agenda berikutnya</span>
-                  <div className="landing-showcase-task-list">
-                    {dashboardQueue.map((item) => (
-                      <span key={item}>{item}</span>
+              <div className="landing-hero-dashboard">
+                <div className="landing-hero-dashboard-head">
+                  <div className="landing-hero-dashboard-copy">
+                    <span className="landing-showcase-badge">{dashboardSummaryLabel}</span>
+                    <h3>{dashboardSummaryTitle}</h3>
+                    <p>{dashboardSummaryText}</p>
+                  </div>
+
+                  <div className="landing-hero-score-pill">
+                    <strong>{dashboardPercent}%</strong>
+                    <small>{dashboardData.loading ? 'sync...' : user ? 'akun aktif' : 'preview'}</small>
+                  </div>
+                </div>
+
+                <div className="landing-showcase-progress landing-showcase-progress-hero">
+                  <span style={{ width: `${dashboardPercent}%` }} />
+                </div>
+
+                <div className="landing-hero-dashboard-grid">
+                  <div className="landing-hero-dashboard-panel">
+                    <span className="landing-showcase-lane-label">Lanjut berikutnya</span>
+                    <div className="landing-hero-step-list">
+                      {dashboardQueue.map((item, index) => (
+                        <div className="landing-hero-step" key={item}>
+                          <span>{index + 1}</span>
+                          <strong>{item}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="landing-hero-dashboard-panel landing-hero-dashboard-panel-stats">
+                    {sideHighlights.map((item) => (
+                      <div className="landing-side-highlight" key={item.title}>
+                        <strong>{item.title}</strong>
+                        <span>{item.detail}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
+              </div>
 
-                <div className="landing-showcase-lane">
-                  <span className="landing-showcase-lane-label">Status akun</span>
-                  <div className="landing-showcase-stat-grid landing-showcase-stat-grid-compact">
-                    <div className="landing-showcase-stat">
-                      <strong>{user ? activePackageCount : '2'}</strong>
-                      <span>{user ? 'Paket aktif' : 'Program utama'}</span>
-                    </div>
-                    <div className="landing-showcase-stat">
-                      <strong>{user ? completedTryoutCount : 'Preview'}</strong>
-                      <span>{user ? 'Tryout selesai' : 'Materi awal terbuka'}</span>
-                    </div>
-                    <div className="landing-showcase-stat">
-                      <strong>{user ? totalRemainingAttempts : 'Login'}</strong>
-                      <span>{user ? 'Sisa attempt' : 'Untuk simpan progres'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="landing-showcase-lane">
-                  <span className="landing-showcase-lane-label">Alur belajar</span>
-                  <div className="landing-showcase-flow">
-                    <div className="landing-showcase-flow-item">
-                      <span>01</span>
-                      <div>
-                        <strong>Pilih subtes</strong>
-                        <p>Mulai dari yang paling perlu.</p>
-                      </div>
-                    </div>
-                    <div className="landing-showcase-flow-item">
-                      <span>02</span>
-                      <div>
-                        <strong>Baca materi</strong>
-                        <p>Preview untuk guest, full untuk paket aktif.</p>
-                      </div>
-                    </div>
-                    <div className="landing-showcase-flow-item">
-                      <span>03</span>
-                      <div>
-                        <strong>Tutup dengan tryout</strong>
-                        <p>Hasil langsung masuk ke akun aktif.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div className="landing-hero-floating-card landing-hero-floating-card-bottom">
+                <span>{user ? (hasActivePackage ? 'Tryout tersimpan' : 'Siap diaktifkan') : 'Tanpa login'}</span>
+                <strong>
+                  {user
+                    ? (hasActivePackage ? `${completedTryoutCount} hasil masuk` : 'Pilih paket untuk full access')
+                    : 'Lihat materi awal lebih dulu'}
+                </strong>
               </div>
             </div>
           </div>

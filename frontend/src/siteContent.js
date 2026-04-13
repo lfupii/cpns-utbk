@@ -39,42 +39,6 @@ export const contactChannels = [
   },
 ];
 
-export const aboutPrinciples = [
-  {
-    title: 'Belajar lebih terarah',
-    description:
-      'Satu akun dipakai untuk melihat materi, latihan bertahap, dan tryout penuh tanpa pindah-pindah alur belajar.',
-  },
-  {
-    title: 'Akses digital yang ringan',
-    description:
-      'Platform dirancang agar peserta bisa mulai dari preview, lalu lanjut ke paket aktif saat sudah siap belajar serius.',
-  },
-  {
-    title: 'Evaluasi cepat',
-    description:
-      'Hasil tryout ditampilkan instan agar peserta cepat tahu progres, kekuatan, dan bagian yang masih perlu dikejar.',
-  },
-];
-
-export const aboutJourney = [
-  {
-    title: 'Mulai dari preview',
-    description:
-      'Pengguna bisa mengenal tampilan platform dan alur belajar sebelum memutuskan membeli paket.',
-  },
-  {
-    title: 'Aktifkan program',
-    description:
-      'Setelah transaksi berhasil, akses paket dibuka sesuai kategori, masa aktif, dan batas percobaan yang berlaku.',
-  },
-  {
-    title: 'Belajar dan ukur progres',
-    description:
-      'Materi, latihan, dan hasil tryout dipakai sebagai dasar evaluasi supaya ritme belajar tetap konsisten.',
-  },
-];
-
 export const termsSections = [
   {
     title: 'Ketentuan Penggunaan',

@@ -391,7 +391,7 @@ export default function Home() {
           <div className="container">
             <div className="landing-about-band">
               <div className="landing-about-copy">
-                <h2>Tentang Ujiin</h2>
+                <h2>Tentang Ujiin, tempat belajar yang bikin progres lebih kebaca.</h2>
                 <p>
                   Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
                   latihan bertahap, simulasi tryout, dan hasil evaluasi yang langsung bisa dibaca
@@ -402,6 +402,12 @@ export default function Home() {
                   <span className="landing-about-tag">Materi belajar</span>
                   <span className="landing-about-tag">Latihan bertahap</span>
                   <span className="landing-about-tag">Tryout online</span>
+                </div>
+
+                <div className="landing-about-actions">
+                  <a href="#paket" className="btn btn-primary">
+                    Lihat Program
+                  </a>
                 </div>
               </div>
 
@@ -422,6 +428,13 @@ export default function Home() {
                 <div className="landing-about-stat landing-about-stat-bottom">
                   <span>Fokus utama</span>
                   <strong>CPNS dan UTBK dalam satu flow</strong>
+                </div>
+
+                <div className="landing-about-activity" aria-hidden="true">
+                  <span className="landing-about-activity-chip">Belajar harian</span>
+                  <div className="landing-about-activity-line landing-about-activity-line-wide" />
+                  <div className="landing-about-activity-line" />
+                  <div className="landing-about-activity-line landing-about-activity-line-short" />
                 </div>
               </div>
             </div>

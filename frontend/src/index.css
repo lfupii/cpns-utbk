@@ -1172,12 +1172,50 @@ textarea:focus-visible {
   }
 }
 
+@keyframes aboutSweep {
+  0%,
+  100% {
+    transform: translateX(0) rotate(12deg);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateX(230%) rotate(12deg);
+    opacity: 0.9;
+  }
+}
+
+@keyframes aboutMediaDrift {
+  0%,
+  100% {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.07) translate3d(-10px, -6px, 0);
+  }
+}
+
+@keyframes aboutBarPulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scaleX(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-hero-copy-modern,
   .landing-hero-dashboard,
   .landing-pill,
   .landing-hero-floating-card,
-  .landing-showcase-progress-hero span::after {
+  .landing-showcase-progress-hero span::after,
+  .landing-about-media,
+  .landing-about-stat,
+  .landing-about-visual::before,
+  .landing-about-activity-line {
     animation: none !important;
   }
 }
@@ -1319,6 +1357,10 @@ textarea:focus-visible {
   margin-top: 1.35rem;
 }
 
+.landing-about-actions {
+  margin-top: 1.35rem;
+}
+
 .landing-about-tag {
   display: inline-flex;
   align-items: center;
@@ -1343,12 +1385,25 @@ textarea:focus-visible {
   background: linear-gradient(180deg, rgba(245, 249, 255, 0.88), rgba(232, 242, 255, 0.98));
 }
 
+.landing-about-visual::before {
+  content: '';
+  position: absolute;
+  inset: -18% auto -18% -38%;
+  width: 52%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0));
+  transform: rotate(12deg);
+  z-index: 1;
+  animation: aboutSweep 7.2s ease-in-out infinite;
+}
+
 .landing-about-media {
   position: absolute;
   inset: 0;
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
+  transform: scale(1.02);
+  animation: aboutMediaDrift 10s ease-in-out infinite;
 }
 
 .landing-about-visual::after {
@@ -1373,6 +1428,7 @@ textarea:focus-visible {
   border: 1px solid rgba(214, 226, 240, 0.95);
   box-shadow: 0 18px 38px rgba(23, 41, 70, 0.12);
   backdrop-filter: blur(14px);
+  animation: landingFloat 5.6s ease-in-out infinite;
 }
 
 .landing-about-stat span {
@@ -1397,6 +1453,58 @@ textarea:focus-visible {
   right: 1rem;
   left: auto;
   bottom: 1rem;
+  animation-delay: 1.2s;
+}
+
+.landing-about-activity {
+  position: absolute;
+  left: 50%;
+  bottom: 1.25rem;
+  z-index: 1;
+  width: min(72%, 280px);
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  transform: translateX(-50%);
+  background: rgba(13, 24, 45, 0.74);
+  border: 1px solid rgba(167, 195, 228, 0.22);
+  box-shadow: 0 18px 38px rgba(11, 21, 40, 0.28);
+  backdrop-filter: blur(16px);
+}
+
+.landing-about-activity-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.landing-about-activity-line {
+  height: 0.56rem;
+  margin-top: 0.72rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(72, 189, 255, 0.92), rgba(157, 205, 255, 0.48));
+  transform-origin: left center;
+  animation: aboutBarPulse 3.4s ease-in-out infinite;
+}
+
+.landing-about-activity-line-wide {
+  width: 100%;
+}
+
+.landing-about-activity-line-short {
+  width: 56%;
+  animation-delay: 0.9s;
+}
+
+.landing-about-activity-line:not(.landing-about-activity-line-wide):not(.landing-about-activity-line-short) {
+  width: 78%;
+  animation-delay: 0.45s;
 }
 
 .landing-package-grid {
@@ -4526,6 +4634,11 @@ textarea:focus-visible {
     gap: 0.65rem;
   }
 
+  .landing-about-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
   .landing-about-stat {
     max-width: calc(100% - 2rem);
   }
@@ -4533,6 +4646,11 @@ textarea:focus-visible {
   .landing-about-stat-bottom {
     left: 1rem;
     right: 1rem;
+  }
+
+  .landing-about-activity {
+    width: calc(100% - 2rem);
+    max-width: none;
   }
 
   .landing-benefit-strip {

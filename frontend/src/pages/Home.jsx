@@ -391,38 +391,17 @@ export default function Home() {
           <div className="container">
             <div className="landing-about-band">
               <div className="landing-about-copy">
-                <span className="landing-kicker">Tentang Ujiin</span>
-                <h2>Belajar lebih fokus. Progres lebih cepat terbaca.</h2>
+                <h2>Tentang Ujiin</h2>
                 <p>
                   Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
                   latihan bertahap, simulasi tryout, dan hasil evaluasi yang langsung bisa dibaca
                   dari satu akun.
                 </p>
-                <p>
-                  Tujuannya sederhana: bikin proses belajar terasa lebih jelas dari awal, lebih
-                  ringan untuk dimulai, dan lebih mudah dipantau saat ritme belajarnya mulai
-                  terbentuk.
-                </p>
 
-                <div className="landing-about-points">
-                  <div className="landing-about-point">
-                    <strong>Preview dulu, lanjut saat siap</strong>
-                    <span>
-                      Kenali materi dan alur platform sebelum pindah ke paket aktif.
-                    </span>
-                  </div>
-                  <div className="landing-about-point">
-                    <strong>Latihan dan tryout dalam satu ritme</strong>
-                    <span>
-                      Dari sesi singkat sampai simulasi penuh, semuanya dirancang tetap nyambung.
-                    </span>
-                  </div>
-                  <div className="landing-about-point">
-                    <strong>Hasil tidak berhenti di skor</strong>
-                    <span>
-                      Evaluasi dibuat cepat dibaca supaya kamu tahu bagian yang perlu dikejar.
-                    </span>
-                  </div>
+                <div className="landing-about-tags" aria-label="Fokus utama Ujiin">
+                  <span className="landing-about-tag">Materi belajar</span>
+                  <span className="landing-about-tag">Latihan bertahap</span>
+                  <span className="landing-about-tag">Tryout online</span>
                 </div>
               </div>
 
@@ -445,21 +424,6 @@ export default function Home() {
                   <strong>CPNS dan UTBK dalam satu flow</strong>
                 </div>
               </div>
-            </div>
-
-            <div className="landing-about-metrics">
-              <article className="landing-about-metric">
-                <strong>1 akun</strong>
-                <span>untuk materi, latihan, dan riwayat hasil.</span>
-              </article>
-              <article className="landing-about-metric">
-                <strong>2 fokus</strong>
-                <span>CPNS dan UTBK dengan jalur belajar yang sama-sama ringkas.</span>
-              </article>
-              <article className="landing-about-metric">
-                <strong>Hasil instan</strong>
-                <span>agar evaluasi belajar tidak tertunda setelah sesi selesai.</span>
-              </article>
             </div>
           </div>
         </section>

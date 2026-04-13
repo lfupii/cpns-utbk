@@ -571,36 +571,29 @@ textarea:focus-visible {
 
 .landing-hero-copy p {
   max-width: 680px;
-  font-size: 1.16rem;
-  line-height: 1.7;
+  font-size: 1.08rem;
+  line-height: 1.6;
   color: #5b677c;
 }
 
-.landing-bullet-list {
-  margin-top: 1.4rem;
-  display: grid;
-  gap: 0.9rem;
+.landing-benefit-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.35rem;
 }
 
-.landing-bullet-list span {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  align-items: start;
-  gap: 0.8rem;
-  color: #3c4d63;
-  font-weight: 600;
-}
-
-.landing-bullet-list span::before {
-  content: '';
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at center, #2d8cff 0 30%, transparent 31%),
-    rgba(45, 140, 255, 0.12);
-  border: 1px solid rgba(45, 140, 255, 0.18);
+.landing-benefit-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  color: #314156;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .landing-hero-actions {
@@ -620,7 +613,7 @@ textarea:focus-visible {
 .landing-hero-sidecard {
   display: grid;
   align-content: start;
-  gap: 1.15rem;
+  gap: 1rem;
   padding: 1.4rem;
   border-radius: 1.5rem;
   border: 1px solid rgba(214, 226, 240, 0.95);
@@ -630,24 +623,20 @@ textarea:focus-visible {
 }
 
 .landing-hero-sidecard h3 {
-  font-size: 2rem;
-  line-height: 1.08;
+  font-size: 1.7rem;
+  line-height: 1.05;
   color: #17233b;
-}
-
-.landing-hero-sidecard p {
-  color: #64748b;
-  font-size: 1rem;
-  line-height: 1.7;
 }
 
 .landing-side-highlight-list {
   display: grid;
-  gap: 0.8rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
 }
 
 .landing-side-highlight {
-  padding: 0.95rem 1rem;
+  min-height: 116px;
+  padding: 0.9rem;
   border-radius: 1rem;
   border: 1px solid rgba(214, 226, 240, 0.95);
   background: rgba(255, 255, 255, 0.88);
@@ -660,14 +649,16 @@ textarea:focus-visible {
 
 .landing-side-highlight strong {
   color: #18243d;
-  font-size: 1rem;
+  font-size: 0.88rem;
+  text-transform: uppercase;
 }
 
 .landing-side-highlight span {
-  margin-top: 0.35rem;
-  color: #69788f;
-  line-height: 1.5;
-  font-size: 0.92rem;
+  margin-top: 0.7rem;
+  color: #17233b;
+  line-height: 1.15;
+  font-size: 1.35rem;
+  font-weight: 800;
 }
 
 .landing-showcase-panel {
@@ -734,17 +725,18 @@ textarea:focus-visible {
 .landing-showcase-panel h3 {
   margin-top: 0.95rem;
   max-width: 680px;
-  font-size: 2rem;
-  line-height: 1.08;
+  font-size: 1.72rem;
+  line-height: 1.04;
   letter-spacing: 0;
   color: #17233b;
 }
 
 .landing-showcase-summary-copy p {
-  margin-top: 0.7rem;
+  margin-top: 0.55rem;
   max-width: 720px;
   color: #64748b;
-  line-height: 1.7;
+  line-height: 1.5;
+  font-size: 0.95rem;
 }
 
 .landing-showcase-progress-card {
@@ -833,7 +825,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  min-height: 34px;
+  min-height: 38px;
   padding: 0 0.75rem;
   border-radius: 0.8rem;
   background: #ffffff;
@@ -850,14 +842,13 @@ textarea:focus-visible {
 }
 
 .landing-showcase-flow {
-  margin-top: 1rem;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.8rem;
 }
 
 .landing-showcase-flow-item {
-  min-height: 128px;
+  min-height: 110px;
   padding: 0.9rem;
   border: 1px solid rgba(214, 226, 240, 0.95);
   border-radius: 1rem;
@@ -887,8 +878,8 @@ textarea:focus-visible {
 .landing-showcase-flow-item p {
   margin-top: 0.35rem;
   color: #64748b;
-  font-size: 0.84rem;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 .landing-showcase-stat-grid {
@@ -919,46 +910,6 @@ textarea:focus-visible {
   margin-top: 0.2rem;
   color: #718096;
   font-size: 0.88rem;
-}
-
-.landing-showcase-flow {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.landing-showcase-flow-item {
-  min-height: 0;
-  padding: 0.9rem;
-  border: 1px solid rgba(214, 226, 240, 0.95);
-  border-radius: 1rem;
-  background: #ffffff;
-}
-
-.landing-showcase-flow-item > span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: #172554;
-  color: #ffffff;
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.landing-showcase-flow-item strong {
-  display: block;
-  margin-top: 0.75rem;
-  color: #17233b;
-  font-size: 0.98rem;
-}
-
-.landing-showcase-flow-item p {
-  margin-top: 0.35rem;
-  color: #64748b;
-  font-size: 0.84rem;
-  line-height: 1.45;
 }
 
 .landing-section {
@@ -4084,6 +4035,15 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .landing-benefit-strip {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .landing-side-highlight-list {
+    grid-template-columns: 1fr;
+  }
+
   .landing-package-footer {
     flex-direction: column;
     align-items: stretch;
@@ -4123,7 +4083,7 @@ textarea:focus-visible {
   }
 
   .landing-showcase-panel h3 {
-    font-size: 1.85rem;
+    font-size: 1.55rem;
   }
 
   .landing-hero-sidecard,

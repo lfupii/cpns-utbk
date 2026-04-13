@@ -240,7 +240,7 @@ export default function Home() {
               className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
             >
               <div className="landing-nav-links">
-                <Link to="/tentang" onClick={closeMobileMenu}>Tentang</Link>
+                <a href="#tentang" onClick={closeMobileMenu}>Tentang</a>
                 <a href="#keunggulan" onClick={closeMobileMenu}>Fitur</a>
                 <a href="#paket" onClick={closeMobileMenu}>Program</a>
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
@@ -289,7 +289,7 @@ export default function Home() {
           </div>
         )}
 
-        <section className="landing-hero" id="tentang">
+        <section className="landing-hero">
           <div className="container landing-hero-asymmetric">
             <div className="landing-hero-copy landing-hero-copy-modern">
               <span className="landing-kicker">UTBK dan CPNS dalam satu ritme belajar</span>
@@ -383,6 +383,43 @@ export default function Home() {
                     : 'Lihat materi awal lebih dulu'}
                 </strong>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-section" id="tentang">
+          <div className="container">
+            <div className="landing-section-heading">
+              <h2>Tentang Ujiin</h2>
+              <p>
+                Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
+                latihan bertahap, simulasi tryout, dan hasil evaluasi yang bisa langsung dibaca
+                dari satu akun.
+              </p>
+            </div>
+
+            <div className="landing-highlight-grid">
+              <article className="landing-highlight-card">
+                <h3>Mulai tanpa ribet</h3>
+                <p>
+                  Pengguna bisa melihat preview lebih dulu, memahami alur belajarnya, lalu lanjut
+                  ke paket aktif saat sudah siap.
+                </p>
+              </article>
+              <article className="landing-highlight-card">
+                <h3>Belajar lebih terarah</h3>
+                <p>
+                  Materi, latihan, dan tryout disusun supaya kamu tidak cuma mengerjakan soal, tapi
+                  juga tahu bagian mana yang perlu dikejar.
+                </p>
+              </article>
+              <article className="landing-highlight-card">
+                <h3>Progres cepat terbaca</h3>
+                <p>
+                  Setelah sesi selesai, hasilnya langsung muncul agar evaluasi belajar terasa
+                  praktis dan tidak menunggu lama.
+                </p>
+              </article>
             </div>
           </div>
         </section>

@@ -147,31 +147,31 @@ export default function Home() {
       ? 'Akun belajar aktif'
       : 'Akun siap diaktifkan';
   const dashboardSummaryTitle = !user
-    ? 'Masuk ke materi preview dulu, lalu lanjutkan saat sudah siap.'
+    ? 'Preview dulu. Lanjut saat siap.'
     : hasActivePackage
-      ? `Halo ${firstName}, lanjutkan sesi belajarmu dari titik terakhir.`
-      : `Halo ${firstName}, akunmu sudah masuk dan tinggal pilih paket yang mau diaktifkan.`;
+      ? `Halo ${firstName}, progresmu siap dilanjutkan.`
+      : `Halo ${firstName}, pilih paket untuk mulai penuh.`;
   const dashboardSummaryText = !user
-    ? 'Panel ini tidak menyimpan progres akun. Setelah login, ringkasan belajar akan menyesuaikan akun yang sedang aktif.'
+    ? 'Guest hanya lihat preview.'
     : hasActivePackage
-      ? 'Ringkasan ini mengambil data paket aktif dan riwayat tryout dari akun yang sedang login.'
-      : 'Belum ada paket aktif di akun ini, jadi dashboard menampilkan langkah awal yang perlu diselesaikan lebih dulu.';
+      ? 'Data diambil dari akun aktif.'
+      : 'Belum ada paket aktif di akun ini.';
   const dashboardQueue = !user
     ? [
-        'Masuk untuk menyimpan progres dan milestone',
-        'Buka preview materi per subtes',
-        'Aktifkan paket saat ingin akses penuh',
+        'Login & simpan',
+        'Lihat preview',
+        'Aktifkan paket',
       ]
     : hasActivePackage
       ? [
-          'Lanjutkan materi prioritas yang belum selesai',
-          'Kerjakan mini test subtes terlemah',
-          'Masuk ke tryout penuh dan review hasilnya',
+          'Lanjutkan materi',
+          'Mini test',
+          'Tryout penuh',
         ]
       : [
-          'Pilih paket UTBK atau CPNS yang ingin dibuka',
-          'Baca preview materi untuk cek kecocokan',
-          'Lanjutkan pembayaran agar semua materi aktif',
+          'Pilih paket',
+          'Cek preview',
+          'Aktifkan akses',
         ];
   const heroProofs = [
     {
@@ -187,18 +187,19 @@ export default function Home() {
       label: user ? 'Sisa attempt aktif' : 'Hasil evaluasi cepat',
     },
   ];
+  const heroBenefits = ['Preview materi', 'Mini test', 'Tryout penuh'];
   const sideHighlights = [
     {
       title: 'UTBK',
-      detail: 'TPS, literasi, dan penalaran disusun per subtes agar fokus belajarnya rapi.',
+      detail: '7 subtes',
     },
     {
       title: 'CPNS',
-      detail: 'TWK, TIU, dan TKP dibuka dalam jalur belajar yang mudah diikuti.',
+      detail: 'TWK TIU TKP',
     },
     {
-      title: 'Preview',
-      detail: 'Tanpa login tetap bisa lihat bagian awal materi sebelum lanjut ke paket.',
+      title: 'Guest',
+      detail: 'Preview',
     },
   ];
 
@@ -290,31 +291,28 @@ export default function Home() {
           <div className="container landing-hero-stack">
             <div className="landing-hero-grid">
               <div className="landing-hero-copy">
-                <span className="landing-kicker">Persiapan SKD dan UTBK yang lebih tertata</span>
+                <span className="landing-kicker">UTBK dan CPNS dalam satu ritme belajar</span>
                 <h1>
-                  Belajar Cepat,
+                  Skor Naik,
                   <br />
-                  Tahu Harus
+                  Arah Belajar
                   <br />
-                  <span>Lanjut ke Mana</span>
+                  <span>Lebih Jelas</span>
                 </h1>
 
                 <div className="landing-pill">
                   <span className="landing-pill-icon">●</span>
-                  <span>
-                    Preview materi terbuka lebih dulu, lalu lanjut ke paket saat kamu sudah siap
-                  </span>
+                  <span>Preview dulu, aktifkan saat siap.</span>
                 </div>
 
                 <p>
-                  Mulai dari lihat materi awal, lanjut ke mini test subtes, lalu tutup dengan tryout
-                  penuh. Alurnya dibikin ringkas supaya kamu tidak kehilangan arah di tengah belajar.
+                  Masuk dari materi, lanjut ke mini test, lalu tutup dengan tryout penuh.
                 </p>
 
-                <div className="landing-bullet-list">
-                  <span>Materi dibagi per subtes yang gampang dipilih</span>
-                  <span>Ringkasan hasil dan prioritas belajar langsung terlihat</span>
-                  <span>Dashboard menyesuaikan akun aktif, bukan sisa akun sebelumnya</span>
+                <div className="landing-benefit-strip" aria-label="Fitur utama">
+                  {heroBenefits.map((item) => (
+                    <span key={item} className="landing-benefit-pill">{item}</span>
+                  ))}
                 </div>
 
                 <div className="landing-hero-actions">
@@ -335,11 +333,7 @@ export default function Home() {
 
               <aside className="landing-hero-sidecard">
                 <div className="landing-showcase-badge">{user ? `Halo, ${firstName}` : 'Mode preview terbuka'}</div>
-                <h3>UTBK dan CPNS sekarang punya alur masuk yang lebih jelas dari awal.</h3>
-                <p>
-                  Mulai sebagai guest untuk lihat preview, lalu login saat ingin menyimpan progres,
-                  dan aktifkan paket untuk membuka seluruh materi beserta tryout lengkap.
-                </p>
+                <h3>Satu flow. Dua target.</h3>
 
                 <div className="landing-side-highlight-list">
                   {sideHighlights.map((item) => (
@@ -370,10 +364,10 @@ export default function Home() {
                   </div>
                   <small>
                     {!user
-                      ? 'Saat logout, panel kembali ke mode preview dan progres akun tidak dibawa.'
+                      ? 'Logout kembali ke preview.'
                       : hasActivePackage
-                        ? `${activePackageCount} paket aktif dan ${completedTryoutCount} tryout tersimpan di akun ini.`
-                        : 'Belum ada paket aktif di akun ini, jadi langkah berikutnya adalah memilih paket.'}
+                        ? `${activePackageCount} paket aktif, ${completedTryoutCount} tryout.`
+                        : 'Belum ada paket aktif.'}
                   </small>
                 </div>
               </div>
@@ -413,21 +407,21 @@ export default function Home() {
                       <span>01</span>
                       <div>
                         <strong>Pilih subtes</strong>
-                        <p>Masuk dari materi yang paling butuh perhatian terlebih dahulu.</p>
+                        <p>Mulai dari yang paling perlu.</p>
                       </div>
                     </div>
                     <div className="landing-showcase-flow-item">
                       <span>02</span>
                       <div>
                         <strong>Baca materi</strong>
-                        <p>Guest melihat preview, user berpaket membuka pembahasan penuh.</p>
+                        <p>Preview untuk guest, full untuk paket aktif.</p>
                       </div>
                     </div>
                     <div className="landing-showcase-flow-item">
                       <span>03</span>
                       <div>
                         <strong>Tutup dengan tryout</strong>
-                        <p>Hasil akhir langsung masuk ke riwayat akun yang sedang aktif.</p>
+                        <p>Hasil langsung masuk ke akun aktif.</p>
                       </div>
                     </div>
                   </div>

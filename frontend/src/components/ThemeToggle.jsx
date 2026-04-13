@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTheme } from '../ThemeContext';
 
-export default function ThemeToggle({ mobile = false, onToggle }) {
+export default function ThemeToggle({ mobile = false, dropdown = false, onToggle }) {
   const { isDark, toggleTheme } = useTheme();
 
   const handleClick = () => {
@@ -12,7 +12,7 @@ export default function ThemeToggle({ mobile = false, onToggle }) {
   return (
     <button
       type="button"
-      className={`theme-toggle ${mobile ? 'theme-toggle-mobile' : ''} ${isDark ? 'theme-toggle-on' : ''}`}
+      className={`theme-toggle ${mobile ? 'theme-toggle-mobile' : ''} ${dropdown ? 'theme-toggle-dropdown' : ''} ${isDark ? 'theme-toggle-on' : ''}`}
       aria-label={isDark ? 'Nonaktifkan dark mode' : 'Aktifkan dark mode'}
       aria-pressed={isDark}
       onClick={handleClick}

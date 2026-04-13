@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import ThemeToggle from './ThemeToggle';
 
 export default function ProfileDropdown({
   displayName,
@@ -71,6 +72,9 @@ export default function ProfileDropdown({
         <div className="profile-dropdown-menu">
           <div className="profile-dropdown-menu-header">
             <strong>Halo, {displayName}</strong>
+          </div>
+          <div className="profile-dropdown-theme">
+            <ThemeToggle dropdown onToggle={() => setOpen(false)} />
           </div>
           {isAdmin && (
             <Link to="/admin" className="profile-dropdown-item profile-dropdown-admin">

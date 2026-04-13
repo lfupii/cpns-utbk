@@ -387,38 +387,78 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="landing-section" id="tentang">
+        <section className="landing-section landing-section-about" id="tentang">
           <div className="container">
-            <div className="landing-section-heading">
-              <h2>Tentang Ujiin</h2>
-              <p>
-                Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
-                latihan bertahap, simulasi tryout, dan hasil evaluasi yang bisa langsung dibaca
-                dari satu akun.
-              </p>
+            <div className="landing-about-band">
+              <div className="landing-about-copy">
+                <span className="landing-kicker">Tentang Ujiin</span>
+                <h2>Belajar lebih fokus. Progres lebih cepat terbaca.</h2>
+                <p>
+                  Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
+                  latihan bertahap, simulasi tryout, dan hasil evaluasi yang langsung bisa dibaca
+                  dari satu akun.
+                </p>
+                <p>
+                  Tujuannya sederhana: bikin proses belajar terasa lebih jelas dari awal, lebih
+                  ringan untuk dimulai, dan lebih mudah dipantau saat ritme belajarnya mulai
+                  terbentuk.
+                </p>
+
+                <div className="landing-about-points">
+                  <div className="landing-about-point">
+                    <strong>Preview dulu, lanjut saat siap</strong>
+                    <span>
+                      Kenali materi dan alur platform sebelum pindah ke paket aktif.
+                    </span>
+                  </div>
+                  <div className="landing-about-point">
+                    <strong>Latihan dan tryout dalam satu ritme</strong>
+                    <span>
+                      Dari sesi singkat sampai simulasi penuh, semuanya dirancang tetap nyambung.
+                    </span>
+                  </div>
+                  <div className="landing-about-point">
+                    <strong>Hasil tidak berhenti di skor</strong>
+                    <span>
+                      Evaluasi dibuat cepat dibaca supaya kamu tahu bagian yang perlu dikejar.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="landing-about-visual" aria-label="Ilustrasi belajar bersama Ujiin">
+                <div
+                  className="landing-about-media"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(180deg, rgba(15, 23, 47, 0.1), rgba(15, 23, 47, 0.38)), url('https://images.pexels.com/photos/5905709/pexels-photo-5905709.jpeg?auto=compress&cs=tinysrgb&w=1200')",
+                  }}
+                />
+
+                <div className="landing-about-stat landing-about-stat-top">
+                  <span>Belajar aktif</span>
+                  <strong>Preview, materi, tryout</strong>
+                </div>
+
+                <div className="landing-about-stat landing-about-stat-bottom">
+                  <span>Fokus utama</span>
+                  <strong>CPNS dan UTBK dalam satu flow</strong>
+                </div>
+              </div>
             </div>
 
-            <div className="landing-highlight-grid">
-              <article className="landing-highlight-card">
-                <h3>Mulai tanpa ribet</h3>
-                <p>
-                  Pengguna bisa melihat preview lebih dulu, memahami alur belajarnya, lalu lanjut
-                  ke paket aktif saat sudah siap.
-                </p>
+            <div className="landing-about-metrics">
+              <article className="landing-about-metric">
+                <strong>1 akun</strong>
+                <span>untuk materi, latihan, dan riwayat hasil.</span>
               </article>
-              <article className="landing-highlight-card">
-                <h3>Belajar lebih terarah</h3>
-                <p>
-                  Materi, latihan, dan tryout disusun supaya kamu tidak cuma mengerjakan soal, tapi
-                  juga tahu bagian mana yang perlu dikejar.
-                </p>
+              <article className="landing-about-metric">
+                <strong>2 fokus</strong>
+                <span>CPNS dan UTBK dengan jalur belajar yang sama-sama ringkas.</span>
               </article>
-              <article className="landing-highlight-card">
-                <h3>Progres cepat terbaca</h3>
-                <p>
-                  Setelah sesi selesai, hasilnya langsung muncul agar evaluasi belajar terasa
-                  praktis dan tidak menunggu lama.
-                </p>
+              <article className="landing-about-metric">
+                <strong>Hasil instan</strong>
+                <span>agar evaluasi belajar tidak tertunda setelah sesi selesai.</span>
               </article>
             </div>
           </div>

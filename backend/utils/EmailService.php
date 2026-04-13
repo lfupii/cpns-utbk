@@ -22,17 +22,11 @@ class EmailService {
             return self::sendViaSmtp($toEmail, $toName, $subject, $htmlBody, $textBody);
         } catch (Throwable $error) {
             error_log('SMTP send failed: ' . $error->getMessage());
-        }
-
-        try {
-            return self::sendViaPhpMail($toEmail, $toName, $subject, $htmlBody, $textBody);
-        } catch (Throwable $error) {
-            error_log('mail() send failed: ' . $error->getMessage());
-
             return [
                 'success' => false,
-                'transport' => 'mail',
-                'message' => 'Pengiriman email gagal setelah mencoba SMTP dan mail().',
+                'transport' => 'smtp',
+                'message' => 'Pengiriman email gagal via SMTP.',
+                'debug' => $error->getMessage(),
             ];
         }
     }
@@ -99,47 +93,13 @@ class EmailService {
         ];
     }
 
-    private static function sendViaPhpMail(string $toEmail, string $toName, string $subject, string $htmlBody, string $textBody): array {
-        $boundary = 'boundary_' . bin2hex(random_bytes(12));
-        $encodedSubject = self::encodeHeader($subject);
-        $toHeader = $toName !== ''
-            ? self::encodeHeader($toName) . ' <' . $toEmail . '>'
-            : $toEmail;
-
-        $headers = [
-            'MIME-Version: 1.0',
-            'From: ' . self::formatAddress(FROM_EMAIL, FROM_NAME),
-            'Reply-To: ' . self::formatAddress(FROM_EMAIL, FROM_NAME),
-            'Content-Type: multipart/alternative; boundary="' . $boundary . '"',
-        ];
-
-        $body = '--' . $boundary . "\r\n"
-            . "Content-Type: text/plain; charset=UTF-8\r\n"
-            . "Content-Transfer-Encoding: base64\r\n\r\n"
-            . chunk_split(base64_encode($textBody))
-            . '--' . $boundary . "\r\n"
-            . "Content-Type: text/html; charset=UTF-8\r\n"
-            . "Content-Transfer-Encoding: base64\r\n\r\n"
-            . chunk_split(base64_encode($htmlBody))
-            . '--' . $boundary . "--\r\n";
-
-        $sent = @mail($toHeader, $encodedSubject, $body, implode("\r\n", $headers));
-
-        return [
-            'success' => $sent,
-            'transport' => 'mail',
-            'message' => $sent
-                ? 'Email berhasil dikirim via mail().'
-                : 'Pengiriman email gagal via SMTP dan mail().',
-        ];
-    }
-
     private static function buildMimeMessage(string $toEmail, string $toName, string $subject, string $htmlBody, string $textBody): string {
         $boundary = 'boundary_' . bin2hex(random_bytes(12));
         $headers = [
             'Date: ' . date(DATE_RFC2822),
             'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . self::detectHostname() . '>',
             'From: ' . self::formatAddress(FROM_EMAIL, FROM_NAME),
+            'Reply-To: ' . self::formatAddress(FROM_EMAIL, FROM_NAME),
             'To: ' . self::formatAddress($toEmail, $toName),
             'Subject: ' . self::encodeHeader($subject),
             'MIME-Version: 1.0',

@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext';
 import apiClient from '../api';
 import ProfileDropdown from '../components/ProfileDropdown';
 import BrandLogo from '../components/BrandLogo';
+import ThemeToggle from '../components/ThemeToggle';
 import { businessProfile } from '../siteContent';
 
 export default function Home() {
@@ -260,6 +261,7 @@ export default function Home() {
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
                 <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
+              <ThemeToggle mobile onToggle={closeMobileMenu} />
               {!user && (
                 <div className="landing-nav-panel-actions">
                   <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>

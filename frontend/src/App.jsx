@@ -15,6 +15,7 @@ import TestHistory from './pages/TestHistory';
 import AdminPanel from './pages/AdminPanel';
 import AdminLearningMaterialEditor from './pages/AdminLearningMaterialEditor';
 import Contact from './pages/Contact';
+import About from './pages/About';
 import TermsConditions from './pages/TermsConditions';
 import './index.css';
 
@@ -77,6 +78,7 @@ function AppRoutes() {
       <div key={location.pathname} className="route-stage">
         <Routes location={location}>
           <Route path="/" element={<Home />} />
+          <Route path="/tentang" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/terms" element={<TermsConditions />} />
           <Route path="/refund-policy" element={<Navigate to="/terms#refund-policy" replace />} />

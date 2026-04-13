@@ -240,7 +240,7 @@ export default function Home() {
               className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
             >
               <div className="landing-nav-links">
-                <a href="#tentang" onClick={closeMobileMenu}>Tentang</a>
+                <Link to="/tentang" onClick={closeMobileMenu}>Tentang</Link>
                 <a href="#keunggulan" onClick={closeMobileMenu}>Fitur</a>
                 <a href="#paket" onClick={closeMobileMenu}>Program</a>
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>

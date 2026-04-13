@@ -275,6 +275,7 @@ textarea:focus-visible {
 }
 
 .theme-toggle-mobile {
+  display: none;
   width: 100%;
   justify-content: space-between;
   margin-top: 0.7rem;
@@ -419,6 +420,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   height: 132px;
   max-width: min(72vw, 540px);
   object-fit: contain;
+  transition: height 220ms ease, transform 220ms ease;
 }
 
 .landing-nav-links,
@@ -547,6 +549,16 @@ html[data-theme='dark'] .theme-toggle-thumb {
   padding: 0 0.15rem 0.7rem;
   margin-bottom: 0.4rem;
   border-bottom: 1px solid rgba(214, 226, 240, 0.95);
+}
+
+@media (min-width: 1081px) {
+  .landing-navbar-scrolled .landing-navbar-inner {
+    min-height: 46px;
+  }
+
+  .landing-navbar-scrolled .brand-logo-image {
+    height: 96px;
+  }
 }
 
 .profile-dropdown-item {
@@ -4411,6 +4423,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
     min-height: 46px;
   }
 
+  .theme-toggle-mobile {
+    display: inline-flex;
+  }
+
   .landing-nav-actions {
     width: auto;
     margin-left: auto;
@@ -4516,6 +4532,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
   .profile-dropdown-menu-header strong {
     display: block;
     font-size: 1rem;
+  }
+
+  .profile-dropdown-theme {
+    display: none;
   }
 
   .landing-hero-asymmetric,
@@ -5517,4 +5537,162 @@ html[data-theme='dark'] .profile-dropdown-danger {
 
 html[data-theme='dark'] .profile-dropdown-theme {
   border-bottom-color: rgba(112, 142, 186, 0.22);
+}
+
+html[data-theme='dark'] .auth-page {
+  background: linear-gradient(135deg, #08111f 0%, #0f1d35 48%, #153058 100%);
+}
+
+html[data-theme='dark'] .auth-card-header,
+html[data-theme='dark'] .auth-card-body,
+html[data-theme='dark'] .account-history-item,
+html[data-theme='dark'] .learning-hero-panel,
+html[data-theme='dark'] .learning-dashboard,
+html[data-theme='dark'] .learning-material,
+html[data-theme='dark'] .learning-tryout-panel,
+html[data-theme='dark'] .learning-path-card,
+html[data-theme='dark'] .learning-summary-grid div,
+html[data-theme='dark'] .learning-section-button,
+html[data-theme='dark'] .learning-page,
+html[data-theme='dark'] .learning-subtest-box,
+html[data-theme='dark'] .learning-locked-pages,
+html[data-theme='dark'] .learning-option,
+html[data-theme='dark'] .learning-test-result,
+html[data-theme='dark'] .learning-lock-notice,
+html[data-theme='dark'] .learning-tab,
+html[data-theme='dark'] .admin-panel-card,
+html[data-theme='dark'] .admin-sidebar,
+html[data-theme='dark'] .admin-message-card,
+html[data-theme='dark'] .admin-package-switch,
+html[data-theme='dark'] .admin-learning-column,
+html[data-theme='dark'] .admin-learning-page-card,
+html[data-theme='dark'] .admin-learning-overview-card,
+html[data-theme='dark'] .admin-learning-editor-shell,
+html[data-theme='dark'] .admin-doc-toolbar,
+html[data-theme='dark'] .admin-doc-format-bar,
+html[data-theme='dark'] .admin-doc-outline,
+html[data-theme='dark'] .admin-doc-cover,
+html[data-theme='dark'] .admin-doc-page,
+html[data-theme='dark'] .admin-word-ribbon,
+html[data-theme='dark'] .test-question-card,
+html[data-theme='dark'] .test-sidebar-card,
+html[data-theme='dark'] .test-option,
+html[data-theme='dark'] .test-nav-chip,
+html[data-theme='dark'] .test-subtest-chip,
+html[data-theme='dark'] .test-question-strip,
+html[data-theme='dark'] .test-header-stat,
+html[data-theme='dark'] .account-stat-card,
+html[data-theme='dark'] .account-info-card {
+  background: rgba(11, 18, 33, 0.88);
+  border-color: rgba(112, 142, 186, 0.24);
+  color: #e9f1fb;
+}
+
+html[data-theme='dark'] .form-group input,
+html[data-theme='dark'] .form-group textarea,
+html[data-theme='dark'] .form-group select,
+html[data-theme='dark'] .admin-option-row input,
+html[data-theme='dark'] .admin-doc-cover input,
+html[data-theme='dark'] .admin-doc-title-input,
+html[data-theme='dark'] .admin-doc-body-input,
+html[data-theme='dark'] .admin-doc-closing-input,
+html[data-theme='dark'] .admin-word-ribbon button,
+html[data-theme='dark'] .admin-word-ribbon select,
+html[data-theme='dark'] .admin-correct-toggle {
+  background: rgba(8, 14, 26, 0.94);
+  border-color: rgba(112, 142, 186, 0.28);
+  color: #e9f1fb;
+}
+
+html[data-theme='dark'] .form-group label,
+html[data-theme='dark'] .form-note,
+html[data-theme='dark'] .text-muted,
+html[data-theme='dark'] .account-page-header p,
+html[data-theme='dark'] .account-stat-card span,
+html[data-theme='dark'] .account-info-row span,
+html[data-theme='dark'] .account-history-score span,
+html[data-theme='dark'] .learning-hero-panel p,
+html[data-theme='dark'] .learning-material-header p,
+html[data-theme='dark'] .learning-tryout-panel p,
+html[data-theme='dark'] .learning-path-copy small,
+html[data-theme='dark'] .learning-section-button small,
+html[data-theme='dark'] .learning-section-button span,
+html[data-theme='dark'] .learning-page span,
+html[data-theme='dark'] .learning-page p,
+html[data-theme='dark'] .learning-page li,
+html[data-theme='dark'] .learning-rich-content,
+html[data-theme='dark'] .learning-summary-grid span,
+html[data-theme='dark'] .learning-option,
+html[data-theme='dark'] .admin-package-switch span,
+html[data-theme='dark'] .admin-section-header p,
+html[data-theme='dark'] .admin-meta-pill,
+html[data-theme='dark'] .admin-learning-overview-card p,
+html[data-theme='dark'] .admin-learning-overview-stats span,
+html[data-theme='dark'] .admin-doc-toolbar h3,
+html[data-theme='dark'] .admin-doc-format-bar span,
+html[data-theme='dark'] .admin-doc-outline,
+html[data-theme='dark'] .admin-doc-outline span,
+html[data-theme='dark'] .admin-doc-outline button,
+html[data-theme='dark'] .admin-doc-cover label,
+html[data-theme='dark'] .admin-word-editable,
+html[data-theme='dark'] .test-hero-description,
+html[data-theme='dark'] .test-header-stat-label,
+html[data-theme='dark'] .test-option,
+html[data-theme='dark'] .test-question-section-label,
+html[data-theme='dark'] .test-nav-chip-button,
+html[data-theme='dark'] .alert,
+html[data-theme='dark'] .account-history-item,
+html[data-theme='dark'] .landing-empty {
+  color: #9fb0c7;
+}
+
+html[data-theme='dark'] .auth-card-header h1,
+html[data-theme='dark'] .account-page-header h1,
+html[data-theme='dark'] .account-stat-card strong,
+html[data-theme='dark'] .account-info-row strong,
+html[data-theme='dark'] .account-history-score strong,
+html[data-theme='dark'] .learning-hero-panel h2,
+html[data-theme='dark'] .learning-material h2,
+html[data-theme='dark'] .learning-tryout-panel h2,
+html[data-theme='dark'] .learning-section-title h3,
+html[data-theme='dark'] .learning-path-copy strong,
+html[data-theme='dark'] .learning-summary-grid strong,
+html[data-theme='dark'] .learning-page h3,
+html[data-theme='dark'] .learning-question h4,
+html[data-theme='dark'] .admin-sidebar h2,
+html[data-theme='dark'] .admin-main-card h2,
+html[data-theme='dark'] .admin-package-switch strong,
+html[data-theme='dark'] .admin-options-header h3,
+html[data-theme='dark'] .admin-learning-overview-card h3,
+html[data-theme='dark'] .admin-doc-outline strong,
+html[data-theme='dark'] .test-hero-title,
+html[data-theme='dark'] .test-header-stat-value,
+html[data-theme='dark'] .test-header-stat-value-success,
+html[data-theme='dark'] .test-header-stat-value-danger {
+  color: #f3f7fd;
+}
+
+html[data-theme='dark'] .learning-tab-active,
+html[data-theme='dark'] .learning-section-button-active,
+html[data-theme='dark'] .admin-package-switch-active,
+html[data-theme='dark'] .admin-learning-overview-card-active,
+html[data-theme='dark'] .admin-doc-outline-item-active,
+html[data-theme='dark'] .test-option-active,
+html[data-theme='dark'] .test-nav-chip:hover,
+html[data-theme='dark'] .test-subtest-chip:hover {
+  background: rgba(24, 47, 84, 0.96);
+  border-color: rgba(123, 184, 255, 0.3);
+}
+
+html[data-theme='dark'] .learning-path-score,
+html[data-theme='dark'] .learning-path-step-done,
+html[data-theme='dark'] .admin-correct-toggle-active,
+html[data-theme='dark'] .admin-doc-outline button:hover,
+html[data-theme='dark'] .admin-question-row-wrap-expanded {
+  background: rgba(20, 79, 90, 0.28);
+}
+
+html[data-theme='dark'] .alert {
+  background: rgba(86, 24, 24, 0.5);
+  border-color: rgba(239, 68, 68, 0.28);
 }

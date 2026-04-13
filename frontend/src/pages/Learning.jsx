@@ -294,28 +294,76 @@ export default function Learning() {
       {successMessage && <div className="account-success learning-flash">{successMessage}</div>}
 
       <section className="learning-hero-panel">
-        <div>
+        <div className="learning-hero-copy">
           <span className="account-package-tag">{packageData.category_name}</span>
-          <h2>{packageData.name}</h2>
-          <p>{packageData.description}</p>
+          <div className="learning-hero-copy-block">
+            <h2>{packageData.name}</h2>
+            <p>{packageData.description}</p>
+          </div>
+          <div className="learning-hero-badges" aria-label="Ringkasan paket belajar">
+            <span>{sections.length} subtest</span>
+            <span>{packageData.question_count || 0} soal</span>
+            <span>{packageData.time_limit || 0} menit</span>
+          </div>
+          <div className="learning-hero-actions">
+            {hasAccess ? (
+              <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
+                Mulai Tryout Keseluruhan
+              </Link>
+            ) : !viewerIsAuthenticated ? (
+              <Link to="/login" className="btn btn-primary">
+                Login untuk Buka Lengkap
+              </Link>
+            ) : (
+              <Link to={`/payment/${numericPackageId}`} className="btn btn-primary">
+                Aktifkan Paket
+              </Link>
+            )}
+            <Link to="/" className="btn btn-outline">
+              Kembali ke Home
+            </Link>
+          </div>
         </div>
-        <div className="learning-hero-actions">
-          {hasAccess ? (
-            <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
-              Mulai Tryout Keseluruhan
-            </Link>
-          ) : !viewerIsAuthenticated ? (
-            <Link to="/login" className="btn btn-primary">
-              Login untuk Buka Lengkap
-            </Link>
-          ) : (
-            <Link to={`/payment/${numericPackageId}`} className="btn btn-primary">
-              Aktifkan Paket
-            </Link>
-          )}
-          <Link to="/" className="btn btn-outline">
-            Kembali ke Home
-          </Link>
+
+        <div className="learning-hero-stage">
+          <div className="learning-hero-stage-card">
+            <div className="learning-hero-stage-head">
+              <div>
+                <p>Progress aktif</p>
+                <strong>{milestonePercent}% selesai</strong>
+              </div>
+              <span className="learning-hero-stage-ring">
+                {completedMilestoneSteps}/{totalMilestoneSteps}
+              </span>
+            </div>
+            <div className="learning-progress-track" aria-hidden="true">
+              <span style={{ width: `${milestonePercent}%` }} />
+            </div>
+            <div className="learning-hero-stage-grid">
+              <div>
+                <span>Materi dibaca</span>
+                <strong>{materialDoneCount}/{sections.length}</strong>
+              </div>
+              <div>
+                <span>Mini test</span>
+                <strong>{subtestDoneCount}/{sections.length}</strong>
+              </div>
+              <div>
+                <span>Status akses</span>
+                <strong>{hasAccess ? 'Full access' : 'Preview'}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="learning-hero-next">
+            <span>Fokus berikutnya</span>
+            <strong>{activeSection?.name || 'Mulai dari subtest pertama'}</strong>
+            <p>
+              {hasAccess
+                ? 'Lanjutkan materi aktif, tandai selesai, lalu tutup dengan mini test sebelum masuk tryout penuh.'
+                : 'Preview materi awal tetap terbuka supaya kamu bisa cek ritme belajar sebelum aktifkan paket.'}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -432,20 +480,39 @@ export default function Learning() {
       {activeTab === 'materi' ? (
         <section className="learning-layout">
           <aside className="learning-section-nav">
+            <div className="learning-section-nav-head">
+              <p>Rute belajar</p>
+              <strong>{sections.length} subtest siap dipelajari</strong>
+            </div>
             {sections.map((section) => (
-              <button
-                type="button"
-                key={section.code}
-                className={section.code === activeSection?.code ? 'learning-section-button learning-section-button-active' : 'learning-section-button'}
-                onClick={() => setActiveSectionCode(section.code)}
-              >
-                <span>{section.name}</span>
-                <small>
-                  {section.progress.material_read && section.progress.subtest_test_completed
-                    ? 'Milestone selesai'
-                    : `${section.visible_page_count}/${section.total_page_count} halaman`}
-                </small>
-              </button>
+              (() => {
+                const sectionMaterialDone = Boolean(section.progress.material_read);
+                const sectionSubtestDone = Boolean(section.progress.subtest_test_completed);
+
+                return (
+                  <button
+                    type="button"
+                    key={section.code}
+                    className={section.code === activeSection?.code ? 'learning-section-button learning-section-button-active' : 'learning-section-button'}
+                    onClick={() => setActiveSectionCode(section.code)}
+                  >
+                    <span className="learning-section-button-title">{section.name}</span>
+                    <small>
+                      {sectionMaterialDone && sectionSubtestDone
+                        ? 'Milestone selesai'
+                        : `${section.visible_page_count}/${section.total_page_count} halaman`}
+                    </small>
+                    <div className="learning-section-button-progress">
+                      <span className={sectionMaterialDone ? 'learning-section-chip learning-section-chip-done' : 'learning-section-chip'}>
+                        Materi
+                      </span>
+                      <span className={sectionSubtestDone ? 'learning-section-chip learning-section-chip-done' : 'learning-section-chip'}>
+                        Mini test
+                      </span>
+                    </div>
+                  </button>
+                );
+              })()
             ))}
           </aside>
 

@@ -185,6 +185,12 @@ export default function Test() {
     const sectionCount = sections.reduce((sum, section) => sum + Number(section.question_count || 0), 0);
     return sectionCount > 0 ? sectionCount : questions.length;
   }, [packageMeta, questions.length, sections]);
+  const activeSectionAnsweredCount = useMemo(() => (
+    activeQuestions.filter((question) => {
+      const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
+      return Boolean(savedValue);
+    }).length
+  ), [activeQuestions, savedAnswers]);
 
   const pickInitialQuestionId = useCallback((nextQuestions, nextSavedAnswers, nextWorkflow, nextElapsedSeconds) => {
     const initialState = computeAttemptState(nextWorkflow, nextElapsedSeconds);
@@ -556,7 +562,7 @@ export default function Test() {
     : Math.max(1, currentGlobalQuestionIndex + 1);
 
   return (
-    <div className="min-h-screen bg-gray-100 test-shell">
+    <div className="min-h-screen test-shell">
       <div className="container mx-auto px-4 py-8">
         <section className="test-hero">
           <div className="test-hero-copy">
@@ -571,16 +577,47 @@ export default function Test() {
                 ? 'Navigasi soal bebas dengan penyimpanan jawaban otomatis setiap kali Anda memilih opsi.'
                 : 'Kerjakan setiap bagian sesuai alur tryout dan fokus pada waktu yang masih tersedia di tiap sesi.'}
             </p>
+            <div className="test-hero-pills" aria-label="Ringkasan sesi test">
+              <span>{packageMeta?.name || 'Paket aktif'}</span>
+              <span>{totalQuestionCount} soal</span>
+              {isUtbkMode && attemptState.activeSectionName && (
+                <span>{attemptState.activeSectionName}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="test-hero-stats">
+            <div className="test-hero-stat-card">
+              <span>Terjawab</span>
+              <strong>{answeredCount} / {totalQuestionCount}</strong>
+              <small>Progress seluruh soal</small>
+            </div>
+            <div className="test-hero-stat-card">
+              <span>{isUtbkMode ? 'Timer subtes' : 'Timer utama'}</span>
+              <strong>
+                {formatTime(isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds)}
+              </strong>
+              <small>{isUtbkMode ? 'Waktu aktif saat ini' : 'Waktu tersisa ujian'}</small>
+            </div>
+            <div className="test-hero-stat-card">
+              <span>{isUtbkMode ? 'Subtes aktif' : 'Mode pengerjaan'}</span>
+              <strong>{isUtbkMode ? (attemptState.activeSectionName || 'Menunggu') : 'Navigasi bebas'}</strong>
+              <small>
+                {isUtbkMode
+                  ? `${activeSectionAnsweredCount}/${activeQuestions.length} soal terisi`
+                  : allQuestionsAnswered ? 'Siap diselesaikan' : 'Jawab semua soal dulu'}
+              </small>
+            </div>
           </div>
         </section>
 
         {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          <div className="test-feedback test-feedback-error">
             {error}
           </div>
         )}
         {saveMessage && (
-          <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-700">
+          <div className="test-feedback test-feedback-success">
             {saveMessage}
           </div>
         )}
@@ -589,11 +626,11 @@ export default function Test() {
           <div className="test-main-column">
             <div className="card test-question-card">
               <div key={currentQuestion.id} className="test-question-stage">
-              <div className="mb-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-                  <div>
-                    <h2 className="text-lg font-bold">
-                      Soal Nomor {questionTitleNumber}
+                <div className="test-question-head">
+                  <div className="test-question-heading">
+                    <span className="test-question-number">Soal {questionTitleNumber}</span>
+                    <h2 className="test-question-title">
+                      Fokuskan jawabanmu di soal ini dulu
                     </h2>
                     <p className="test-question-section-label">
                       {currentQuestion.section_name || 'Bagian umum'}
@@ -601,7 +638,7 @@ export default function Test() {
                   </div>
                 </div>
                 {currentQuestion.question_text && (
-                  <p className="text-gray-800 leading-relaxed text-lg">{currentQuestion.question_text}</p>
+                  <p className="test-question-text">{currentQuestion.question_text}</p>
                 )}
                 {currentQuestion.question_image_url && (
                   <img
@@ -611,7 +648,6 @@ export default function Test() {
                     loading="lazy"
                   />
                 )}
-              </div>
 
               <div className="space-y-3 mb-8">
                 {currentQuestion.options?.map((option) => (
@@ -627,9 +663,9 @@ export default function Test() {
                       onChange={() => handleAnswerSelect(currentQuestion.id, option.id)}
                       className="mt-1 w-5 h-5 accent-blue-600"
                     />
-                    <div className="ml-4">
-                      <p className="font-semibold">{option.letter}.</p>
-                      {option.text && <p className="text-gray-800">{option.text}</p>}
+                    <div className="test-option-copy">
+                      <p className="test-option-letter">{option.letter}.</p>
+                      {option.text && <p className="test-option-text">{option.text}</p>}
                       {option.image_url && (
                         <img
                           src={option.image_url}
@@ -643,69 +679,73 @@ export default function Test() {
                 ))}
               </div>
 
-              <div className="flex flex-wrap gap-3 pt-6 border-t border-gray-200">
-                {(isCpnsMode || hasMultipleActiveQuestions) && (
-                  <button
-                    type="button"
-                    onClick={() => handleRelativeNavigation(-1)}
-                    disabled={!previousQuestionId}
-                    className="btn btn-outline test-action-button disabled:opacity-50"
-                  >
-                    ← Sebelumnya
-                  </button>
-                )}
+                <div className="test-action-row">
+                  <div className="test-action-buttons">
+                    {(isCpnsMode || hasMultipleActiveQuestions) && (
+                      <button
+                        type="button"
+                        onClick={() => handleRelativeNavigation(-1)}
+                        disabled={!previousQuestionId}
+                        className="btn btn-outline test-action-button disabled:opacity-50"
+                      >
+                        ← Sebelumnya
+                      </button>
+                    )}
 
-                {(isCpnsMode || hasMultipleActiveQuestions) && (
-                  <button
-                    type="button"
-                    onClick={() => handleRelativeNavigation(1)}
-                    disabled={!nextQuestionId}
-                    className="btn btn-outline test-action-button disabled:opacity-50"
-                  >
-                    Selanjutnya →
-                  </button>
-                )}
+                    {(isCpnsMode || hasMultipleActiveQuestions) && (
+                      <button
+                        type="button"
+                        onClick={() => handleRelativeNavigation(1)}
+                        disabled={!nextQuestionId}
+                        className="btn btn-outline test-action-button disabled:opacity-50"
+                      >
+                        Selanjutnya →
+                      </button>
+                    )}
+                  </div>
 
-                {isCpnsMode && allQuestionsAnswered && (
-                  <button
-                    type="button"
-                    onClick={() => handleSubmit({ confirmManual: true })}
-                    disabled={isSubmitting}
-                    className="btn btn-primary test-action-button test-action-button-primary disabled:opacity-50"
-                  >
-                    {isSubmitting ? 'Memproses...' : 'Selesai Ujian'}
-                  </button>
-                )}
-
-                {isUtbkMode && (
-                  <>
-                    <div className="w-full flex-1 self-center text-sm text-gray-600 sm:min-w-[220px]">
+                  {isUtbkMode && (
+                    <div className="test-action-helper">
                       {isCurrentSaved ? 'Jawaban aktif sudah tersimpan otomatis.' : 'Jawaban akan tersimpan otomatis saat dipilih.'}
                       {!hasMultipleActiveQuestions ? ' Subtes ini hanya memiliki 1 soal aktif.' : ''}
                     </div>
+                  )}
 
-                    {nextSection ? (
-                      <button
-                        type="button"
-                        onClick={handleAdvanceSection}
-                        disabled={isAdvancingSection || isSubmitting}
-                        className="btn btn-primary test-action-button disabled:opacity-50"
-                      >
-                        {isAdvancingSection ? 'Membuka Subtes...' : `Lanjut ke ${nextSection.name} →`}
-                      </button>
-                    ) : (
+                  <div className="test-action-buttons test-action-buttons-end">
+                    {isCpnsMode && allQuestionsAnswered && (
                       <button
                         type="button"
                         onClick={() => handleSubmit({ confirmManual: true })}
                         disabled={isSubmitting}
-                        className="btn btn-primary test-action-button disabled:opacity-50"
+                        className="btn btn-primary test-action-button test-action-button-primary disabled:opacity-50"
                       >
-                        {isSubmitting ? 'Memproses...' : 'Selesaikan Ujian'}
+                        {isSubmitting ? 'Memproses...' : 'Selesai Ujian'}
                       </button>
                     )}
-                  </>
-                )}
-              </div>
+
+                    {isUtbkMode && (
+                      nextSection ? (
+                        <button
+                          type="button"
+                          onClick={handleAdvanceSection}
+                          disabled={isAdvancingSection || isSubmitting}
+                          className="btn btn-primary test-action-button disabled:opacity-50"
+                        >
+                          {isAdvancingSection ? 'Membuka Subtes...' : `Lanjut ke ${nextSection.name} →`}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSubmit({ confirmManual: true })}
+                          disabled={isSubmitting}
+                          className="btn btn-primary test-action-button disabled:opacity-50"
+                        >
+                          {isSubmitting ? 'Memproses...' : 'Selesaikan Ujian'}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -736,8 +776,39 @@ export default function Test() {
               )}
             </div>
 
+            {isUtbkMode && sections.length > 0 && (
+              <div className="card test-sidebar-card test-sidebar-card-flow">
+                <h3 className="test-sidebar-title">Flow Subtes</h3>
+                <div className="test-section-flow">
+                  {sections.map((section, index) => {
+                    const isCurrentSection = section.code === attemptState.activeSectionCode;
+                    const isCompletedSection = attemptState.completedSectionCodes.includes(section.code);
+                    const isLockedSection = attemptState.lockedSectionCodes.includes(section.code);
+
+                    return (
+                      <div
+                        key={section.code}
+                        className={[
+                          'test-section-flow-item',
+                          isCurrentSection ? 'test-section-flow-item-active' : '',
+                          isCompletedSection ? 'test-section-flow-item-done' : '',
+                          isLockedSection ? 'test-section-flow-item-locked' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
+                        <span className="test-section-flow-index">{index + 1}</span>
+                        <div className="test-section-flow-copy">
+                          <strong>{section.name}</strong>
+                          <small>{section.question_count || 0} soal</small>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="card test-sidebar-card">
-              <h3 className="font-bold mb-4">Navigasi Soal</h3>
+              <h3 className="test-sidebar-title">Navigasi Soal</h3>
 
               {isCpnsMode ? (
                 <>
@@ -752,10 +823,10 @@ export default function Test() {
                           onClick={() => goToQuestion(question.id)}
                           className={`test-nav-chip test-nav-chip-button ${
                             Number(question.id) === Number(currentQuestion?.id)
-                              ? 'bg-blue-600 text-white'
+                              ? 'test-nav-chip-current'
                               : savedValue
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-700'
+                              ? 'test-nav-chip-done'
+                              : 'test-nav-chip-empty'
                           }`}
                         >
                           {index + 1}
@@ -763,9 +834,9 @@ export default function Test() {
                       );
                     })}
                   </div>
-                  <div className="mt-4 pt-4 border-t text-xs text-gray-600 space-y-2">
-                    <p><span className="inline-block w-3 h-3 rounded bg-green-100 mr-2" />Sudah tersimpan</p>
-                    <p><span className="inline-block w-3 h-3 rounded bg-red-100 mr-2" />Belum dijawab</p>
+                  <div className="test-nav-legend">
+                    <p><span className="test-nav-legend-dot test-nav-legend-dot-done" />Sudah tersimpan</p>
+                    <p><span className="test-nav-legend-dot test-nav-legend-dot-empty" />Belum dijawab</p>
                   </div>
                 </>
               ) : (
@@ -779,14 +850,14 @@ export default function Test() {
                         onClick={() => goToQuestion(question.id)}
                         className={`test-subtest-chip test-subtest-chip-inline ${
                           Number(question.id) === Number(currentQuestion?.id)
-                            ? 'border-blue-500 bg-blue-50'
+                            ? 'test-subtest-chip-current'
                             : savedValue
-                            ? 'border-green-300 bg-green-50'
-                            : 'border-gray-200 bg-white'
+                            ? 'test-subtest-chip-done'
+                            : 'test-subtest-chip-idle'
                         }`}
                       >
-                        <p className="font-semibold">Soal {index + 1}</p>
-                        <p className="text-xs text-gray-600">
+                        <p className="test-subtest-chip-title">Soal {index + 1}</p>
+                        <p className="test-subtest-chip-status">
                           {savedValue ? 'Sudah dijawab' : 'Belum dijawab'}
                         </p>
                       </button>

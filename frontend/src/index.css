@@ -1191,9 +1191,9 @@ textarea:focus-visible {
   padding: 3.35rem 0;
   margin: 0 0 3rem;
   background:
-    linear-gradient(135deg, rgba(221, 241, 255, 0.9) 0%, rgba(240, 248, 255, 0.92) 48%, rgba(230, 250, 241, 0.9) 100%);
-  border-top: 1px solid rgba(192, 214, 236, 0.9);
-  border-bottom: 1px solid rgba(192, 214, 236, 0.9);
+    linear-gradient(135deg, rgba(45, 140, 255, 0.08) 0%, rgba(45, 140, 255, 0.04) 52%, rgba(45, 140, 255, 0.1) 100%);
+  border-top: 1px solid rgba(137, 184, 239, 0.32);
+  border-bottom: 1px solid rgba(137, 184, 239, 0.32);
   overflow: hidden;
 }
 
@@ -1202,10 +1202,10 @@ textarea:focus-visible {
   position: absolute;
   inset: 1rem 1.25rem;
   border-radius: 1.6rem;
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.18) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.1) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
   pointer-events: none;
 }
 
@@ -1312,29 +1312,25 @@ textarea:focus-visible {
   max-width: 62ch;
 }
 
-.landing-about-points {
-  display: grid;
-  gap: 0.9rem;
-  margin-top: 1.4rem;
+.landing-about-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.35rem;
 }
 
-.landing-about-point {
-  display: grid;
-  gap: 0.3rem;
-  padding: 1rem 1.05rem;
-  border-radius: 1rem;
-  background: rgba(248, 251, 255, 0.94);
-  border: 1px solid rgba(214, 226, 240, 0.95);
-  box-shadow: 0 16px 36px rgba(51, 84, 128, 0.06);
-}
-
-.landing-about-point strong {
-  color: #18253a;
-  font-size: 1rem;
-}
-
-.landing-about-point span {
-  color: #64748b;
+.landing-about-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(173, 206, 244, 0.8);
+  color: #1d4f8f;
+  font-size: 0.92rem;
+  font-weight: 700;
+  box-shadow: 0 12px 28px rgba(51, 84, 128, 0.06);
 }
 
 .landing-about-visual {
@@ -1401,34 +1397,6 @@ textarea:focus-visible {
   right: 1rem;
   left: auto;
   bottom: 1rem;
-}
-
-.landing-about-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.landing-about-metric {
-  padding: 1rem 0;
-  border-top: 1px solid rgba(199, 213, 232, 0.85);
-}
-
-.landing-about-metric strong,
-.landing-about-metric span {
-  display: block;
-}
-
-.landing-about-metric strong {
-  color: #132038;
-  font-size: 1.35rem;
-  letter-spacing: -0.03em;
-}
-
-.landing-about-metric span {
-  margin-top: 0.35rem;
-  color: #64748b;
 }
 
 .landing-package-grid {
@@ -4324,7 +4292,6 @@ textarea:focus-visible {
   }
 
   .landing-hero-dashboard-grid,
-  .landing-about-metrics,
   .landing-showcase-summary,
   .landing-showcase-lanes,
   .landing-hero-proof-grid {
@@ -4555,8 +4522,8 @@ textarea:focus-visible {
     font-size: 2.4rem;
   }
 
-  .landing-about-point {
-    padding: 0.95rem 1rem;
+  .landing-about-tags {
+    gap: 0.65rem;
   }
 
   .landing-about-stat {

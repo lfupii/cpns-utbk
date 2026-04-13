@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import ProfileDropdown from './ProfileDropdown';
 import BrandLogo from './BrandLogo';
-import ThemeToggle from './ThemeToggle';
 import { businessProfile } from '../siteContent';
 
 const footerLinks = [
@@ -83,7 +82,6 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
                 <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
-              <ThemeToggle mobile onToggle={closeMobileMenu} />
               {!user && (
                 <div className="landing-nav-panel-actions">
                   <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>
@@ -98,7 +96,6 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
           </div>
 
           <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
-            <ThemeToggle />
             {user ? (
               <ProfileDropdown
                 displayName={displayName}

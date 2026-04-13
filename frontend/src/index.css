@@ -282,6 +282,14 @@ textarea:focus-visible {
   border-radius: 1rem;
 }
 
+.theme-toggle-dropdown {
+  width: 100%;
+  justify-content: space-between;
+  padding: 0.72rem 0.9rem;
+  border-radius: 1rem;
+  box-shadow: none;
+}
+
 html[data-theme='dark'] .theme-toggle {
   border-color: rgba(111, 142, 186, 0.34);
   background: rgba(12, 19, 34, 0.76);
@@ -533,6 +541,12 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .profile-dropdown-menu-header {
   display: none;
+}
+
+.profile-dropdown-theme {
+  padding: 0 0.15rem 0.7rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(214, 226, 240, 0.95);
 }
 
 .profile-dropdown-item {
@@ -5499,4 +5513,8 @@ html[data-theme='dark'] .admin-main-card .account-form-actions {
 
 html[data-theme='dark'] .profile-dropdown-danger {
   color: #ff8e8e;
+}
+
+html[data-theme='dark'] .profile-dropdown-theme {
+  border-bottom-color: rgba(112, 142, 186, 0.22);
 }

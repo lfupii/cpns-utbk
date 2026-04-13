@@ -39,7 +39,14 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 12);
+      const nextScrollY = window.scrollY;
+      setIsScrolled((current) => {
+        if (current) {
+          return nextScrollY > 20;
+        }
+
+        return nextScrollY > 64;
+      });
     };
 
     handleScroll();
@@ -83,7 +90,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
                 <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
-              <ThemeToggle mobile onToggle={closeMobileMenu} />
+              {!user && <ThemeToggle mobile onToggle={closeMobileMenu} />}
               {!user && (
                 <div className="landing-nav-panel-actions">
                   <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>

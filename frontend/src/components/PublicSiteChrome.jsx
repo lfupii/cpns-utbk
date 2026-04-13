@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import ProfileDropdown from './ProfileDropdown';
 import BrandLogo from './BrandLogo';
+import ThemeToggle from './ThemeToggle';
 import { businessProfile } from '../siteContent';
 
 const footerLinks = [
@@ -13,6 +14,7 @@ const footerLinks = [
 
 export default function PublicSiteChrome({ eyebrow, title, subtitle, children }) {
   const { user, logout, isAdmin } = useAuth();
+  const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
@@ -35,9 +37,22 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
     }
   };
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 12);
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   return (
     <div className="landing-shell policy-shell">
-      <nav className="landing-navbar">
+      <nav className={`landing-navbar ${isScrolled ? 'landing-navbar-scrolled' : ''}`}>
         <div className={`container landing-navbar-inner ${user ? 'landing-navbar-inner-authenticated' : ''}`}>
           <div className="landing-navbar-brand">
             <BrandLogo />
@@ -68,6 +83,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
                 <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
+              <ThemeToggle mobile onToggle={closeMobileMenu} />
               {!user && (
                 <div className="landing-nav-panel-actions">
                   <Link to="/login" className="btn btn-outline" onClick={closeMobileMenu}>
@@ -82,6 +98,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
           </div>
 
           <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
+            <ThemeToggle />
             {user ? (
               <ProfileDropdown
                 displayName={displayName}

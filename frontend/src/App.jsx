@@ -16,6 +16,7 @@ import AdminPanel from './pages/AdminPanel';
 import AdminLearningMaterialEditor from './pages/AdminLearningMaterialEditor';
 import Contact from './pages/Contact';
 import TermsConditions from './pages/TermsConditions';
+import { ThemeProvider } from './ThemeContext';
 import './index.css';
 
 function ProtectedRoute({ children }) {
@@ -168,9 +169,11 @@ export default function App() {
         v7_relativeSplatPath: true,
       }}
     >
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

@@ -13,8 +13,14 @@ export default function Home() {
   const [error, setError] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [dashboardData, setDashboardData] = useState({
+    activePackages: [],
+    history: [],
+    loading: false,
+  });
 
-  const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
+  const displayName = user?.full_name || 'Pejuang ASN';
+  const firstName = displayName.trim().split(/\s+/)[0] || 'Pejuang';
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -31,6 +37,47 @@ export default function Home() {
 
     fetchPackages();
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    if (!user) {
+      setDashboardData({
+        activePackages: [],
+        history: [],
+        loading: false,
+      });
+      return undefined;
+    }
+
+    const fetchDashboardData = async () => {
+      setDashboardData((current) => ({
+        ...current,
+        loading: true,
+      }));
+
+      const [activePackagesResult, historyResult] = await Promise.allSettled([
+        apiClient.get('/auth/active-packages'),
+        apiClient.get('/auth/test-history'),
+      ]);
+
+      if (ignore) {
+        return;
+      }
+
+      setDashboardData({
+        activePackages: activePackagesResult.status === 'fulfilled' ? activePackagesResult.value.data.data || [] : [],
+        history: historyResult.status === 'fulfilled' ? historyResult.value.data.data || [] : [],
+        loading: false,
+      });
+    };
+
+    fetchDashboardData();
+
+    return () => {
+      ignore = true;
+    };
+  }, [user]);
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -82,15 +129,77 @@ export default function Home() {
       ],
     },
   ];
-  const heroPrograms = [
-    { label: 'UTBK', meta: 'Per subtes', detail: 'TPS, literasi, penalaran' },
-    { label: 'CPNS', meta: 'SKD lengkap', detail: 'TWK, TIU, TKP' },
-    { label: 'Preview', meta: 'Bisa dibuka dulu', detail: 'Materi awal sebelum paket aktif' },
+  const activePackageCount = dashboardData.activePackages.length;
+  const completedTryoutCount = dashboardData.history.length;
+  const totalRemainingAttempts = dashboardData.activePackages.reduce(
+    (total, item) => total + Number(item.remaining_attempts || 0),
+    0
+  );
+  const hasActivePackage = activePackageCount > 0;
+  const dashboardPercent = user
+    ? hasActivePackage
+      ? Math.min(92, 34 + activePackageCount * 18 + completedTryoutCount * 7)
+      : 18
+    : 8;
+  const dashboardSummaryLabel = !user
+    ? 'Mode preview'
+    : hasActivePackage
+      ? 'Akun belajar aktif'
+      : 'Akun siap diaktifkan';
+  const dashboardSummaryTitle = !user
+    ? 'Masuk ke materi preview dulu, lalu lanjutkan saat sudah siap.'
+    : hasActivePackage
+      ? `Halo ${firstName}, lanjutkan sesi belajarmu dari titik terakhir.`
+      : `Halo ${firstName}, akunmu sudah masuk dan tinggal pilih paket yang mau diaktifkan.`;
+  const dashboardSummaryText = !user
+    ? 'Panel ini tidak menyimpan progres akun. Setelah login, ringkasan belajar akan menyesuaikan akun yang sedang aktif.'
+    : hasActivePackage
+      ? 'Ringkasan ini mengambil data paket aktif dan riwayat tryout dari akun yang sedang login.'
+      : 'Belum ada paket aktif di akun ini, jadi dashboard menampilkan langkah awal yang perlu diselesaikan lebih dulu.';
+  const dashboardQueue = !user
+    ? [
+        'Masuk untuk menyimpan progres dan milestone',
+        'Buka preview materi per subtes',
+        'Aktifkan paket saat ingin akses penuh',
+      ]
+    : hasActivePackage
+      ? [
+          'Lanjutkan materi prioritas yang belum selesai',
+          'Kerjakan mini test subtes terlemah',
+          'Masuk ke tryout penuh dan review hasilnya',
+        ]
+      : [
+          'Pilih paket UTBK atau CPNS yang ingin dibuka',
+          'Baca preview materi untuk cek kecocokan',
+          'Lanjutkan pembayaran agar semua materi aktif',
+        ];
+  const heroProofs = [
+    {
+      value: user ? activePackageCount : 2,
+      label: user ? 'Paket aktif di akun ini' : 'Pilihan program utama',
+    },
+    {
+      value: user ? completedTryoutCount : 'Preview',
+      label: user ? 'Tryout selesai' : 'Materi awal bisa dibuka',
+    },
+    {
+      value: user ? totalRemainingAttempts : 'Instan',
+      label: user ? 'Sisa attempt aktif' : 'Hasil evaluasi cepat',
+    },
   ];
-  const heroFlow = [
-    { step: '01', title: 'Pilih subtes', text: 'Mulai dari area yang paling perlu dikejar.' },
-    { step: '02', title: 'Baca materi', text: 'Preview terbuka, full akses setelah paket aktif.' },
-    { step: '03', title: 'Kerjakan tryout', text: 'Skor dan evaluasi langsung tersimpan.' },
+  const sideHighlights = [
+    {
+      title: 'UTBK',
+      detail: 'TPS, literasi, dan penalaran disusun per subtes agar fokus belajarnya rapi.',
+    },
+    {
+      title: 'CPNS',
+      detail: 'TWK, TIU, dan TKP dibuka dalam jalur belajar yang mudah diikuti.',
+    },
+    {
+      title: 'Preview',
+      detail: 'Tanpa login tetap bisa lihat bagian awal materi sebelum lanjut ke paket.',
+    },
   ];
 
   if (loading) {
@@ -178,114 +287,149 @@ export default function Home() {
         )}
 
         <section className="landing-hero" id="tentang">
-          <div className="container landing-hero-grid">
-            <div className="landing-hero-copy">
-              <span className="landing-kicker">Persiapan SKD yang lebih terarah</span>
-              <h1>
-                Naikkan Skor
-                <br />
-                Dengan Ritme
-                <br />
-                <span>Belajar yang Jelas</span>
-              </h1>
+          <div className="container landing-hero-stack">
+            <div className="landing-hero-grid">
+              <div className="landing-hero-copy">
+                <span className="landing-kicker">Persiapan SKD dan UTBK yang lebih tertata</span>
+                <h1>
+                  Belajar Cepat,
+                  <br />
+                  Tahu Harus
+                  <br />
+                  <span>Lanjut ke Mana</span>
+                </h1>
 
-              <div className="landing-pill">
-                <span className="landing-pill-icon">●</span>
-                <span>
-                  Dipakai <strong>ribuan peserta</strong> untuk latihan harian dan simulasi penuh
-                </span>
-              </div>
-
-              <div className="landing-program-strip" aria-label="Pilihan program belajar">
-                {heroPrograms.map((program) => (
-                  <div className="landing-program-chip" key={program.label}>
-                    <strong>{program.label}</strong>
-                    <span>{program.meta}</span>
-                    <small>{program.detail}</small>
-                  </div>
-                ))}
-              </div>
-
-              <p>
-                Bukan cuma kumpulan soal. Kamu dapat paket latihan, pemetaan kemampuan, dan alur
-                belajar yang membantu fokus ke materi paling berdampak.
-              </p>
-
-              <div className="landing-bullet-list">
-                <span>Target mingguan yang mudah diikuti</span>
-                <span>Analisis hasil per kategori soal</span>
-                <span>Simulasi waktu yang terasa realistis</span>
-              </div>
-
-              <div className="landing-hero-actions">
-                <a href="#paket" className="btn btn-primary landing-cta-secondary">
-                  Lihat Paket
-                </a>
-              </div>
-            </div>
-
-            <div className="landing-hero-showcase">
-              <div className="landing-showcase-panel">
-                <div className="landing-showcase-topline">
-                  <div>
-                    <div className="landing-showcase-badge">Belajar lebih fokus</div>
-                    <h3>Ritme harian dari materi sampai tryout.</h3>
-                  </div>
-                  <span className="landing-showcase-live">Live progress</span>
+                <div className="landing-pill">
+                  <span className="landing-pill-icon">●</span>
+                  <span>
+                    Preview materi terbuka lebih dulu, lalu lanjut ke paket saat kamu sudah siap
+                  </span>
                 </div>
 
-                <div className="landing-showcase-bento">
-                  <div className="landing-showcase-plan">
-                    <div className="landing-showcase-board-head">
-                      <div>
-                        <span>Target Minggu Ini</span>
-                        <strong>Naikkan akurasi inti</strong>
-                      </div>
-                      <span className="landing-showcase-status">68%</span>
-                    </div>
-                    <div className="landing-showcase-progress">
-                      <span style={{ width: '68%' }} />
-                    </div>
-                    <div className="landing-showcase-task-list">
-                      <span>Baca materi prioritas</span>
-                      <span>Kerjakan mini test</span>
-                      <span>Review hasil tryout</span>
-                    </div>
-                  </div>
-                  <div className="landing-showcase-mini-stat">
-                    <strong>7</strong>
-                    <span>Subtes bisa dipilih</span>
-                  </div>
-                  <div className="landing-showcase-mini-stat">
-                    <strong>Instan</strong>
-                    <span>Hasil evaluasi</span>
-                  </div>
+                <p>
+                  Mulai dari lihat materi awal, lanjut ke mini test subtes, lalu tutup dengan tryout
+                  penuh. Alurnya dibikin ringkas supaya kamu tidak kehilangan arah di tengah belajar.
+                </p>
+
+                <div className="landing-bullet-list">
+                  <span>Materi dibagi per subtes yang gampang dipilih</span>
+                  <span>Ringkasan hasil dan prioritas belajar langsung terlihat</span>
+                  <span>Dashboard menyesuaikan akun aktif, bukan sisa akun sebelumnya</span>
                 </div>
 
-                <div className="landing-showcase-flow" aria-label="Alur belajar">
-                  {heroFlow.map((item) => (
-                    <div className="landing-showcase-flow-item" key={item.step}>
-                      <span>{item.step}</span>
-                      <div>
-                        <strong>{item.title}</strong>
-                        <p>{item.text}</p>
-                      </div>
+                <div className="landing-hero-actions">
+                  <a href="#paket" className="btn btn-primary landing-cta-secondary">
+                    Lihat Paket
+                  </a>
+                </div>
+
+                <div className="landing-hero-proof-grid" aria-label="Ringkasan layanan">
+                  {heroProofs.map((proof) => (
+                    <div className="landing-hero-proof-card" key={proof.label}>
+                      <strong>{proof.value}</strong>
+                      <span>{proof.label}</span>
                     </div>
                   ))}
                 </div>
+              </div>
 
-                <div className="landing-showcase-stat-grid">
-                  <div className="landing-showcase-stat">
-                    <strong>2</strong>
-                    <span>Paket inti</span>
+              <aside className="landing-hero-sidecard">
+                <div className="landing-showcase-badge">{user ? `Halo, ${firstName}` : 'Mode preview terbuka'}</div>
+                <h3>UTBK dan CPNS sekarang punya alur masuk yang lebih jelas dari awal.</h3>
+                <p>
+                  Mulai sebagai guest untuk lihat preview, lalu login saat ingin menyimpan progres,
+                  dan aktifkan paket untuk membuka seluruh materi beserta tryout lengkap.
+                </p>
+
+                <div className="landing-side-highlight-list">
+                  {sideHighlights.map((item) => (
+                    <div className="landing-side-highlight" key={item.title}>
+                      <strong>{item.title}</strong>
+                      <span>{item.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            </div>
+
+            <div className="landing-showcase-panel landing-showcase-panel-wide" key={user?.userId || 'guest'}>
+              <div className="landing-showcase-summary">
+                <div className="landing-showcase-summary-copy">
+                  <span className="landing-showcase-summary-label">{dashboardSummaryLabel}</span>
+                  <h3>{dashboardSummaryTitle}</h3>
+                  <p>{dashboardSummaryText}</p>
+                </div>
+
+                <div className="landing-showcase-progress-card">
+                  <span className="landing-showcase-progress-account">
+                    {dashboardData.loading ? 'Memuat data akun...' : user ? displayName : 'Guest preview'}
+                  </span>
+                  <strong>{dashboardPercent}%</strong>
+                  <div className="landing-showcase-progress">
+                    <span style={{ width: `${dashboardPercent}%` }} />
                   </div>
-                  <div className="landing-showcase-stat">
-                    <strong>100</strong>
-                    <span>Soal per sesi</span>
+                  <small>
+                    {!user
+                      ? 'Saat logout, panel kembali ke mode preview dan progres akun tidak dibawa.'
+                      : hasActivePackage
+                        ? `${activePackageCount} paket aktif dan ${completedTryoutCount} tryout tersimpan di akun ini.`
+                        : 'Belum ada paket aktif di akun ini, jadi langkah berikutnya adalah memilih paket.'}
+                  </small>
+                </div>
+              </div>
+
+              <div className="landing-showcase-lanes">
+                <div className="landing-showcase-lane">
+                  <span className="landing-showcase-lane-label">Agenda berikutnya</span>
+                  <div className="landing-showcase-task-list">
+                    {dashboardQueue.map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
                   </div>
-                  <div className="landing-showcase-stat">
-                    <strong>Instan</strong>
-                    <span>Hasil evaluasi</span>
+                </div>
+
+                <div className="landing-showcase-lane">
+                  <span className="landing-showcase-lane-label">Status akun</span>
+                  <div className="landing-showcase-stat-grid landing-showcase-stat-grid-compact">
+                    <div className="landing-showcase-stat">
+                      <strong>{user ? activePackageCount : '2'}</strong>
+                      <span>{user ? 'Paket aktif' : 'Program utama'}</span>
+                    </div>
+                    <div className="landing-showcase-stat">
+                      <strong>{user ? completedTryoutCount : 'Preview'}</strong>
+                      <span>{user ? 'Tryout selesai' : 'Materi awal terbuka'}</span>
+                    </div>
+                    <div className="landing-showcase-stat">
+                      <strong>{user ? totalRemainingAttempts : 'Login'}</strong>
+                      <span>{user ? 'Sisa attempt' : 'Untuk simpan progres'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="landing-showcase-lane">
+                  <span className="landing-showcase-lane-label">Alur belajar</span>
+                  <div className="landing-showcase-flow">
+                    <div className="landing-showcase-flow-item">
+                      <span>01</span>
+                      <div>
+                        <strong>Pilih subtes</strong>
+                        <p>Masuk dari materi yang paling butuh perhatian terlebih dahulu.</p>
+                      </div>
+                    </div>
+                    <div className="landing-showcase-flow-item">
+                      <span>02</span>
+                      <div>
+                        <strong>Baca materi</strong>
+                        <p>Guest melihat preview, user berpaket membuka pembahasan penuh.</p>
+                      </div>
+                    </div>
+                    <div className="landing-showcase-flow-item">
+                      <span>03</span>
+                      <div>
+                        <strong>Tutup dengan tryout</strong>
+                        <p>Hasil akhir langsung masuk ke riwayat akun yang sedang aktif.</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -380,6 +380,7 @@ export default function Learning() {
 
   return (
     <AccountShell
+      shellClassName="account-shell-learning"
       title={`Ruang Belajar ${packageData.name}`}
       subtitle="Baca materi per subtest, kerjakan mini test, lalu lanjut ke tryout keseluruhan saat paket aktif."
     >

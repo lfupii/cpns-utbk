@@ -2106,6 +2106,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
   min-height: 100vh;
 }
 
+.account-shell-learning .landing-navbar {
+  position: relative;
+}
+
 .account-main {
   padding-top: 2.25rem;
   padding-bottom: 4rem;
@@ -2377,11 +2381,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .learning-material h2,
 .learning-tryout-panel h2 {
   margin-top: 0;
-  font-size: 3.15rem;
-  line-height: 0.95;
-  letter-spacing: -0.06em;
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
   color: #14213a;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .learning-hero-panel p,
@@ -2724,16 +2728,16 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .learning-path-copy strong {
   color: #1d2b43;
-  line-height: 1.18;
-  font-size: 1rem;
-  letter-spacing: -0.025em;
-  font-weight: 800;
+  line-height: 1.12;
+  font-size: 1.08rem;
+  letter-spacing: 0;
+  font-weight: 700;
 }
 
 .learning-path-copy small {
   color: #708198;
-  font-weight: 700;
-  font-size: 0.8rem;
+  font-weight: 600;
+  font-size: 0.88rem;
   letter-spacing: 0.01em;
 }
 
@@ -2840,9 +2844,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .learning-summary-grid span {
   display: block;
   color: #7b8aa0;
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -2850,10 +2854,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
   display: block;
   margin-top: 0.25rem;
   color: #1f2d44;
-  font-size: 1.5rem;
+  font-size: 1.72rem;
   line-height: 1.04;
-  letter-spacing: -0.045em;
-  font-weight: 800;
+  letter-spacing: 0;
+  font-weight: 700;
 }
 
 .learning-tabs {
@@ -2926,10 +2930,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .learning-sidebar-label {
   color: #7b8aa0;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.82rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
 }
 
 .learning-sidebar-toggle,
@@ -2962,14 +2966,15 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .learning-sidebar-link,
 .learning-sidebar-item strong {
   color: #1d2b43;
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .learning-sidebar-toggle small,
 .learning-sidebar-item small {
   color: #708198;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.84rem;
+  font-weight: 600;
 }
 
 .learning-sidebar-toggle-secondary {
@@ -3047,16 +3052,18 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .learning-dashboard-header h2 {
   margin-top: 0.4rem;
   color: #18263f;
-  font-size: 1.7rem;
-  line-height: 1.08;
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  line-height: 1.05;
   letter-spacing: -0.04em;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .learning-dashboard-header p {
   margin-top: 0.65rem;
   color: #61728b;
   max-width: 62ch;
+  font-size: 0.98rem;
+  line-height: 1.6;
 }
 
 .learning-dashboard-focus {
@@ -3090,14 +3097,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .learning-dashboard-card h3 {
   margin-top: 0.4rem;
   color: #1a2a42;
-  font-size: 1.28rem;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
+  font-size: 1.72rem;
+  line-height: 1.04;
+  letter-spacing: 0;
+  font-weight: 700;
 }
 
 .learning-dashboard-card p:not(.learning-sidebar-label) {
   margin-top: 0.55rem;
   color: #607089;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .learning-section-nav {
@@ -3243,19 +3253,19 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .learning-page span {
   color: #1f6fd7;
-  font-size: 0.7rem;
-  font-weight: 800;
+  font-size: 0.8rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0;
 }
 
 .learning-page h3 {
   margin-top: 0.35rem;
   color: #17253e;
-  font-size: 1.34rem;
-  line-height: 1.12;
-  letter-spacing: -0.04em;
-  font-weight: 800;
+  font-size: 1.72rem;
+  line-height: 1.04;
+  letter-spacing: 0;
+  font-weight: 700;
 }
 
 .learning-page ul {
@@ -3353,10 +3363,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .learning-question h4 {
   color: #1d2b43;
-  line-height: 1.38;
-  font-size: 1.04rem;
-  letter-spacing: -0.02em;
-  font-weight: 800;
+  line-height: 1.3;
+  font-size: 1.02rem;
+  letter-spacing: 0;
+  font-weight: 700;
 }
 
 .learning-option-list {

@@ -69,6 +69,136 @@ class AdminController {
         sendResponse('error', 'Subtest tidak ditemukan pada paket ini', null, 404);
     }
 
+    private function sanitizeSectionCode($value, int $fallbackIndex): string {
+        $normalized = strtolower(trim((string) $value));
+        $normalized = preg_replace('/[^a-z0-9_]+/', '_', $normalized) ?? '';
+        $normalized = trim($normalized, '_');
+        return $normalized !== '' ? $normalized : 'section_' . $fallbackIndex;
+    }
+
+    private function normalizeWorkflowConfig(array $package, $workflowInput): array {
+        $baseWorkflow = TestWorkflow::buildPackageWorkflow($package);
+        $custom = $workflowInput;
+
+        if (is_string($custom)) {
+            $decoded = json_decode($custom, true);
+            $custom = is_array($decoded) ? $decoded : [];
+        }
+
+        if (!is_array($custom)) {
+            $custom = [];
+        }
+
+        $sectionsInput = $custom['sections'] ?? $baseWorkflow['sections'];
+        if (!is_array($sectionsInput) || count($sectionsInput) === 0) {
+            sendResponse('error', 'Minimal harus ada 1 subtest', null, 422);
+        }
+
+        $usedCodes = [];
+        $normalizedSections = [];
+        foreach (array_values($sectionsInput) as $index => $section) {
+            if (!is_array($section)) {
+                sendResponse('error', 'Format subtest tidak valid', null, 422);
+            }
+
+            $code = $this->sanitizeSectionCode($section['code'] ?? null, $index + 1);
+            if (isset($usedCodes[$code])) {
+                $code = $this->sanitizeSectionCode($code . '_' . ($index + 1), $index + 1);
+            }
+            $usedCodes[$code] = true;
+
+            $name = trim((string) ($section['name'] ?? ''));
+            if ($name === '') {
+                $name = 'Subtest ' . ($index + 1);
+            }
+
+            $durationMinutes = $section['duration_minutes'] ?? null;
+            if ($durationMinutes !== null && $durationMinutes !== '') {
+                $durationMinutes = max(0, (float) $durationMinutes);
+            } else {
+                $durationMinutes = null;
+            }
+
+            $normalizedSections[] = array_filter([
+                'code' => $code,
+                'name' => $name,
+                'session_name' => trim((string) ($section['session_name'] ?? '')) ?: null,
+                'session_order' => isset($section['session_order']) ? max(1, (int) $section['session_order']) : null,
+                'order' => $index + 1,
+                'duration_minutes' => $durationMinutes,
+                'target_question_count' => isset($section['target_question_count']) ? max(0, (int) $section['target_question_count']) : null,
+            ], static function ($value) {
+                return $value !== null && $value !== '';
+            });
+        }
+
+        $normalizedWorkflow = [
+            'label' => trim((string) ($custom['label'] ?? $baseWorkflow['label'])),
+            'allow_random_navigation' => array_key_exists('allow_random_navigation', $custom)
+                ? (bool) $custom['allow_random_navigation']
+                : (bool) $baseWorkflow['allow_random_navigation'],
+            'save_behavior' => trim((string) ($custom['save_behavior'] ?? $baseWorkflow['save_behavior'])),
+            'manual_finish' => array_key_exists('manual_finish', $custom)
+                ? (bool) $custom['manual_finish']
+                : (bool) $baseWorkflow['manual_finish'],
+            'total_duration_minutes' => (float) ($custom['total_duration_minutes'] ?? $baseWorkflow['total_duration_minutes']),
+            'sections' => $normalizedSections,
+        ];
+
+        if (($baseWorkflow['mode'] ?? '') === TestWorkflow::MODE_UTBK_SECTIONED) {
+            $totalDuration = 0.0;
+            foreach ($normalizedSections as $section) {
+                $totalDuration += (float) ($section['duration_minutes'] ?? 0);
+            }
+
+            if ($totalDuration > 0) {
+                $normalizedWorkflow['total_duration_minutes'] = $totalDuration;
+            }
+        }
+
+        return $normalizedWorkflow;
+    }
+
+    private function syncPackageWorkflowData(int $packageId, array $previousWorkflow, array $nextWorkflow): void {
+        $previousSections = [];
+        foreach ($previousWorkflow['sections'] ?? [] as $section) {
+            $previousSections[(string) ($section['code'] ?? '')] = $section;
+        }
+
+        $nextSections = [];
+        foreach ($nextWorkflow['sections'] ?? [] as $section) {
+            $nextSections[(string) ($section['code'] ?? '')] = $section;
+        }
+
+        foreach ($previousSections as $code => $section) {
+            if ($code === '' || isset($nextSections[$code])) {
+                continue;
+            }
+
+            $deleteQuestions = $this->mysqli->prepare('DELETE FROM questions WHERE package_id = ? AND section_code = ?');
+            $deleteQuestions->bind_param('is', $packageId, $code);
+            $deleteQuestions->execute();
+
+            $deleteMaterials = $this->mysqli->prepare('DELETE FROM learning_materials WHERE package_id = ? AND section_code = ?');
+            $deleteMaterials->bind_param('is', $packageId, $code);
+            $deleteMaterials->execute();
+
+            $deleteLearningQuestions = $this->mysqli->prepare('DELETE FROM learning_section_questions WHERE package_id = ? AND section_code = ?');
+            $deleteLearningQuestions->bind_param('is', $packageId, $code);
+            $deleteLearningQuestions->execute();
+        }
+
+        foreach ($nextSections as $code => $section) {
+            $sectionName = (string) ($section['name'] ?? 'Subtest');
+            $sectionOrder = (int) ($section['order'] ?? 1);
+            $updateQuestions = $this->mysqli->prepare(
+                'UPDATE questions SET section_name = ?, section_order = ? WHERE package_id = ? AND section_code = ?'
+            );
+            $updateQuestions->bind_param('siis', $sectionName, $sectionOrder, $packageId, $code);
+            $updateQuestions->execute();
+        }
+    }
+
     private function normalizeMaterialPages(array $pages): array {
         if (count($pages) === 0) {
             sendResponse('error', 'Materi minimal memiliki 1 halaman', null, 422);
@@ -342,10 +472,14 @@ class AdminController {
         $maxAttempts = (int) ($data['max_attempts'] ?? 1);
         $timeLimit = (int) ($data['time_limit'] ?? 90);
         $package = $this->getPackage($packageId);
-        $workflow = TestWorkflow::buildPackageWorkflow($package);
+        $previousWorkflow = TestWorkflow::buildPackageWorkflow($package);
+        $nextWorkflow = array_key_exists('workflow_config', $data)
+            ? $this->normalizeWorkflowConfig($package, $data['workflow_config'])
+            : $previousWorkflow;
+        $workflowConfig = json_encode($nextWorkflow, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        if (in_array($workflow['mode'], [TestWorkflow::MODE_CPNS_CAT, TestWorkflow::MODE_UTBK_SECTIONED], true)) {
-            $timeLimit = (int) ($workflow['total_duration_minutes'] ?? $timeLimit);
+        if (in_array($previousWorkflow['mode'], [TestWorkflow::MODE_CPNS_CAT, TestWorkflow::MODE_UTBK_SECTIONED], true)) {
+            $timeLimit = (int) ($nextWorkflow['total_duration_minutes'] ?? $timeLimit);
         }
 
         if ($packageId <= 0 || $name === '' || $price <= 0 || $durationDays <= 0 || $maxAttempts <= 0 || $timeLimit <= 0) {
@@ -353,15 +487,16 @@ class AdminController {
         }
 
         $query = "UPDATE test_packages
-                  SET name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?
+                  SET name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, workflow_config = ?
                   WHERE id = ?";
         $stmt = $this->mysqli->prepare($query);
-        $stmt->bind_param('ssiiiii', $name, $description, $price, $durationDays, $maxAttempts, $timeLimit, $packageId);
+        $stmt->bind_param('ssiiiisi', $name, $description, $price, $durationDays, $maxAttempts, $timeLimit, $workflowConfig, $packageId);
 
         if (!$stmt->execute()) {
             sendResponse('error', 'Gagal memperbarui paket', null, 500);
         }
 
+        $this->syncPackageWorkflowData($packageId, $previousWorkflow, $nextWorkflow);
         $this->syncQuestionCount($packageId);
         sendResponse('success', 'Paket berhasil diperbarui');
     }

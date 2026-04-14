@@ -238,6 +238,8 @@ export default function AdminPanel() {
   const [loadingPackages, setLoadingPackages] = useState(true);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [packageSaving, setPackageSaving] = useState(false);
+  const [packageCreating, setPackageCreating] = useState(false);
+  const [packageDeleting, setPackageDeleting] = useState(false);
   const [questionSaving, setQuestionSaving] = useState(false);
   const [importingQuestions, setImportingQuestions] = useState(false);
   const [error, setError] = useState('');
@@ -284,6 +286,11 @@ export default function AdminPanel() {
     () => learningContent.find((section) => section.code === learningSectionCode) || learningContent[0] || null,
     [learningContent, learningSectionCode]
   );
+  const selectedPackageSummary = useMemo(() => ({
+    sectionCount: packageSections.length,
+    materialPageCount: learningContent.reduce((total, section) => total + (section.material?.pages?.length || 0), 0),
+    questionCount: questions.length,
+  }), [learningContent, packageSections.length, questions.length]);
 
   const fetchAdminQuestions = useCallback(async (packageId) => {
     const response = await apiClient.get(`/admin/questions?package_id=${packageId}&_=${Date.now()}`);
@@ -512,6 +519,63 @@ export default function AdminPanel() {
       setError(err.response?.data?.message || 'Gagal menyimpan paket');
     } finally {
       setPackageSaving(false);
+    }
+  };
+
+  const handleCreatePackage = async () => {
+    setPackageCreating(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await apiClient.post('/admin/packages', {
+        template_package_id: selectedPackage ? Number(selectedPackage.id) : null,
+      });
+      const createdPackageId = Number(response.data?.data?.package_id || 0);
+      const packagesResponse = await apiClient.get('/admin/packages');
+      const nextPackages = packagesResponse.data.data || [];
+      setPackages(nextPackages);
+      if (createdPackageId > 0) {
+        setSelectedPackageId(createdPackageId);
+      } else if (nextPackages.length > 0) {
+        setSelectedPackageId(Number(nextPackages[nextPackages.length - 1].id));
+      }
+      setSuccess(response.data?.message || 'Paket baru berhasil dibuat.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal membuat paket baru');
+    } finally {
+      setPackageCreating(false);
+    }
+  };
+
+  const handleDeletePackage = async () => {
+    if (!selectedPackage) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Hapus paket "${selectedPackage.name}"? Semua materi, soal, dan riwayat terkait akan ikut terhapus.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setPackageDeleting(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await apiClient.delete(`/admin/packages?id=${selectedPackage.id}`);
+      const packagesResponse = await apiClient.get('/admin/packages');
+      const nextPackages = packagesResponse.data.data || [];
+      setPackages(nextPackages);
+      setSelectedPackageId(nextPackages[0] ? Number(nextPackages[0].id) : null);
+      resetQuestionForm();
+      setExpandedQuestionId(null);
+      setLearningEditorMode('');
+      setSuccess(`Paket "${selectedPackage.name}" berhasil dihapus.`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal menghapus paket');
+    } finally {
+      setPackageDeleting(false);
     }
   };
 
@@ -822,12 +886,26 @@ export default function AdminPanel() {
 
           <div className="admin-grid admin-workspace-grid">
             <section className="account-card admin-sidebar admin-sticky-card admin-workspace-sidebar">
-              <div className="admin-section-header admin-section-header-compact">
+              <div className="admin-workspace-sidebar-head">
+                <span className="account-package-tag">Workspace</span>
                 <div>
                   <h2>Paket Aktif</h2>
-                  <p className="text-muted">Pilih paket yang ingin dikelola.</p>
+                  <p className="text-muted">Pilih paket, buat paket baru, atau hapus paket langsung dari panel ini.</p>
                 </div>
                 <span className="account-package-tag admin-meta-pill">{packages.length} paket</span>
+              </div>
+              <div className="admin-package-crud-actions">
+                <button type="button" className="btn btn-primary" onClick={handleCreatePackage} disabled={packageCreating}>
+                  {packageCreating ? 'Membuat...' : 'Tambah Paket'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleDeletePackage}
+                  disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
+                >
+                  {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
+                </button>
               </div>
               <div className="admin-package-switcher">
                 {packages.map((pkg) => (
@@ -843,6 +921,7 @@ export default function AdminPanel() {
                     }}
                   >
                     <strong>{pkg.name}</strong>
+                    <small>{pkg.workflow?.sections?.length || 0} subtes • {Number(pkg.question_count || 0)} soal</small>
                     <span>Rp{Number(pkg.price).toLocaleString('id-ID')}</span>
                   </button>
                 ))}
@@ -850,19 +929,39 @@ export default function AdminPanel() {
             </section>
 
             <section className="account-card admin-main-card admin-panel-card admin-workspace-main-card">
-              <div className="admin-section-header admin-section-header-compact">
-                <div>
-                  <h2>Pengaturan Paket</h2>
-                  <p className="text-muted">Harga, akses, dan mekanisme ujian.</p>
+              {selectedPackage && (
+                <div className="admin-workspace-main-hero">
+                  <div>
+                    <span className="account-package-tag">
+                      {selectedPackage.test_mode === 'utbk_sectioned' ? 'UTBK Bertahap' : 'CPNS CAT'}
+                    </span>
+                    <h2>{selectedPackage.name}</h2>
+                    <p className="text-muted">Kelola pengaturan, materi, mini test, dan bank soal dari satu workspace admin.</p>
+                  </div>
+                  <div className="admin-workspace-stat-grid">
+                    <article className="admin-workspace-stat-card">
+                      <strong>{selectedPackageSummary.sectionCount}</strong>
+                      <span>Subtes aktif</span>
+                    </article>
+                    <article className="admin-workspace-stat-card">
+                      <strong>{selectedPackageSummary.materialPageCount}</strong>
+                      <span>Halaman materi</span>
+                    </article>
+                    <article className="admin-workspace-stat-card">
+                      <strong>{selectedPackageSummary.questionCount}</strong>
+                      <span>Bank soal</span>
+                    </article>
+                  </div>
                 </div>
-                {selectedPackage && (
-                  <span className="account-package-tag admin-meta-pill">
-                    {selectedPackage.test_mode === 'utbk_sectioned' ? 'UTBK Bertahap' : 'CPNS CAT'}
-                  </span>
-                )}
-              </div>
+              )}
               {packageForm && (
                 <form className="admin-package-form" onSubmit={handlePackageSave}>
+                  <div className="admin-section-header admin-section-header-compact admin-workspace-form-head">
+                    <div>
+                      <h3>Pengaturan Paket</h3>
+                      <p className="text-muted">Harga, akses, attempt, dan mekanisme ujian.</p>
+                    </div>
+                  </div>
                   <div className="account-form-grid">
                     <div className="form-group">
                       <label>Nama Paket</label>
@@ -917,8 +1016,19 @@ export default function AdminPanel() {
                   </div>
 
                   <div className="account-form-actions">
+                    <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
+                      {packageCreating ? 'Membuat...' : 'Tambah Paket'}
+                    </button>
                     <button type="submit" className="btn btn-primary" disabled={packageSaving}>
                       {packageSaving ? 'Menyimpan...' : 'Simpan Paket'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={handleDeletePackage}
+                      disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
+                    >
+                      {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
                     </button>
                   </div>
                 </form>

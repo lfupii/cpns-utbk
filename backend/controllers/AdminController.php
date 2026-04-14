@@ -51,6 +51,12 @@ class AdminController {
         return $package;
     }
 
+    private function getFallbackCategoryId(): int {
+        $result = $this->mysqli->query('SELECT id FROM test_categories ORDER BY id ASC LIMIT 1');
+        $row = $result ? $result->fetch_assoc() : null;
+        return (int) ($row['id'] ?? 0);
+    }
+
     private function getWorkflowSection(int $packageId, string $sectionCode): array {
         $package = $this->getPackage($packageId);
         $workflow = TestWorkflow::buildPackageWorkflow($package);
@@ -358,6 +364,89 @@ class AdminController {
 
         $this->syncQuestionCount($packageId);
         sendResponse('success', 'Paket berhasil diperbarui');
+    }
+
+    public function createPackage() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        $templatePackageId = (int) ($data['template_package_id'] ?? 0);
+        $templatePackage = $templatePackageId > 0 ? $this->getPackage($templatePackageId) : null;
+
+        $categoryId = $templatePackage ? (int) $templatePackage['category_id'] : $this->getFallbackCategoryId();
+        if ($categoryId <= 0) {
+            sendResponse('error', 'Kategori paket belum tersedia', null, 422);
+        }
+
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            $baseName = trim((string) ($templatePackage['name'] ?? 'Paket Baru'));
+            $name = $baseName . ' Copy';
+        }
+
+        $description = trim((string) ($data['description'] ?? ($templatePackage['description'] ?? '')));
+        $price = max(1000, (int) ($data['price'] ?? ($templatePackage['price'] ?? 1000)));
+        $durationDays = max(1, (int) ($data['duration_days'] ?? ($templatePackage['duration_days'] ?? 30)));
+        $maxAttempts = max(1, (int) ($data['max_attempts'] ?? ($templatePackage['max_attempts'] ?? 1)));
+        $timeLimit = max(1, (int) ($data['time_limit'] ?? ($templatePackage['time_limit'] ?? 90)));
+        $testMode = trim((string) ($data['test_mode'] ?? ($templatePackage['test_mode'] ?? '')));
+        $workflowConfig = $data['workflow_config'] ?? ($templatePackage['workflow_config'] ?? null);
+
+        $query = 'INSERT INTO test_packages (
+                    category_id,
+                    name,
+                    description,
+                    price,
+                    duration_days,
+                    max_attempts,
+                    question_count,
+                    time_limit,
+                    test_mode,
+                    workflow_config
+                  ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)';
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param(
+            'issiiiiss',
+            $categoryId,
+            $name,
+            $description,
+            $price,
+            $durationDays,
+            $maxAttempts,
+            $timeLimit,
+            $testMode,
+            $workflowConfig
+        );
+
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal menambahkan paket', ['details' => $stmt->error], 500);
+        }
+
+        sendResponse('success', 'Paket baru berhasil dibuat', ['package_id' => (int) $stmt->insert_id], 201);
+    }
+
+    public function deletePackage() {
+        verifyAdmin();
+
+        $packageId = (int) ($_GET['id'] ?? 0);
+        if ($packageId <= 0) {
+            sendResponse('error', 'Package ID harus diisi', null, 400);
+        }
+
+        $package = $this->getPackage($packageId);
+        $totalResult = $this->mysqli->query('SELECT COUNT(*) AS total FROM test_packages');
+        $totalPackages = (int) (($totalResult ? $totalResult->fetch_assoc() : [])['total'] ?? 0);
+        if ($totalPackages <= 1) {
+            sendResponse('error', 'Minimal harus ada 1 paket aktif', null, 422);
+        }
+
+        $stmt = $this->mysqli->prepare('DELETE FROM test_packages WHERE id = ?');
+        $stmt->bind_param('i', $packageId);
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal menghapus paket', ['details' => $stmt->error], 500);
+        }
+
+        sendResponse('success', 'Paket "' . $package['name'] . '" berhasil dihapus');
     }
 
     public function getQuestions() {
@@ -761,8 +850,12 @@ $controller = new AdminController($mysqli);
 
 if (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 'GET') {
     $controller->getPackages();
+} elseif (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 'POST') {
+    $controller->createPackage();
 } elseif (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 'PUT') {
     $controller->updatePackage();
+} elseif (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 'DELETE') {
+    $controller->deletePackage();
 } elseif (strpos($requestPath, '/api/admin/questions') !== false && $requestMethod === 'GET') {
     $controller->getQuestions();
 } elseif (strpos($requestPath, '/api/admin/questions/import') !== false && $requestMethod === 'POST') {

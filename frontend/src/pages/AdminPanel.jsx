@@ -884,85 +884,80 @@ export default function AdminPanel() {
             </div>
           )}
 
-          <div className="admin-grid admin-workspace-grid">
-            <section className="account-card admin-sidebar admin-sticky-card admin-workspace-sidebar">
-              <div className="admin-workspace-sidebar-head">
-                <span className="account-package-tag">Workspace</span>
-                <div>
-                  <h2>Paket Aktif</h2>
-                  <p className="text-muted">Pilih paket, buat paket baru, atau hapus paket langsung dari panel ini.</p>
+          <section className="learning-workspace admin-user-workspace">
+            <aside className="learning-sidebar admin-user-sidebar">
+              <div className="learning-sidebar-card admin-user-sidebar-card">
+                <p className="learning-sidebar-label">Workspace admin</p>
+                <div className="learning-sidebar-toggle admin-user-current-package" aria-hidden="true">
+                  <span>
+                    <strong>{selectedPackage?.name || 'Pilih paket'}</strong>
+                    <small>{selectedPackage?.category_name || `${packages.length} paket tersedia`}</small>
+                  </span>
+                  <span>{packages.length} paket</span>
                 </div>
-                <span className="account-package-tag admin-meta-pill">{packages.length} paket</span>
-              </div>
-              <div className="admin-package-crud-actions">
-                <button type="button" className="btn btn-primary" onClick={handleCreatePackage} disabled={packageCreating}>
-                  {packageCreating ? 'Membuat...' : 'Tambah Paket'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={handleDeletePackage}
-                  disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
-                >
-                  {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
-                </button>
-              </div>
-              <div className="admin-package-switcher">
-                {packages.map((pkg) => (
-                  <button
-                    key={pkg.id}
-                    type="button"
-                    className={`admin-package-switch ${Number(selectedPackageId) === Number(pkg.id) ? 'admin-package-switch-active' : ''}`}
-                    onClick={() => {
-                      setSelectedPackageId(Number(pkg.id));
-                      resetQuestionForm();
-                      setExpandedQuestionId(null);
-                      setLearningEditorMode('');
-                    }}
-                  >
-                    <strong>{pkg.name}</strong>
-                    <small>{pkg.workflow?.sections?.length || 0} subtes • {Number(pkg.question_count || 0)} soal</small>
-                    <span>Rp{Number(pkg.price).toLocaleString('id-ID')}</span>
+                <div className="admin-package-crud-actions">
+                  <button type="button" className="btn btn-primary" onClick={handleCreatePackage} disabled={packageCreating}>
+                    {packageCreating ? 'Membuat...' : 'Tambah Paket'}
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={handleDeletePackage}
+                    disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
+                  >
+                    {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
+                  </button>
+                </div>
               </div>
-            </section>
 
-            <section className="account-card admin-main-card admin-panel-card admin-workspace-main-card">
-              {selectedPackage && (
-                <div className="admin-workspace-main-hero">
+              <div className="learning-sidebar-card admin-user-sidebar-card">
+                <p className="learning-sidebar-label">Jenis paket</p>
+                <div className="learning-sidebar-list">
+                  {packages.map((pkg) => (
+                    <button
+                      key={pkg.id}
+                      type="button"
+                      className={Number(selectedPackageId) === Number(pkg.id) ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
+                      onClick={() => {
+                        setSelectedPackageId(Number(pkg.id));
+                        resetQuestionForm();
+                        setExpandedQuestionId(null);
+                        setLearningEditorMode('');
+                      }}
+                    >
+                      <strong>{pkg.name}</strong>
+                      <small>{pkg.workflow?.sections?.length || 0} subtes • {Number(pkg.question_count || 0)} soal</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            <div className="learning-main-panel admin-user-main-panel">
+              <section className="learning-dashboard-shell admin-user-dashboard-shell">
+                <div className="learning-dashboard-header">
                   <div>
                     <span className="account-package-tag">
-                      {selectedPackage.test_mode === 'utbk_sectioned' ? 'UTBK Bertahap' : 'CPNS CAT'}
+                      {selectedPackage?.test_mode === 'utbk_sectioned' ? 'UTBK Bertahap' : 'CPNS CAT'}
                     </span>
-                    <h2>{selectedPackage.name}</h2>
-                    <p className="text-muted">Kelola pengaturan, materi, mini test, dan bank soal dari satu workspace admin.</p>
+                    <h2>{selectedPackage?.name || 'Panel Admin'}</h2>
+                    <p>Kelola pengaturan paket, materi, mini test, dan bank soal dengan pola workspace yang sama seperti halaman user.</p>
                   </div>
-                  <div className="admin-workspace-stat-grid">
-                    <article className="admin-workspace-stat-card">
-                      <strong>{selectedPackageSummary.sectionCount}</strong>
-                      <span>Subtes aktif</span>
-                    </article>
-                    <article className="admin-workspace-stat-card">
-                      <strong>{selectedPackageSummary.materialPageCount}</strong>
-                      <span>Halaman materi</span>
-                    </article>
-                    <article className="admin-workspace-stat-card">
-                      <strong>{selectedPackageSummary.questionCount}</strong>
-                      <span>Bank soal</span>
-                    </article>
+                  <div className="learning-path-score" aria-label="Ringkasan workspace admin">
+                    <strong>{selectedPackageSummary.questionCount}</strong>
+                    <span>bank soal</span>
                   </div>
                 </div>
-              )}
-              {packageForm && (
-                <form className="admin-package-form" onSubmit={handlePackageSave}>
-                  <div className="admin-section-header admin-section-header-compact admin-workspace-form-head">
-                    <div>
-                      <h3>Pengaturan Paket</h3>
-                      <p className="text-muted">Harga, akses, attempt, dan mekanisme ujian.</p>
-                    </div>
-                  </div>
-                  <div className="account-form-grid">
+
+                <div className="learning-dashboard-focus admin-user-dashboard-focus">
+                  <div className="learning-dashboard-card admin-user-dashboard-card">
+                    <p className="learning-sidebar-label">Pengaturan paket</p>
+                    <h3>{selectedPackage?.name || 'Belum ada paket dipilih'}</h3>
+                    <p>Harga, akses, attempt, dan mekanisme ujian diatur dari panel ini.</p>
+
+                    {packageForm && (
+                      <form className="admin-package-form" onSubmit={handlePackageSave}>
+                        <div className="account-form-grid">
                     <div className="form-group">
                       <label>Nama Paket</label>
                       <input name="name" value={packageForm.name} onChange={handlePackageChange} />
@@ -1015,26 +1010,44 @@ export default function AdminPanel() {
                     )}
                   </div>
 
-                  <div className="account-form-actions">
-                    <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
-                      {packageCreating ? 'Membuat...' : 'Tambah Paket'}
-                    </button>
-                    <button type="submit" className="btn btn-primary" disabled={packageSaving}>
-                      {packageSaving ? 'Menyimpan...' : 'Simpan Paket'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      onClick={handleDeletePackage}
-                      disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
-                    >
-                      {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
-                    </button>
+                        <div className="account-form-actions">
+                          <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
+                            {packageCreating ? 'Membuat...' : 'Tambah Paket'}
+                          </button>
+                          <button type="submit" className="btn btn-primary" disabled={packageSaving}>
+                            {packageSaving ? 'Menyimpan...' : 'Simpan Paket'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={handleDeletePackage}
+                            disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
+                          >
+                            {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
-                </form>
-              )}
-            </section>
-          </div>
+
+                  <div className="learning-summary-grid admin-user-summary-grid">
+                    <div>
+                      <span>Subtes aktif</span>
+                      <strong>{selectedPackageSummary.sectionCount}</strong>
+                    </div>
+                    <div>
+                      <span>Halaman materi</span>
+                      <strong>{selectedPackageSummary.materialPageCount}</strong>
+                    </div>
+                    <div>
+                      <span>Total soal</span>
+                      <strong>{selectedPackageSummary.questionCount}</strong>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
 
           <section className="account-card admin-main-card admin-panel-card admin-learning-card admin-learning-crud-shell">
             <div className="admin-section-header admin-list-toolbar">

@@ -924,7 +924,7 @@ export default function AdminPanel() {
             </section>
           </div>
 
-          <section className="account-card admin-main-card admin-panel-card admin-learning-card">
+          <section className="account-card admin-main-card admin-panel-card admin-learning-card admin-learning-crud-shell">
             <div className="admin-section-header admin-list-toolbar">
               <div>
                 <h2>Materi & Mini Test Subtest</h2>
@@ -950,7 +950,7 @@ export default function AdminPanel() {
               <p>Memuat materi subtest...</p>
             ) : activeLearningSection ? (
               <>
-                <div className="admin-learning-overview-grid">
+                <div className="admin-learning-overview-grid admin-learning-overview-grid-modern">
                   {learningContent.map((section) => {
                     const pageCount = section.material?.pages?.length || 0;
                     const questionCount = section.questions?.length || 0;
@@ -959,7 +959,7 @@ export default function AdminPanel() {
                     return (
                       <article
                         key={section.code}
-                        className={`admin-learning-overview-card ${isActive ? 'admin-learning-overview-card-active' : ''}`}
+                        className={`admin-learning-overview-card admin-learning-overview-card-modern ${isActive ? 'admin-learning-overview-card-active' : ''}`}
                       >
                         <span className="account-package-tag">{section.session_name || 'Subtest'}</span>
                         <h3>{section.name}</h3>
@@ -985,7 +985,7 @@ export default function AdminPanel() {
                 </div>
 
                 {learningEditorMode === 'quiz' && (
-                  <div className="admin-learning-editor-shell">
+                  <div className="admin-learning-editor-shell admin-learning-quiz-shell">
                     <div className="admin-section-header admin-section-header-compact">
                       <div>
                         <span className="account-package-tag">{activeLearningSection.name}</span>
@@ -1004,7 +1004,7 @@ export default function AdminPanel() {
 
                     <div className="admin-learning-question-list">
                       {learningQuestionsForm.map((question, questionIndex) => (
-                        <div key={`learning-question-${questionIndex}`} className="admin-learning-page-card">
+                        <div key={`learning-question-${questionIndex}`} className="admin-learning-page-card admin-learning-question-card-modern">
                           <div className="admin-option-editor-head">
                             <strong>Soal {questionIndex + 1}</strong>
                             <button
@@ -1086,7 +1086,7 @@ export default function AdminPanel() {
           </section>
 
           <div className={`admin-grid admin-grid-questions ${showQuestionEditor ? '' : 'admin-grid-questions-collapsed'}`}>
-            <section className="account-card admin-main-card admin-panel-card admin-list-card">
+            <section className="account-card admin-main-card admin-panel-card admin-list-card admin-test-bank-shell">
               <div className="admin-section-header admin-list-toolbar">
                 <div>
                   <h2>Bank Soal</h2>
@@ -1186,7 +1186,7 @@ export default function AdminPanel() {
                   </button>
                 </div>
               ) : (
-                <div className="admin-question-table">
+                <div className="admin-question-table admin-question-table-modern">
                   <div className="admin-question-table-head">
                     <span />
                     <span>Pertanyaan</span>
@@ -1197,7 +1197,7 @@ export default function AdminPanel() {
                   {filteredQuestions.map((question, index) => {
                     const isExpanded = Number(expandedQuestionId) === Number(question.id);
                     return (
-                      <div key={question.id} className={`admin-question-row-wrap ${isExpanded ? 'admin-question-row-wrap-expanded' : ''}`}>
+                      <div key={question.id} className={`admin-question-row-wrap admin-question-row-wrap-modern ${isExpanded ? 'admin-question-row-wrap-expanded' : ''}`}>
                         <div className="admin-question-row">
                           <button
                             type="button"
@@ -1278,7 +1278,7 @@ export default function AdminPanel() {
             </section>
 
             {showQuestionEditor && (
-              <section className="account-card admin-main-card admin-panel-card admin-editor-card">
+              <section className="account-card admin-main-card admin-panel-card admin-editor-card admin-test-editor-shell">
                 <div className="admin-section-header admin-editor-header">
                   <div>
                     <h2>{questionForm.question_id ? 'Edit Soal' : 'Tambah Soal Baru'}</h2>

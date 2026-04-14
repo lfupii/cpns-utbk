@@ -898,6 +898,7 @@ export default function AdminPanel() {
                       <div className="form-group form-group-full">
                         <label>Mekanisme Ujian</label>
                         <textarea
+                          name="workflow_overview"
                           rows="4"
                           value={[
                             `${selectedPackage.workflow.label} • ${selectedPackage.workflow.total_duration_minutes} menit`,
@@ -932,6 +933,7 @@ export default function AdminPanel() {
               </div>
               <div className="admin-list-toolbar-actions">
                 <select
+                  name="learning_section_filter"
                   value={learningSectionCode}
                   onChange={(event) => setLearningSectionCode(event.target.value)}
                   className="admin-search-input admin-section-filter"
@@ -1019,6 +1021,7 @@ export default function AdminPanel() {
                           <div className="form-group">
                             <label>Pertanyaan</label>
                             <textarea
+                              name={`learning_question_text_${questionIndex}`}
                               rows="3"
                               value={question.question_text}
                               onChange={(event) => updateLearningQuestion(questionIndex, 'question_text', event.target.value)}
@@ -1028,6 +1031,7 @@ export default function AdminPanel() {
                             <div className="form-group">
                               <label>Kesulitan</label>
                               <select
+                                name={`learning_question_difficulty_${questionIndex}`}
                                 value={question.difficulty}
                                 onChange={(event) => updateLearningQuestion(questionIndex, 'difficulty', event.target.value)}
                               >
@@ -1039,6 +1043,7 @@ export default function AdminPanel() {
                             <div className="form-group">
                               <label>Urutan</label>
                               <input
+                                name={`learning_question_order_${questionIndex}`}
                                 type="number"
                                 min="1"
                                 value={question.question_order}
@@ -1058,6 +1063,7 @@ export default function AdminPanel() {
                                 </button>
                                 <strong>{option.letter}</strong>
                                 <input
+                                  name={`learning_option_text_${questionIndex}_${optionIndex}`}
                                   value={option.text}
                                   onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'text', event.target.value)}
                                   placeholder={`Opsi ${option.letter}`}
@@ -1096,6 +1102,7 @@ export default function AdminPanel() {
                 </div>
                 <div className="admin-list-toolbar-actions">
                   <select
+                    name="question_section_filter"
                     value={questionSectionFilter}
                     onChange={(event) => setQuestionSectionFilter(event.target.value)}
                     className="admin-search-input admin-section-filter"
@@ -1109,6 +1116,7 @@ export default function AdminPanel() {
                     ))}
                   </select>
                   <input
+                    name="question_search"
                     type="search"
                     value={questionQuery}
                     onChange={(event) => setQuestionQuery(event.target.value)}
@@ -1158,7 +1166,7 @@ export default function AdminPanel() {
                   </button>
                   <label className="btn btn-outline admin-file-button">
                     Pilih File CSV
-                    <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
+                    <input name="question_import_file" type="file" accept=".csv,text/csv" onChange={handleImportFileChange} hidden />
                   </label>
                   <button
                     type="button"
@@ -1380,6 +1388,7 @@ export default function AdminPanel() {
                         <div className="form-group">
                           <label>Teks Opsi {option.letter}</label>
                           <input
+                            name={`option_text_${option.letter}_${index}`}
                             type="text"
                             value={option.text}
                             onChange={(event) => handleOptionFieldChange(index, 'text', event.target.value)}
@@ -1390,6 +1399,7 @@ export default function AdminPanel() {
                         <div className="form-group">
                           <label>URL Gambar Opsi {option.letter}</label>
                           <input
+                            name={`option_image_url_${option.letter}_${index}`}
                             type="url"
                             value={option.image_url}
                             onChange={(event) => handleOptionFieldChange(index, 'image_url', event.target.value)}

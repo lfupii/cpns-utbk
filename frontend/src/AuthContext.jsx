@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback } from 'react';
+import React, { createContext, useState, useCallback, useEffect } from 'react';
 import apiClient from './api';
 
 export const AuthContext = createContext();
@@ -23,6 +23,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(storedToken || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [authReady, setAuthReady] = useState(!storedToken);
 
   const persistSession = useCallback(({ token: nextToken, userId, email, full_name, role }) => {
     if (nextToken) {
@@ -214,9 +215,46 @@ export const AuthProvider = ({ children }) => {
   const isAuthenticated = !!token;
   const isAdmin = user?.role === 'admin';
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      clearSession();
+      setAuthReady(true);
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, [clearSession]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    if (!storedToken) {
+      setAuthReady(true);
+      return undefined;
+    }
+
+    const hydrateSession = async () => {
+      try {
+        await refreshProfile();
+      } catch (err) {
+        // refreshProfile already clears invalid sessions on 401
+      } finally {
+        if (!ignore) {
+          setAuthReady(true);
+        }
+      }
+    };
+
+    hydrateSession();
+
+    return () => {
+      ignore = true;
+    };
+  }, [refreshProfile, storedToken]);
+
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, error, login, register, resendVerification, getVerificationStatus, verifyEmail, refreshProfile, logout, isAuthenticated, isAdmin }}
+      value={{ user, token, loading, error, authReady, login, register, resendVerification, getVerificationStatus, verifyEmail, refreshProfile, logout, isAuthenticated, isAdmin }}
     >
       {children}
     </AuthContext.Provider>

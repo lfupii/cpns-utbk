@@ -20,12 +20,18 @@ import { ThemeProvider } from './ThemeContext';
 import './index.css';
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, authReady } = useAuth();
+  if (!authReady) {
+    return null;
+  }
   return isAuthenticated ? children : <Navigate to="/login" />;
 }
 
 function AdminRoute({ children }) {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, authReady } = useAuth();
+  if (!authReady) {
+    return null;
+  }
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
   }
@@ -69,8 +75,12 @@ function MotionEffects() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, authReady } = useAuth();
   const location = useLocation();
+
+  if (!authReady) {
+    return null;
+  }
 
   return (
     <>

@@ -293,12 +293,12 @@ export default function AdminLearningMaterialEditor() {
               }
             }}
           >
-            <select onChange={(event) => runCommand('formatBlock', event.target.value)} defaultValue="p">
+            <select name="editor_block_type" onChange={(event) => runCommand('formatBlock', event.target.value)} defaultValue="p">
               <option value="p">Paragraf</option>
               <option value="h2">Heading 1</option>
               <option value="h3">Heading 2</option>
             </select>
-            <select onChange={(event) => applyFontSize(event.target.value)} defaultValue="16">
+            <select name="editor_font_size" onChange={(event) => applyFontSize(event.target.value)} defaultValue="16">
               <option value="12">12</option>
               <option value="14">14</option>
               <option value="16">16</option>
@@ -308,7 +308,7 @@ export default function AdminLearningMaterialEditor() {
             </select>
             <label className="admin-color-control">
               Warna
-              <input type="color" defaultValue="#16243c" onChange={(event) => runCommand('foreColor', event.target.value)} />
+              <input name="editor_text_color" type="color" defaultValue="#16243c" onChange={(event) => runCommand('foreColor', event.target.value)} />
             </label>
             <button type="button" onClick={() => runCommand('bold')}>B</button>
             <button type="button" onClick={() => runCommand('italic')}><em>I</em></button>
@@ -345,6 +345,7 @@ export default function AdminLearningMaterialEditor() {
               <div className="admin-doc-cover admin-learning-cover-card">
                 <label>Judul Materi</label>
                 <input
+                  name="material_title"
                   value={materialForm.title}
                   onChange={(event) => setMaterialForm((current) => ({ ...current, title: event.target.value }))}
                 />
@@ -364,6 +365,7 @@ export default function AdminLearningMaterialEditor() {
                     </button>
                   </div>
                   <input
+                    name={`material_page_title_${pageIndex}`}
                     className="admin-doc-title-input"
                     value={page.title}
                     onChange={(event) => updatePageTitle(pageIndex, event.target.value)}

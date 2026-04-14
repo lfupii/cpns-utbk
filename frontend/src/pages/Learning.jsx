@@ -38,9 +38,12 @@ export default function Learning() {
   const { isAuthenticated } = useAuth();
   const numericPackageId = Number(packageId);
   const [learning, setLearning] = useState(null);
-  const [activeTab, setActiveTab] = useState('materi');
   const [activeSectionCode, setActiveSectionCode] = useState('');
   const [sectionTests, setSectionTests] = useState({});
+  const [activePackages, setActivePackages] = useState([]);
+  const [contentView, setContentView] = useState('dashboard');
+  const [packagesExpanded, setPackagesExpanded] = useState(false);
+  const [materialsExpanded, setMaterialsExpanded] = useState(true);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
@@ -69,6 +72,40 @@ export default function Learning() {
     fetchLearning();
   }, [fetchLearning]);
 
+  useEffect(() => {
+    setContentView('dashboard');
+    setPackagesExpanded(false);
+    setMaterialsExpanded(true);
+  }, [numericPackageId]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setActivePackages([]);
+      return;
+    }
+
+    let ignore = false;
+
+    const fetchActivePackages = async () => {
+      try {
+        const response = await apiClient.get('/auth/active-packages');
+        if (!ignore) {
+          setActivePackages(response.data.data || []);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setActivePackages([]);
+        }
+      }
+    };
+
+    fetchActivePackages();
+
+    return () => {
+      ignore = true;
+    };
+  }, [isAuthenticated]);
+
   const sections = useMemo(() => learning?.sections || [], [learning]);
   const activeSection = useMemo(
     () => sections.find((section) => section.code === activeSectionCode) || sections[0] || null,
@@ -85,10 +122,58 @@ export default function Learning() {
   const totalMilestoneSteps = Math.max(1, sections.length * 2 + 1);
   const completedMilestoneSteps = materialDoneCount + subtestDoneCount + (completedTryout ? 1 : 0);
   const milestonePercent = Math.round((completedMilestoneSteps / totalMilestoneSteps) * 100);
+  const currentPackageOption = useMemo(() => {
+    const matchedPackage = activePackages.find((pkg) => Number(pkg.package_id) === numericPackageId);
+    if (matchedPackage) {
+      return matchedPackage;
+    }
+
+    return {
+      access_id: `current-${numericPackageId}`,
+      package_id: numericPackageId,
+      package_name: packageData?.name || 'Paket belajar',
+      category_name: packageData?.category_name || 'Paket',
+      description: packageData?.description || '',
+      remaining_attempts: summary.remaining_attempts ?? 'Admin',
+      is_unused: false,
+      can_start_test: Boolean(summary.can_start_tryout),
+    };
+  }, [activePackages, numericPackageId, packageData, summary.remaining_attempts, summary.can_start_tryout]);
+  const packageOptions = useMemo(() => {
+    if (activePackages.length > 0) {
+      return activePackages;
+    }
+
+    return currentPackageOption ? [currentPackageOption] : [];
+  }, [activePackages, currentPackageOption]);
+  const lastReadSection = useMemo(() => {
+    const scoredSections = sections
+      .map((section) => {
+        const timestamps = [
+          section.progress.material_read_at,
+          section.progress.subtest_test_completed_at,
+        ].filter(Boolean).map((value) => new Date(value).getTime());
+
+        return {
+          section,
+          latestTimestamp: timestamps.length ? Math.max(...timestamps) : 0,
+        };
+      })
+      .filter((item) => item.latestTimestamp > 0)
+      .sort((left, right) => right.latestTimestamp - left.latestTimestamp);
+
+    return scoredSections[0]?.section || null;
+  }, [sections]);
+  const nextLearningSection = useMemo(
+    () => sections.find((section) => !section.progress.material_read) || sections[0] || null,
+    [sections]
+  );
+  const resumeSection = lastReadSection || nextLearningSection || activeSection || null;
 
   const jumpToSectionMaterial = (sectionCode) => {
-    setActiveTab('materi');
+    setContentView('materi');
     setActiveSectionCode(sectionCode);
+    setMaterialsExpanded(true);
   };
 
   const updateSectionProgress = (sectionCode, progressPatch) => {
@@ -262,6 +347,14 @@ export default function Learning() {
     }
   };
 
+  const openTryoutView = () => {
+    setContentView('tryout');
+  };
+
+  const openDashboardView = () => {
+    setContentView('dashboard');
+  };
+
   if (loading) {
     return (
       <AccountShell title="Ruang Belajar" subtitle="Memuat paket belajar dan progresmu.">
@@ -293,80 +386,6 @@ export default function Learning() {
       {error && <div className="alert">{error}</div>}
       {successMessage && <div className="account-success learning-flash">{successMessage}</div>}
 
-      <section className="learning-hero-panel">
-        <div className="learning-hero-copy">
-          <span className="account-package-tag">{packageData.category_name}</span>
-          <div className="learning-hero-copy-block">
-            <h2>{packageData.name}</h2>
-            <p>{packageData.description}</p>
-          </div>
-          <div className="learning-hero-badges" aria-label="Ringkasan paket belajar">
-            <span>{sections.length} subtest</span>
-            <span>{packageData.question_count || 0} soal</span>
-            <span>{packageData.time_limit || 0} menit</span>
-          </div>
-          <div className="learning-hero-actions">
-            {hasAccess ? (
-              <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
-                Mulai Tryout Keseluruhan
-              </Link>
-            ) : !viewerIsAuthenticated ? (
-              <Link to="/login" className="btn btn-primary">
-                Login untuk Buka Lengkap
-              </Link>
-            ) : (
-              <Link to={`/payment/${numericPackageId}`} className="btn btn-primary">
-                Aktifkan Paket
-              </Link>
-            )}
-            <Link to="/" className="btn btn-outline">
-              Kembali ke Home
-            </Link>
-          </div>
-        </div>
-
-        <div className="learning-hero-stage">
-          <div className="learning-hero-stage-card">
-            <div className="learning-hero-stage-head">
-              <div>
-                <p>Progress aktif</p>
-                <strong>{milestonePercent}% selesai</strong>
-              </div>
-              <span className="learning-hero-stage-ring">
-                {completedMilestoneSteps}/{totalMilestoneSteps}
-              </span>
-            </div>
-            <div className="learning-progress-track" aria-hidden="true">
-              <span style={{ width: `${milestonePercent}%` }} />
-            </div>
-            <div className="learning-hero-stage-grid">
-              <div>
-                <span>Materi dibaca</span>
-                <strong>{materialDoneCount}/{sections.length}</strong>
-              </div>
-              <div>
-                <span>Mini test</span>
-                <strong>{subtestDoneCount}/{sections.length}</strong>
-              </div>
-              <div>
-                <span>Status akses</span>
-                <strong>{hasAccess ? 'Full access' : 'Preview'}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="learning-hero-next">
-            <span>Fokus berikutnya</span>
-            <strong>{activeSection?.name || 'Mulai dari subtest pertama'}</strong>
-            <p>
-              {hasAccess
-                ? 'Lanjutkan materi aktif, tandai selesai, lalu tutup dengan mini test sebelum masuk tryout penuh.'
-                : 'Preview materi awal tetap terbuka supaya kamu bisa cek ritme belajar sebelum aktifkan paket.'}
-            </p>
-          </div>
-        </div>
-      </section>
-
       {!hasAccess && (
         <div className="learning-lock-notice">
           <strong>Mode preview aktif.</strong>
@@ -377,146 +396,191 @@ export default function Learning() {
           </span>
         </div>
       )}
-
-      <section className="learning-dashboard">
-        <div className="learning-milestone">
-          <div className="learning-path-head">
-            <div className="learning-section-title">
-              <p>Timeline belajar</p>
-              <h3>Milestone</h3>
-            </div>
-            <div className="learning-path-score" aria-label={`Progress belajar ${milestonePercent} persen`}>
-              <strong>{milestonePercent}%</strong>
-              <span>progress</span>
-            </div>
-          </div>
-
-          <div className="learning-progress-track" aria-hidden="true">
-            <span style={{ width: `${milestonePercent}%` }} />
-          </div>
-
-          <div className="learning-path-list">
-            {sections.map((section, index) => {
-              const materialDone = Boolean(section.progress.material_read);
-              const subtestDone = Boolean(section.progress.subtest_test_completed);
-              const sectionDone = materialDone && subtestDone;
-              const isActive = section.code === activeSection?.code;
-
-              return (
-                <button
-                  type="button"
-                  key={section.code}
-                  className={[
-                    'learning-path-card',
-                    sectionDone ? 'learning-path-card-done' : '',
-                    isActive ? 'learning-path-card-active' : '',
-                  ].filter(Boolean).join(' ')}
-                  onClick={() => jumpToSectionMaterial(section.code)}
-                >
-                  <span className="learning-path-index">{index + 1}</span>
-                  <span className="learning-path-copy">
-                    <strong>{section.name}</strong>
-                    <small>{section.session_name || 'Subtest belajar'}</small>
-                  </span>
-                  <span className="learning-path-steps">
-                    <span className={materialDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
-                      Materi
-                    </span>
-                    <span className={subtestDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
-                      Mini test
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-            <div className={`learning-path-card learning-path-card-final ${completedTryout ? 'learning-path-card-done' : ''}`}>
-              <span className="learning-path-index">T</span>
-              <span className="learning-path-copy">
-                <strong>Tryout keseluruhan</strong>
-                <small>{completedTryout ? 'Simulasi penuh sudah dikerjakan' : 'Terbuka setelah paket aktif'}</small>
+      <section className="learning-workspace">
+        <aside className="learning-sidebar">
+          <div className="learning-sidebar-card">
+            <p className="learning-sidebar-label">Jenis paket</p>
+            <button
+              type="button"
+              className="learning-sidebar-toggle"
+              onClick={() => setPackagesExpanded((current) => !current)}
+              aria-expanded={packagesExpanded}
+            >
+              <span>
+                <strong>{currentPackageOption.package_name}</strong>
+                <small>{currentPackageOption.category_name}</small>
               </span>
-              <span className="learning-path-steps">
-                <span className={completedTryout ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
-                  {completedTryout ? 'Selesai' : 'Belum'}
-                </span>
-              </span>
-            </div>
-          </div>
-        </div>
+              <span>{packagesExpanded ? '▴' : '▾'}</span>
+            </button>
 
-        <div className="learning-summary-grid">
-          <div>
-            <span>Materi selesai</span>
-            <strong>{materialDoneCount}/{sections.length}</strong>
-          </div>
-          <div>
-            <span>Mini test selesai</span>
-            <strong>{subtestDoneCount}/{sections.length}</strong>
-          </div>
-          <div>
-            <span>Sisa tryout</span>
-            <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
-          </div>
-        </div>
-      </section>
-
-      <div className="learning-tabs">
-        <button
-          type="button"
-          className={activeTab === 'materi' ? 'learning-tab learning-tab-active' : 'learning-tab'}
-          onClick={() => setActiveTab('materi')}
-        >
-          Materi
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'tryout' ? 'learning-tab learning-tab-active' : 'learning-tab'}
-          onClick={() => setActiveTab('tryout')}
-        >
-          Tryout
-        </button>
-      </div>
-
-      {activeTab === 'materi' ? (
-        <section className="learning-layout">
-          <aside className="learning-section-nav">
-            <div className="learning-section-nav-head">
-              <p>Rute belajar</p>
-              <strong>{sections.length} subtest siap dipelajari</strong>
-            </div>
-            {sections.map((section) => (
-              (() => {
-                const sectionMaterialDone = Boolean(section.progress.material_read);
-                const sectionSubtestDone = Boolean(section.progress.subtest_test_completed);
-
-                return (
+            {packagesExpanded && (
+              <div className="learning-sidebar-list">
+                {packageOptions.map((pkg) => (
                   <button
                     type="button"
-                    key={section.code}
-                    className={section.code === activeSection?.code ? 'learning-section-button learning-section-button-active' : 'learning-section-button'}
-                    onClick={() => setActiveSectionCode(section.code)}
+                    key={pkg.access_id || pkg.package_id}
+                    className={Number(pkg.package_id) === numericPackageId ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
+                    onClick={() => navigate(`/learning/${pkg.package_id}`)}
                   >
-                    <span className="learning-section-button-title">{section.name}</span>
-                    <small>
-                      {sectionMaterialDone && sectionSubtestDone
-                        ? 'Milestone selesai'
-                        : `${section.visible_page_count}/${section.total_page_count} halaman`}
-                    </small>
-                    <div className="learning-section-button-progress">
-                      <span className={sectionMaterialDone ? 'learning-section-chip learning-section-chip-done' : 'learning-section-chip'}>
-                        Materi
-                      </span>
-                      <span className={sectionSubtestDone ? 'learning-section-chip learning-section-chip-done' : 'learning-section-chip'}>
-                        Mini test
-                      </span>
-                    </div>
+                    <strong>{pkg.package_name}</strong>
+                    <small>{pkg.category_name}</small>
                   </button>
-                );
-              })()
-            ))}
-          </aside>
+                ))}
+              </div>
+            )}
+          </div>
 
-          {activeSection && (
+          <div className="learning-sidebar-card">
+            <button
+              type="button"
+              className={contentView === 'dashboard' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+              onClick={openDashboardView}
+            >
+              Dashboard
+            </button>
+
+            <button
+              type="button"
+              className="learning-sidebar-toggle learning-sidebar-toggle-secondary"
+              onClick={() => setMaterialsExpanded((current) => !current)}
+              aria-expanded={materialsExpanded}
+            >
+              <span>
+                <strong>Materi</strong>
+                <small>{sections.length} subtest tersedia</small>
+              </span>
+              <span>{materialsExpanded ? '▴' : '▾'}</span>
+            </button>
+
+            {materialsExpanded && (
+              <div className="learning-sidebar-list">
+                {sections.map((section) => {
+                  const sectionMaterialDone = Boolean(section.progress.material_read);
+                  const sectionSubtestDone = Boolean(section.progress.subtest_test_completed);
+
+                  return (
+                    <button
+                      type="button"
+                      key={section.code}
+                      className={contentView === 'materi' && section.code === activeSection?.code ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
+                      onClick={() => jumpToSectionMaterial(section.code)}
+                    >
+                      <strong>{section.name}</strong>
+                      <small>
+                        {sectionMaterialDone && sectionSubtestDone
+                          ? 'Materi dan mini test selesai'
+                          : `${section.visible_page_count}/${section.total_page_count} halaman`}
+                      </small>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              type="button"
+              className={contentView === 'tryout' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+              onClick={openTryoutView}
+            >
+              Tryout
+            </button>
+          </div>
+        </aside>
+
+        <div className="learning-main-panel">
+          {contentView === 'dashboard' && (
+            <section className="learning-dashboard-shell">
+              <div className="learning-dashboard-header">
+                <div>
+                  <span className="account-package-tag">{packageData.category_name}</span>
+                  <h2>{packageData.name}</h2>
+                  <p>{packageData.description}</p>
+                </div>
+                <div className="learning-path-score" aria-label={`Progress belajar ${milestonePercent} persen`}>
+                  <strong>{milestonePercent}%</strong>
+                  <span>progress</span>
+                </div>
+              </div>
+
+              <div className="learning-progress-track" aria-hidden="true">
+                <span style={{ width: `${milestonePercent}%` }} />
+              </div>
+
+              <div className="learning-dashboard-focus">
+                <div className="learning-dashboard-card">
+                  <p className="learning-sidebar-label">Riwayat baca terakhir</p>
+                  <h3>{resumeSection?.name || 'Mulai dari materi pertama'}</h3>
+                  <p>
+                    {resumeSection
+                      ? `Terakhir aktif di ${resumeSection.session_name || 'subtest utama'}.`
+                      : 'Belum ada materi yang dibuka. Mulai dari subtest pertama.'}
+                  </p>
+                  <div className="learning-hero-actions">
+                    {resumeSection && (
+                      <button type="button" className="btn btn-primary" onClick={() => jumpToSectionMaterial(resumeSection.code)}>
+                        Lanjutkan Membaca Materi
+                      </button>
+                    )}
+                    <button type="button" className="btn btn-outline" onClick={openTryoutView}>
+                      Buka Menu Tryout
+                    </button>
+                  </div>
+                </div>
+
+                <div className="learning-summary-grid">
+                  <div>
+                    <span>Materi selesai</span>
+                    <strong>{materialDoneCount}/{sections.length}</strong>
+                  </div>
+                  <div>
+                    <span>Mini test selesai</span>
+                    <strong>{subtestDoneCount}/{sections.length}</strong>
+                  </div>
+                  <div>
+                    <span>Sisa tryout</span>
+                    <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="learning-path-list">
+                {sections.map((section, index) => {
+                  const materialDone = Boolean(section.progress.material_read);
+                  const subtestDone = Boolean(section.progress.subtest_test_completed);
+                  const sectionDone = materialDone && subtestDone;
+
+                  return (
+                    <button
+                      type="button"
+                      key={section.code}
+                      className={[
+                        'learning-path-card',
+                        sectionDone ? 'learning-path-card-done' : '',
+                        section.code === resumeSection?.code ? 'learning-path-card-active' : '',
+                      ].filter(Boolean).join(' ')}
+                      onClick={() => jumpToSectionMaterial(section.code)}
+                    >
+                      <span className="learning-path-index">{index + 1}</span>
+                      <span className="learning-path-copy">
+                        <strong>{section.name}</strong>
+                        <small>{section.session_name || 'Subtest belajar'}</small>
+                      </span>
+                      <span className="learning-path-steps">
+                        <span className={materialDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
+                          Materi
+                        </span>
+                        <span className={subtestDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
+                          Mini test
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {contentView === 'materi' && activeSection && (
             <article className="learning-material">
               <div className="learning-material-header">
                 <div>
@@ -649,54 +713,56 @@ export default function Learning() {
               )}
             </article>
           )}
-        </section>
-      ) : (
-        <section className="learning-tryout-panel">
-          <div>
-            <span className="account-package-tag">Tryout keseluruhan</span>
-            <h2>{packageData.name}</h2>
-            <p>
-              Tryout ini memakai alur test yang sudah ada: seluruh materi paket dikerjakan sebagai simulasi penuh.
-            </p>
-          </div>
 
-          <div className="account-package-stats learning-tryout-stats">
-            <div>
-              <span>Soal</span>
-              <strong>{packageData.question_count}</strong>
-            </div>
-            <div>
-              <span>Waktu</span>
-              <strong>{packageData.time_limit} menit</strong>
-            </div>
-            <div>
-              <span>Sisa percobaan</span>
-              <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
-            </div>
-          </div>
+          {contentView === 'tryout' && (
+            <section className="learning-tryout-panel">
+              <div>
+                <span className="account-package-tag">Tryout keseluruhan</span>
+                <h2>{packageData.name}</h2>
+                <p>
+                  Tryout ini memakai alur test yang sudah ada: seluruh materi paket dikerjakan sebagai simulasi penuh.
+                </p>
+              </div>
 
-          <div className="learning-tryout-actions">
-            {hasAccess ? (
-              summary.can_start_tryout ? (
-                <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
-                  Mulai Tryout
-                </Link>
-              ) : (
-                <button type="button" className="btn btn-outline" disabled>
-                  Percobaan Habis
+              <div className="account-package-stats learning-tryout-stats">
+                <div>
+                  <span>Soal</span>
+                  <strong>{packageData.question_count}</strong>
+                </div>
+                <div>
+                  <span>Waktu</span>
+                  <strong>{packageData.time_limit} menit</strong>
+                </div>
+                <div>
+                  <span>Sisa percobaan</span>
+                  <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
+                </div>
+              </div>
+
+              <div className="learning-tryout-actions">
+                {hasAccess ? (
+                  summary.can_start_tryout ? (
+                    <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
+                      Mulai Tryout
+                    </Link>
+                  ) : (
+                    <button type="button" className="btn btn-outline" disabled>
+                      Percobaan Habis
+                    </button>
+                  )
+                ) : (
+                  <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
+                    {viewerIsAuthenticated ? 'Aktifkan Paket untuk Tryout' : 'Login untuk Buka Tryout'}
+                  </Link>
+                )}
+                <button type="button" className="btn btn-outline" onClick={openDashboardView}>
+                  Kembali ke Dashboard
                 </button>
-              )
-            ) : (
-              <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
-                {viewerIsAuthenticated ? 'Aktifkan Paket untuk Tryout' : 'Login untuk Buka Tryout'}
-              </Link>
-            )}
-            <button type="button" className="btn btn-outline" onClick={() => setActiveTab('materi')}>
-              Lihat Materi Dulu
-            </button>
-          </div>
-        </section>
-      )}
+              </div>
+            </section>
+          )}
+        </div>
+      </section>
     </AccountShell>
   );
 }

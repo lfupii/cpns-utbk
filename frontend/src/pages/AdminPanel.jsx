@@ -264,6 +264,9 @@ export default function AdminPanel() {
     createEmptyLearningQuestion(5),
   ]);
   const [learningQuestionsSaving, setLearningQuestionsSaving] = useState(false);
+  const [adminView, setAdminView] = useState('dashboard');
+  const [packagesExpanded, setPackagesExpanded] = useState(false);
+  const [materialsExpanded, setMaterialsExpanded] = useState(true);
 
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
@@ -291,6 +294,21 @@ export default function AdminPanel() {
     materialPageCount: learningContent.reduce((total, section) => total + (section.material?.pages?.length || 0), 0),
     questionCount: questions.length,
   }), [learningContent, packageSections.length, questions.length]);
+  const completedMaterialSections = useMemo(
+    () => learningContent.filter((section) => (section.material?.pages?.length || 0) > 0).length,
+    [learningContent]
+  );
+  const completedQuizSections = useMemo(
+    () => learningContent.filter((section) => (section.questions?.length || 0) > 0).length,
+    [learningContent]
+  );
+  const adminCoveragePercent = useMemo(() => {
+    if (packageSections.length === 0) {
+      return 0;
+    }
+
+    return Math.round(((completedMaterialSections + completedQuizSections) / (packageSections.length * 2)) * 100);
+  }, [completedMaterialSections, completedQuizSections, packageSections.length]);
 
   const fetchAdminQuestions = useCallback(async (packageId) => {
     const response = await apiClient.get(`/admin/questions?package_id=${packageId}&_=${Date.now()}`);
@@ -703,6 +721,7 @@ export default function AdminPanel() {
     setSuccess('');
     setError('');
     setShowQuestionEditor(true);
+    setAdminView('soal');
   };
 
   const openLearningEditor = (sectionCode, mode) => {
@@ -710,6 +729,7 @@ export default function AdminPanel() {
     setLearningEditorMode(mode);
     setSuccess('');
     setError('');
+    setAdminView('materi');
   };
 
   const handleQuestionDelete = async (questionId) => {
@@ -865,6 +885,29 @@ export default function AdminPanel() {
     }
   };
 
+  const openDashboardView = () => {
+    setAdminView('dashboard');
+    setLearningEditorMode('');
+  };
+
+  const openPackageView = () => {
+    setAdminView('paket');
+    setLearningEditorMode('');
+  };
+
+  const openLearningView = (sectionCode = null, mode = '') => {
+    if (sectionCode) {
+      setLearningSectionCode(sectionCode);
+    }
+    setAdminView('materi');
+    setLearningEditorMode(mode);
+  };
+
+  const openQuestionView = () => {
+    setAdminView('soal');
+    setLearningEditorMode('');
+  };
+
   return (
     <AccountShell
       shellClassName="account-shell-learning admin-workspace-shell"
@@ -887,168 +930,273 @@ export default function AdminPanel() {
           <section className="learning-workspace admin-user-workspace">
             <aside className="learning-sidebar admin-user-sidebar">
               <div className="learning-sidebar-card admin-user-sidebar-card">
-                <p className="learning-sidebar-label">Workspace admin</p>
-                <div className="learning-sidebar-toggle admin-user-current-package" aria-hidden="true">
+                <p className="learning-sidebar-label">Jenis paket</p>
+                <button
+                  type="button"
+                  className="learning-sidebar-toggle"
+                  onClick={() => setPackagesExpanded((current) => !current)}
+                  aria-expanded={packagesExpanded}
+                >
                   <span>
                     <strong>{selectedPackage?.name || 'Pilih paket'}</strong>
                     <small>{selectedPackage?.category_name || `${packages.length} paket tersedia`}</small>
                   </span>
-                  <span>{packages.length} paket</span>
-                </div>
-                <div className="admin-package-crud-actions">
-                  <button type="button" className="btn btn-primary" onClick={handleCreatePackage} disabled={packageCreating}>
-                    {packageCreating ? 'Membuat...' : 'Tambah Paket'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    onClick={handleDeletePackage}
-                    disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
-                  >
-                    {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
-                  </button>
-                </div>
+                  <span>{packagesExpanded ? '▴' : '▾'}</span>
+                </button>
+
+                {packagesExpanded && (
+                  <div className="learning-sidebar-list">
+                    {packages.map((pkg) => (
+                      <button
+                        key={pkg.id}
+                        type="button"
+                        className={Number(selectedPackageId) === Number(pkg.id) ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
+                        onClick={() => {
+                          setSelectedPackageId(Number(pkg.id));
+                          resetQuestionForm();
+                          setExpandedQuestionId(null);
+                          setLearningEditorMode('');
+                          setAdminView('dashboard');
+                        }}
+                      >
+                        <strong>{pkg.name}</strong>
+                        <small>{pkg.category_name || `${pkg.workflow?.sections?.length || 0} subtes`}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="learning-sidebar-card admin-user-sidebar-card">
-                <p className="learning-sidebar-label">Jenis paket</p>
-                <div className="learning-sidebar-list">
-                  {packages.map((pkg) => (
-                    <button
-                      key={pkg.id}
-                      type="button"
-                      className={Number(selectedPackageId) === Number(pkg.id) ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
-                      onClick={() => {
-                        setSelectedPackageId(Number(pkg.id));
-                        resetQuestionForm();
-                        setExpandedQuestionId(null);
-                        setLearningEditorMode('');
-                      }}
-                    >
-                      <strong>{pkg.name}</strong>
-                      <small>{pkg.workflow?.sections?.length || 0} subtes • {Number(pkg.question_count || 0)} soal</small>
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  className={adminView === 'dashboard' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+                  onClick={openDashboardView}
+                >
+                  Dashboard
+                </button>
+
+                <button
+                  type="button"
+                  className={adminView === 'paket' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+                  onClick={openPackageView}
+                >
+                  Pengaturan Paket
+                </button>
+
+                <button
+                  type="button"
+                  className="learning-sidebar-toggle learning-sidebar-toggle-secondary"
+                  onClick={() => setMaterialsExpanded((current) => !current)}
+                  aria-expanded={materialsExpanded}
+                >
+                  <span>
+                    <strong>Materi</strong>
+                    <small>{learningContent.length} subtest tersedia</small>
+                  </span>
+                  <span>{materialsExpanded ? '▴' : '▾'}</span>
+                </button>
+
+                {materialsExpanded && (
+                  <div className="learning-sidebar-list">
+                    {learningContent.map((section) => (
+                      <button
+                        type="button"
+                        key={section.code}
+                        className={adminView === 'materi' && section.code === activeLearningSection?.code ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
+                        onClick={() => openLearningView(section.code)}
+                      >
+                        <strong>{section.name}</strong>
+                        <small>{section.material?.pages?.length || 0}/{Math.max(section.material?.pages?.length || 0, 4)} halaman</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className={adminView === 'soal' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+                  onClick={openQuestionView}
+                >
+                  Bank Soal
+                </button>
               </div>
             </aside>
 
             <div className="learning-main-panel admin-user-main-panel">
-              <section className="learning-dashboard-shell admin-user-dashboard-shell">
-                <div className="learning-dashboard-header">
-                  <div>
-                    <span className="account-package-tag">
-                      {selectedPackage?.test_mode === 'utbk_sectioned' ? 'UTBK Bertahap' : 'CPNS CAT'}
-                    </span>
-                    <h2>{selectedPackage?.name || 'Panel Admin'}</h2>
-                    <p>Kelola pengaturan paket, materi, mini test, dan bank soal dengan pola workspace yang sama seperti halaman user.</p>
+              {adminView === 'dashboard' && (
+                <section className="learning-dashboard-shell admin-user-dashboard-shell">
+                  <div className="learning-dashboard-header">
+                    <div>
+                      <span className="account-package-tag">{selectedPackage?.category_name || 'Workspace admin'}</span>
+                      <h2>{selectedPackage?.name || 'Panel Admin'}</h2>
+                      <p>{selectedPackage?.description || 'Kelola materi, mini test, paket, dan bank soal dari satu workspace admin.'}</p>
+                    </div>
+                    <div className="learning-path-score" aria-label={`Cakupan admin ${adminCoveragePercent} persen`}>
+                      <strong>{adminCoveragePercent}%</strong>
+                      <span>progress</span>
+                    </div>
                   </div>
-                  <div className="learning-path-score" aria-label="Ringkasan workspace admin">
-                    <strong>{selectedPackageSummary.questionCount}</strong>
-                    <span>bank soal</span>
+
+                  <div className="learning-progress-track" aria-hidden="true">
+                    <span style={{ width: `${adminCoveragePercent}%` }} />
                   </div>
-                </div>
 
-                <div className="learning-dashboard-focus admin-user-dashboard-focus">
-                  <div className="learning-dashboard-card admin-user-dashboard-card">
-                    <p className="learning-sidebar-label">Pengaturan paket</p>
-                    <h3>{selectedPackage?.name || 'Belum ada paket dipilih'}</h3>
-                    <p>Harga, akses, attempt, dan mekanisme ujian diatur dari panel ini.</p>
-
-                    {packageForm && (
-                      <form className="admin-package-form" onSubmit={handlePackageSave}>
-                        <div className="account-form-grid">
-                    <div className="form-group">
-                      <label>Nama Paket</label>
-                      <input name="name" value={packageForm.name} onChange={handlePackageChange} />
-                    </div>
-                    <div className="form-group">
-                      <label>Harga</label>
-                      <input type="number" min="1000" name="price" value={packageForm.price} onChange={handlePackageChange} />
-                    </div>
-                    <div className="form-group">
-                      <label>Durasi Akses (hari)</label>
-                      <input type="number" min="1" name="duration_days" value={packageForm.duration_days} onChange={handlePackageChange} />
-                    </div>
-                    <div className="form-group">
-                      <label>Batas Attempt</label>
-                      <input type="number" min="1" name="max_attempts" value={packageForm.max_attempts} onChange={handlePackageChange} />
-                    </div>
-                    <div className="form-group">
-                      <label>Waktu Ujian (menit)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        name="time_limit"
-                        value={packageForm.time_limit}
-                        onChange={handlePackageChange}
-                        disabled={selectedPackage?.test_mode === 'cpns_cat' || selectedPackage?.test_mode === 'utbk_sectioned'}
-                      />
-                    </div>
-                    <div className="form-group form-group-full">
-                      <label>Deskripsi</label>
-                      <textarea name="description" rows="3" value={packageForm.description} onChange={handlePackageChange} />
-                    </div>
-                    {selectedPackage?.workflow && (
-                      <div className="form-group form-group-full">
-                        <label>Mekanisme Ujian</label>
-                        <textarea
-                          name="workflow_overview"
-                          rows="4"
-                          value={[
-                            `${selectedPackage.workflow.label} • ${selectedPackage.workflow.total_duration_minutes} menit`,
-                            selectedPackage.workflow.allow_random_navigation
-                              ? 'Navigasi soal bebas.'
-                              : 'Navigasi soal dikunci mengikuti subtes aktif.',
-                            ...packageSections.map((section) => (
-                              `${section.order}. ${section.name}${section.duration_minutes ? ` - ${section.duration_minutes} menit` : ''}`
-                            )),
-                          ].join('\n')}
-                          disabled
-                        />
+                  <div className="learning-dashboard-focus admin-user-dashboard-focus">
+                    <div className="learning-dashboard-card admin-user-dashboard-card">
+                      <p className="learning-sidebar-label">Area kerja terakhir</p>
+                      <h3>{activeLearningSection?.name || 'Pilih subtest'}</h3>
+                      <p>
+                        {activeLearningSection
+                          ? `Kelola materi dan mini test untuk ${activeLearningSection.session_name || 'subtest aktif'}.`
+                          : 'Pilih paket dan subtest untuk mulai mengelola konten.'}
+                      </p>
+                      <div className="learning-hero-actions">
+                        {activeLearningSection && (
+                          <button type="button" className="btn btn-primary" onClick={() => openLearningView(activeLearningSection.code)}>
+                            Lanjutkan Kelola Materi
+                          </button>
+                        )}
+                        <button type="button" className="btn btn-outline" onClick={openQuestionView}>
+                          Buka Bank Soal
+                        </button>
                       </div>
-                    )}
+                    </div>
+
+                    <div className="learning-summary-grid admin-user-summary-grid">
+                      <div>
+                        <span>Materi selesai</span>
+                        <strong>{completedMaterialSections}/{selectedPackageSummary.sectionCount || 0}</strong>
+                      </div>
+                      <div>
+                        <span>Mini test selesai</span>
+                        <strong>{completedQuizSections}/{selectedPackageSummary.sectionCount || 0}</strong>
+                      </div>
+                      <div>
+                        <span>Sisa tryout</span>
+                        <strong>Admin</strong>
+                      </div>
+                    </div>
                   </div>
 
-                        <div className="account-form-actions">
-                          <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
-                            {packageCreating ? 'Membuat...' : 'Tambah Paket'}
+                  <div className="learning-path-list admin-dashboard-path-list">
+                    {learningContent.map((section, index) => (
+                      <article
+                        key={section.code}
+                        className={[
+                          'learning-path-card',
+                          section.code === activeLearningSection?.code ? 'learning-path-card-active' : '',
+                          (section.material?.pages?.length || 0) > 0 && (section.questions?.length || 0) > 0 ? 'learning-path-card-done' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
+                        <span className="learning-path-index">{index + 1}</span>
+                        <span className="learning-path-copy">
+                          <strong>{section.name}</strong>
+                          <small>{section.session_name || 'Subtest belajar'}</small>
+                        </span>
+                        <span className="learning-path-steps admin-dashboard-path-actions">
+                          <button type="button" className="learning-path-step" onClick={() => openLearningView(section.code)}>
+                            Materi
                           </button>
-                          <button type="submit" className="btn btn-primary" disabled={packageSaving}>
-                            {packageSaving ? 'Menyimpan...' : 'Simpan Paket'}
+                          <button type="button" className="learning-path-step" onClick={() => openLearningEditor(section.code, 'quiz')}>
+                            Mini test
                           </button>
-                          <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={handleDeletePackage}
-                            disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
-                          >
-                            {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
-                          </button>
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {adminView === 'paket' && packageForm && (
+                <article className="learning-material admin-package-view-shell">
+                  <div className="learning-material-header">
+                    <div>
+                      <span className="account-package-tag">Pengaturan paket</span>
+                      <h2>{selectedPackage?.name || 'Paket aktif'}</h2>
+                      <p>Harga, durasi akses, batas attempt, dan mekanisme ujian dikelola dari sini.</p>
+                    </div>
+                  </div>
+
+                  <div className="learning-page admin-package-form-page">
+                    <form className="admin-package-form" onSubmit={handlePackageSave}>
+                      <div className="account-form-grid">
+                        <div className="form-group">
+                          <label>Nama Paket</label>
+                          <input name="name" value={packageForm.name} onChange={handlePackageChange} />
                         </div>
-                      </form>
-                    )}
-                  </div>
+                        <div className="form-group">
+                          <label>Harga</label>
+                          <input type="number" min="1000" name="price" value={packageForm.price} onChange={handlePackageChange} />
+                        </div>
+                        <div className="form-group">
+                          <label>Durasi Akses (hari)</label>
+                          <input type="number" min="1" name="duration_days" value={packageForm.duration_days} onChange={handlePackageChange} />
+                        </div>
+                        <div className="form-group">
+                          <label>Batas Attempt</label>
+                          <input type="number" min="1" name="max_attempts" value={packageForm.max_attempts} onChange={handlePackageChange} />
+                        </div>
+                        <div className="form-group">
+                          <label>Waktu Ujian (menit)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            name="time_limit"
+                            value={packageForm.time_limit}
+                            onChange={handlePackageChange}
+                            disabled={selectedPackage?.test_mode === 'cpns_cat' || selectedPackage?.test_mode === 'utbk_sectioned'}
+                          />
+                        </div>
+                        <div className="form-group form-group-full">
+                          <label>Deskripsi</label>
+                          <textarea name="description" rows="3" value={packageForm.description} onChange={handlePackageChange} />
+                        </div>
+                        {selectedPackage?.workflow && (
+                          <div className="form-group form-group-full">
+                            <label>Mekanisme Ujian</label>
+                            <textarea
+                              name="workflow_overview"
+                              rows="4"
+                              value={[
+                                `${selectedPackage.workflow.label} • ${selectedPackage.workflow.total_duration_minutes} menit`,
+                                selectedPackage.workflow.allow_random_navigation
+                                  ? 'Navigasi soal bebas.'
+                                  : 'Navigasi soal dikunci mengikuti subtes aktif.',
+                                ...packageSections.map((section) => (
+                                  `${section.order}. ${section.name}${section.duration_minutes ? ` - ${section.duration_minutes} menit` : ''}`
+                                )),
+                              ].join('\n')}
+                              disabled
+                            />
+                          </div>
+                        )}
+                      </div>
 
-                  <div className="learning-summary-grid admin-user-summary-grid">
-                    <div>
-                      <span>Subtes aktif</span>
-                      <strong>{selectedPackageSummary.sectionCount}</strong>
-                    </div>
-                    <div>
-                      <span>Halaman materi</span>
-                      <strong>{selectedPackageSummary.materialPageCount}</strong>
-                    </div>
-                    <div>
-                      <span>Total soal</span>
-                      <strong>{selectedPackageSummary.questionCount}</strong>
-                    </div>
+                      <div className="account-form-actions">
+                        <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
+                          {packageCreating ? 'Membuat...' : 'Tambah Paket'}
+                        </button>
+                        <button type="submit" className="btn btn-primary" disabled={packageSaving}>
+                          {packageSaving ? 'Menyimpan...' : 'Simpan Paket'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={handleDeletePackage}
+                          disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
+                        >
+                          {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                </div>
-              </section>
+                </article>
+              )}
             </div>
           </section>
 
+          {adminView === 'materi' && (
           <section className="account-card admin-main-card admin-panel-card admin-learning-card admin-learning-crud-shell">
             <div className="admin-section-header admin-list-toolbar">
               <div>
@@ -1214,7 +1362,9 @@ export default function AdminPanel() {
               <p className="text-muted">Pilih paket untuk mengelola materi dan mini test.</p>
             )}
           </section>
+          )}
 
+          {adminView === 'soal' && (
           <div className={`admin-grid admin-grid-questions ${showQuestionEditor ? '' : 'admin-grid-questions-collapsed'}`}>
             <section className="account-card admin-main-card admin-panel-card admin-list-card admin-test-bank-shell">
               <div className="admin-section-header admin-list-toolbar">
@@ -1553,6 +1703,7 @@ export default function AdminPanel() {
               </section>
             )}
           </div>
+          )}
         </div>
       )}
     </AccountShell>

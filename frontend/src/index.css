@@ -3814,6 +3814,20 @@ html[data-theme='dark'] .theme-toggle-thumb {
   align-self: stretch;
 }
 
+.admin-dashboard-path-actions .learning-path-step {
+  border: 0;
+  cursor: pointer;
+}
+
+.admin-dashboard-path-actions .learning-path-step:hover {
+  background: #e1ecfb;
+  color: #255fb6;
+}
+
+.admin-package-view-shell .learning-page {
+  margin-top: 1rem;
+}
+
 .admin-package-switcher {
   margin-top: 1rem;
   display: grid;

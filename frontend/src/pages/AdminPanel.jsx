@@ -803,6 +803,7 @@ export default function AdminPanel() {
 
   return (
     <AccountShell
+      shellClassName="account-shell-learning admin-workspace-shell"
       title="Panel Admin"
       subtitle="Kelola paket, soal, gambar, dan import bank soal dari satu workspace yang lebih ringkas."
     >
@@ -811,7 +812,7 @@ export default function AdminPanel() {
           <p>Memuat panel admin...</p>
         </div>
       ) : (
-        <div className="admin-layout">
+        <div className="admin-layout admin-workspace-layout">
           {(error || success) && (
             <div className="account-card admin-message-card">
               {error && <div className="alert">{error}</div>}
@@ -819,8 +820,8 @@ export default function AdminPanel() {
             </div>
           )}
 
-          <div className="admin-grid">
-            <section className="account-card admin-sidebar admin-sticky-card">
+          <div className="admin-grid admin-workspace-grid">
+            <section className="account-card admin-sidebar admin-sticky-card admin-workspace-sidebar">
               <div className="admin-section-header admin-section-header-compact">
                 <div>
                   <h2>Paket Aktif</h2>
@@ -848,7 +849,7 @@ export default function AdminPanel() {
               </div>
             </section>
 
-            <section className="account-card admin-main-card admin-panel-card">
+            <section className="account-card admin-main-card admin-panel-card admin-workspace-main-card">
               <div className="admin-section-header admin-section-header-compact">
                 <div>
                   <h2>Pengaturan Paket</h2>

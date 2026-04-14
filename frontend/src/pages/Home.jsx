@@ -226,6 +226,43 @@ export default function Home() {
       detail: 'Preview',
     },
   ];
+  const featureMindmap = [
+    {
+      step: '01',
+      badge: 'Mulai',
+      icon: 'P',
+      title: 'Preview yang bikin cepat paham',
+      description: 'Masuk, cek materi awal, lalu rasakan dulu ritme belajar sebelum commit ke sesi penuh.',
+    },
+    {
+      step: '02',
+      badge: 'Fokus',
+      icon: 'A',
+      title: 'Rute belajar adaptif',
+      description: 'Sistem bantu menaruh subtest yang paling perlu perhatian di depan supaya progres terasa lebih jelas.',
+    },
+    {
+      step: '03',
+      badge: 'Latihan',
+      icon: 'L',
+      title: 'Latihan plus evaluasi',
+      description: 'Bukan cuma ngerjain soal, tapi langsung kebaca mana materi yang sudah kuat dan mana yang masih goyang.',
+    },
+    {
+      step: '04',
+      badge: 'Stamina',
+      icon: 'S',
+      title: 'Simulasi bertahap',
+      description: 'Mulai dari drill singkat, mini test, sampai tryout penuh untuk bangun tempo dan fokus ujian.',
+    },
+    {
+      step: '05',
+      badge: 'Naik',
+      icon: 'N',
+      title: 'Skor naik lebih kebaca',
+      description: 'Semua progres masuk ke satu flow yang rapi, jadi keputusan belajarmu selalu punya arah berikutnya.',
+    },
+  ];
 
   if (loading) {
     return (
@@ -351,11 +388,6 @@ export default function Home() {
             </div>
 
             <div className="landing-hero-visual" key={user?.userId || 'guest'}>
-              <div className="landing-hero-floating-card landing-hero-floating-card-top">
-                <span>{user ? 'Akun aktif' : 'Guest mode'}</span>
-                <strong>{user ? displayName : 'Preview materi terbuka'}</strong>
-              </div>
-
               <div className="landing-hero-dashboard">
                 <div className="landing-hero-dashboard-head">
                   <div className="landing-hero-dashboard-copy">
@@ -397,15 +429,6 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-
-              <div className="landing-hero-floating-card landing-hero-floating-card-bottom">
-                <span>{user ? (hasActivePackage ? 'Tryout tersimpan' : 'Siap diaktifkan') : 'Tanpa login'}</span>
-                <strong>
-                  {user
-                    ? (hasActivePackage ? `${completedTryoutCount} hasil masuk` : 'Pilih paket untuk full access')
-                    : 'Lihat materi awal lebih dulu'}
-                </strong>
-              </div>
             </div>
           </div>
         </section>
@@ -415,7 +438,17 @@ export default function Home() {
             <div className="landing-about-band">
               <div className="landing-about-copy">
                 <h2>
-                  Tentang <span>Ujiin</span>
+                  <span className="landing-about-title-prefix">Tentang</span>
+                  <img
+                    className="landing-about-title-logo landing-about-title-logo-default"
+                    src="/ujiin-logo.png"
+                    alt="Ujiin"
+                  />
+                  <img
+                    className="landing-about-title-logo landing-about-title-logo-dark"
+                    src="/ujiin-logo-dark.png"
+                    alt="Ujiin"
+                  />
                 </h2>
                 <p>
                   Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
@@ -460,19 +493,36 @@ export default function Home() {
         </section>
 
         <section className="landing-section" id="keunggulan">
-          <div className="container landing-highlight-grid">
-            <article className="landing-highlight-card">
-              <h3>Rute belajar adaptif</h3>
-              <p>Sistem membantu memprioritaskan materi yang paling butuh perhatianmu lebih dulu.</p>
-            </article>
-            <article className="landing-highlight-card">
-              <h3>Latihan + evaluasi</h3>
-              <p>Bukan hanya ngerjain soal, tapi langsung dapat bacaan progres yang mudah dipahami.</p>
-            </article>
-            <article className="landing-highlight-card">
-              <h3>Simulasi bertahap</h3>
-              <p>Mulai dari drill singkat sampai sesi penuh untuk membangun stamina ujian.</p>
-            </article>
+          <div className="container">
+            <div className="landing-section-heading">
+              <h2>Fitur yang saling nyambung dalam satu flow belajar</h2>
+              <p>
+                Ujiin tidak berhenti di latihan soal. Semuanya dirangkai jadi jalur belajar yang
+                lebih gampang dibaca dari awal sampai skor naik.
+              </p>
+            </div>
+
+            <div className="landing-mindmap-shell">
+              <div className="landing-mindmap-track" aria-label="Flow fitur Ujiin">
+                {featureMindmap.map((item) => (
+                  <article key={item.step} className="landing-mindmap-node">
+                    <div className="landing-mindmap-node-top">
+                      <span className="landing-mindmap-step">{item.step}</span>
+                      <span className="landing-mindmap-badge">{item.badge}</span>
+                    </div>
+
+                    <div className="landing-mindmap-icon" aria-hidden="true">
+                      <span>{item.icon}</span>
+                    </div>
+
+                    <div className="landing-mindmap-copy">
+                      <h3>{item.title}</h3>
+                      <p>{item.description}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 

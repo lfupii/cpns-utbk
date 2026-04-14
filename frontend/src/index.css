@@ -3814,6 +3814,49 @@ html[data-theme='dark'] .theme-toggle-thumb {
   align-self: stretch;
 }
 
+.admin-section-sidebar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: stretch;
+}
+
+.admin-section-sidebar-item {
+  min-width: 0;
+}
+
+.admin-section-sidebar-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 38px);
+  gap: 0.4rem;
+}
+
+.admin-section-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-height: 54px;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  color: #35557d;
+  font-size: 1rem;
+  font-weight: 800;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-section-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(45, 140, 255, 0.3);
+  box-shadow: 0 14px 24px rgba(31, 63, 109, 0.08);
+}
+
+.admin-section-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .admin-dashboard-path-actions .learning-path-step {
   border: 0;
   cursor: pointer;
@@ -3825,6 +3868,12 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-package-view-shell .learning-page {
+  margin-top: 1rem;
+}
+
+.admin-material-view-shell .learning-summary-grid,
+.admin-material-view-shell .learning-page-list,
+.admin-material-view-shell .admin-learning-editor-shell {
   margin-top: 1rem;
 }
 

@@ -427,11 +427,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .brand-logo-image-light {
-  transform: scale(1.92);
+  transform: translateY(0.04rem) scale(1.08);
 }
 
 .brand-logo-image-dark {
-  transform: scale(1.2);
+  transform: translateY(0.04rem) scale(1.08);
 }
 
 .brand-logo-image-dark,
@@ -5279,11 +5279,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
   }
 
   .brand-logo-image-light {
-    transform: scale(1.92);
+    transform: translateY(0.04rem) scale(1.08);
   }
 
   .brand-logo-image-dark {
-    transform: scale(1.2);
+    transform: translateY(0.04rem) scale(1.08);
   }
 
   .brand-logo {
@@ -5676,11 +5676,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
   }
 
   .brand-logo-image-light {
-    transform: scale(1.72);
+    transform: translateY(0.03rem) scale(1.04);
   }
 
   .brand-logo-image-dark {
-    transform: scale(1.12);
+    transform: translateY(0.03rem) scale(1.04);
   }
 
   .landing-hero {
@@ -6648,11 +6648,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
   }
 
   .brand-logo-image-light {
-    transform: scale(1.78);
+    transform: translateY(0.03rem) scale(1.06);
   }
 
   .brand-logo-image-dark {
-    transform: scale(1.16);
+    transform: translateY(0.03rem) scale(1.06);
   }
 
   .landing-navbar-panel {

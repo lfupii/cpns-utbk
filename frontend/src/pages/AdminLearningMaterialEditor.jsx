@@ -252,8 +252,12 @@ export default function AdminLearningMaterialEditor() {
   };
 
   return (
-    <AccountShell title="Editor Materi" subtitle="Tulis materi subtest dengan format dokumen, gambar, warna, dan ukuran font.">
-      <div className="admin-material-editor-topbar">
+    <AccountShell
+      shellClassName="account-shell-learning"
+      title="Editor Materi"
+      subtitle="Tulis materi subtest dengan format dokumen, gambar, warna, dan ukuran font."
+    >
+      <div className="admin-material-editor-topbar admin-learning-editor-topbar">
         <Link to="/admin" className="btn btn-outline">Kembali ke Admin</Link>
         <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving || loading}>
           {saving ? 'Menyimpan...' : 'Simpan Materi'}
@@ -268,8 +272,8 @@ export default function AdminLearningMaterialEditor() {
           <p>Memuat editor materi...</p>
         </div>
       ) : activeSection ? (
-        <section className="account-card admin-material-editor-shell">
-          <div className="admin-doc-toolbar admin-doc-toolbar-sticky">
+        <section className="account-card admin-material-editor-shell admin-learning-editor-shell-page">
+          <div className="admin-doc-toolbar admin-doc-toolbar-sticky admin-learning-editor-hero">
             <div>
               <span className="account-package-tag">{activeSection.session_name || 'Subtest'}</span>
               <h3>{activeSection.name}</h3>
@@ -319,8 +323,8 @@ export default function AdminLearningMaterialEditor() {
             <button type="button" onClick={() => runCommand('removeFormat')}>Hapus Format</button>
           </div>
 
-          <div className="admin-doc-editor admin-material-doc-editor">
-            <aside className="admin-doc-outline">
+          <div className="admin-doc-editor admin-material-doc-editor admin-learning-editor-workspace">
+            <aside className="admin-doc-outline admin-learning-editor-sidebar">
               <strong>Halaman</strong>
               {materialForm.pages.map((page, pageIndex) => (
                 <button
@@ -337,8 +341,8 @@ export default function AdminLearningMaterialEditor() {
               ))}
             </aside>
 
-            <div className="admin-doc-page-stack">
-              <div className="admin-doc-cover">
+            <div className="admin-doc-page-stack admin-learning-editor-content">
+              <div className="admin-doc-cover admin-learning-cover-card">
                 <label>Judul Materi</label>
                 <input
                   value={materialForm.title}
@@ -347,7 +351,7 @@ export default function AdminLearningMaterialEditor() {
               </div>
 
               {materialForm.pages.map((page, pageIndex) => (
-                <section key={`material-page-${pageIndex}`} className="admin-doc-page admin-word-page">
+                <section key={`material-page-${pageIndex}`} className="admin-doc-page admin-word-page admin-learning-page-shell">
                   <div className="admin-doc-page-head">
                     <span>Halaman {pageIndex + 1}</span>
                     <button

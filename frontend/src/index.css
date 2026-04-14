@@ -5410,6 +5410,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
     display: none;
   }
 
+  .profile-dropdown-theme .theme-toggle {
+    display: inline-flex;
+  }
+
   .mobile-nav-toggle {
     display: inline-flex;
     flex-shrink: 0;

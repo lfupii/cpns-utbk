@@ -75,6 +75,27 @@ class QuestionController {
         return $savedAnswers;
     }
 
+    private function getReviewFlags(int $attemptId): array {
+        if (!databaseTableExists($this->mysqli, 'attempt_question_flags')) {
+            return [];
+        }
+
+        $query = 'SELECT question_id
+                  FROM attempt_question_flags
+                  WHERE attempt_id = ? AND is_marked_review = 1';
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $attemptId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $reviewFlags = [];
+        while ($row = $result->fetch_assoc()) {
+            $reviewFlags[(string) ((int) $row['question_id'])] = true;
+        }
+
+        return $reviewFlags;
+    }
+
     private function getSectionCounts(int $packageId): array {
         $query = "SELECT COALESCE(NULLIF(section_code, ''), 'general') AS section_code, COUNT(*) AS total
                   FROM questions
@@ -165,6 +186,7 @@ class QuestionController {
         $workflow = TestWorkflow::buildPackageWorkflow($attempt);
         $attemptState = TestWorkflow::computeAttemptState($attempt, $workflow);
         $savedAnswers = $this->getSavedAnswers($attemptId);
+        $reviewFlags = $this->getReviewFlags($attemptId);
         $sectionCounts = $this->getSectionCounts($packageId);
         $totalQuestionCount = array_sum($sectionCounts);
 
@@ -249,6 +271,7 @@ class QuestionController {
         sendResponse('success', 'Soal-soal berhasil diambil', [
             'questions' => $questions,
             'saved_answers' => $savedAnswers,
+            'review_flags' => $reviewFlags,
             'workflow' => $workflow,
             'sections' => $sections,
             'attempt' => [

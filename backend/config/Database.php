@@ -268,6 +268,43 @@ function ensureTestAttemptProgressSchema(mysqli $mysqli): void {
     }
 }
 
+function ensureAttemptQuestionFlagsSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'test_attempts') || !databaseTableExists($mysqli, 'questions')) {
+        return;
+    }
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS attempt_question_flags (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            attempt_id INT NOT NULL,
+            question_id INT NOT NULL,
+            is_marked_review BOOLEAN NOT NULL DEFAULT TRUE,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE,
+            FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_attempt_question_flag (attempt_id, question_id),
+            INDEX (attempt_id, question_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    if (!databaseColumnExists($mysqli, 'attempt_question_flags', 'is_marked_review')) {
+        $mysqli->query(
+            "ALTER TABLE attempt_question_flags
+             ADD COLUMN is_marked_review BOOLEAN NOT NULL DEFAULT TRUE AFTER question_id"
+        );
+    }
+
+    $schemaVersion = '20260415_attempt_question_flags_v1';
+    $appliedSchemaVersion = getSystemSetting($mysqli, 'attempt_question_flags_schema_version');
+    if ($appliedSchemaVersion !== $schemaVersion) {
+        $mysqli->query(
+            "DELETE FROM attempt_question_flags
+             WHERE is_marked_review = 0 OR is_marked_review IS NULL"
+        );
+        setSystemSetting($mysqli, 'attempt_question_flags_schema_version', $schemaVersion);
+    }
+}
+
 function ensureLearningProgressSchema(mysqli $mysqli): void {
     if (!databaseTableExists($mysqli, 'users') || !databaseTableExists($mysqli, 'test_packages')) {
         return;
@@ -606,5 +643,6 @@ function bootstrapDefaultAdmin(mysqli $mysqli): void {
 ensureEmailVerificationSchema($mysqli);
 ensureTestWorkflowSchema($mysqli);
 ensureTestAttemptProgressSchema($mysqli);
+ensureAttemptQuestionFlagsSchema($mysqli);
 ensureLearningProgressSchema($mysqli);
 bootstrapDefaultAdmin($mysqli);

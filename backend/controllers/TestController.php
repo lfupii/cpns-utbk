@@ -273,6 +273,27 @@ class TestController {
         $stmt->execute();
     }
 
+    private function setReviewFlag(int $attemptId, int $questionId, bool $isMarkedReview): void {
+        if (!$isMarkedReview) {
+            $deleteStmt = $this->mysqli->prepare(
+                'DELETE FROM attempt_question_flags WHERE attempt_id = ? AND question_id = ?'
+            );
+            $deleteStmt->bind_param('ii', $attemptId, $questionId);
+            $deleteStmt->execute();
+            return;
+        }
+
+        $markedValue = 1;
+        $query = "INSERT INTO attempt_question_flags (attempt_id, question_id, is_marked_review)
+                  VALUES (?, ?, ?)
+                  ON DUPLICATE KEY UPDATE
+                    is_marked_review = VALUES(is_marked_review),
+                    updated_at = CURRENT_TIMESTAMP";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('iii', $attemptId, $questionId, $markedValue);
+        $stmt->execute();
+    }
+
     private function persistAnswers(
         int $attemptId,
         array $attempt,
@@ -664,6 +685,73 @@ class TestController {
         }
     }
 
+    public function saveReviewFlag() {
+        $tokenData = verifyToken();
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        $attemptId = (int) ($data['attempt_id'] ?? 0);
+        $questionId = (int) ($data['question_id'] ?? 0);
+        $isMarkedReview = filter_var($data['is_marked_review'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        if ($attemptId <= 0 || $questionId <= 0) {
+            sendResponse('error', 'Attempt ID dan Question ID harus diisi', null, 400);
+        }
+
+        $userId = (int) $tokenData['userId'];
+        $this->mysqli->begin_transaction();
+
+        try {
+            $attempt = $this->getAttemptForUser($attemptId, $userId, true);
+            if (!$attempt) {
+                throw new RuntimeException('Attempt tidak ditemukan', 404);
+            }
+
+            if (($attempt['status'] ?? '') !== 'ongoing') {
+                $existingResult = $this->getExistingResult($attemptId, $userId);
+                throw new RuntimeException(
+                    $existingResult ? 'Attempt ini sudah selesai.' : 'Attempt ini sudah tidak aktif lagi',
+                    409
+                );
+            }
+
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            $this->assertActiveAccess($userId, (int) $attempt['package_id'], $isAdmin);
+            $workflow = TestWorkflow::buildPackageWorkflow($attempt);
+            $attemptState = TestWorkflow::computeAttemptState($attempt, $workflow);
+
+            if (!empty($attemptState['is_expired'])) {
+                $this->mysqli->rollback();
+                $completion = $this->finalizeAttempt($attemptId, $userId, [], $isAdmin);
+                sendResponse('error', 'Waktu ujian sudah habis. Attempt ditutup otomatis.', [
+                    'attempt_completed' => true,
+                    'attempt_id' => $attemptId,
+                    'result' => $completion['result'],
+                ], 409);
+            }
+
+            $question = $this->getQuestion((int) $attempt['package_id'], $questionId);
+            if (!$question) {
+                throw new RuntimeException('Soal tidak ditemukan pada paket ini', 404);
+            }
+
+            $this->assertQuestionAccessible($workflow, $attemptState, $question);
+            $this->setReviewFlag($attemptId, $questionId, $isMarkedReview);
+            $this->mysqli->commit();
+
+            sendResponse('success', 'Status ragu-ragu berhasil disimpan', [
+                'attempt_id' => $attemptId,
+                'question_id' => $questionId,
+                'is_marked_review' => $isMarkedReview,
+            ]);
+        } catch (RuntimeException $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 400);
+        } catch (Throwable $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', 'Gagal menyimpan status ragu-ragu', ['details' => $error->getMessage()], 500);
+        }
+    }
+
     public function submitAnswers() {
         $tokenData = verifyToken();
         $data = json_decode(file_get_contents('php://input'), true);
@@ -776,6 +864,8 @@ if (strpos($requestPath, '/api/test/check-access') !== false && $requestMethod =
     $controller->startAttempt();
 } elseif (strpos($requestPath, '/api/test/save-answer') !== false && $requestMethod === 'POST') {
     $controller->saveAnswer();
+} elseif (strpos($requestPath, '/api/test/review-flag') !== false && $requestMethod === 'POST') {
+    $controller->saveReviewFlag();
 } elseif (strpos($requestPath, '/api/test/advance-section') !== false && $requestMethod === 'POST') {
     $controller->advanceSection();
 } elseif (strpos($requestPath, '/api/test/submit') !== false && $requestMethod === 'POST') {

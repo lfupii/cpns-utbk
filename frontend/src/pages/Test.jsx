@@ -93,6 +93,7 @@ export default function Test() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAdvancingSection, setIsAdvancingSection] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [reviewFlags, setReviewFlags] = useState({});
 
   const attemptState = useMemo(
     () => computeAttemptState(workflow, elapsedSeconds),
@@ -215,6 +216,7 @@ export default function Test() {
     const payload = questionsResponse.data.data || {};
     const nextQuestions = payload.questions || [];
     const nextSavedAnswers = payload.saved_answers || {};
+    const nextReviewFlags = payload.review_flags || {};
     const nextWorkflow = payload.workflow || null;
     const nextSections = payload.sections || [];
     const nextElapsedSeconds = Number(payload.attempt?.state?.elapsed_seconds || 0);
@@ -229,6 +231,7 @@ export default function Test() {
     setQuestions(nextQuestions);
     setSavedAnswers(nextSavedAnswers);
     setDraftAnswers(nextSavedAnswers);
+    setReviewFlags(nextReviewFlags);
     setWorkflow(nextWorkflow);
     setSections(nextSections);
     setPackageMeta(payload.package || null);
@@ -520,6 +523,54 @@ export default function Test() {
     goToQuestion(targetQuestion.id);
   };
 
+  const toggleReviewFlag = useCallback(async (questionId) => {
+    if (!attemptId || !questionId) {
+      return;
+    }
+
+    setError('');
+    setSaveMessage('');
+
+    const questionKey = String(questionId);
+    const nextMarkedReview = !Boolean(reviewFlags[questionKey] || reviewFlags[questionId]);
+
+    setReviewFlags((current) => {
+      const next = { ...current };
+      if (nextMarkedReview) {
+        next[questionKey] = true;
+      } else {
+        delete next[questionKey];
+      }
+      return next;
+    });
+
+    try {
+      await apiClient.post('/test/review-flag', {
+        attempt_id: attemptId,
+        question_id: questionId,
+        is_marked_review: nextMarkedReview,
+      });
+    } catch (err) {
+      setReviewFlags((current) => {
+        const reverted = { ...current };
+        if (nextMarkedReview) {
+          delete reverted[questionKey];
+        } else {
+          reverted[questionKey] = true;
+        }
+        return reverted;
+      });
+
+      const payload = err.response?.data?.data;
+      if (payload?.attempt_completed) {
+        navigate(`/results/${attemptId}`);
+        return;
+      }
+
+      setError(err.response?.data?.message || 'Gagal menyimpan status ragu-ragu');
+    }
+  }, [attemptId, navigate, reviewFlags]);
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Memuat soal...</div>;
   }
@@ -560,6 +611,9 @@ export default function Test() {
   const questionTitleNumber = isUtbkMode
     ? Math.max(1, orderedCurrentQuestionIndex + 1)
     : Math.max(1, currentGlobalQuestionIndex + 1);
+  const isCurrentQuestionMarkedForReview = Boolean(
+    reviewFlags[String(currentQuestion.id)] || reviewFlags[currentQuestion.id]
+  );
 
   return (
     <div className="min-h-screen test-shell">
@@ -626,6 +680,56 @@ export default function Test() {
           <div className="test-main-column">
             <div className="card test-question-card">
               <div key={currentQuestion.id} className="test-question-stage">
+                <div className="test-inline-navigation">
+                  <div className="test-inline-navigation-head">
+                    <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
+                    <p className="test-inline-navigation-note">
+                      Klik nomor soal. Kuning berarti ragu-ragu.
+                    </p>
+                  </div>
+                  <div
+                    className="test-question-strip test-question-strip-inline"
+                    role="tablist"
+                    aria-label={isUtbkMode ? 'Navigasi soal subtes aktif' : 'Navigasi soal'}
+                  >
+                    {orderedQuestions.map((question, index) => {
+                      const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
+                      const isMarkedForReview = Boolean(
+                        reviewFlags[String(question.id)] || reviewFlags[question.id]
+                      );
+
+                      return (
+                        <button
+                          key={question.id}
+                          type="button"
+                          onClick={() => goToQuestion(question.id)}
+                          className={[
+                            'test-nav-chip',
+                            'test-nav-chip-button',
+                            Number(question.id) === Number(currentQuestion?.id)
+                              ? 'test-nav-chip-current'
+                              : savedValue
+                              ? 'test-nav-chip-done'
+                              : 'test-nav-chip-empty',
+                            isMarkedForReview ? 'test-nav-chip-review' : '',
+                          ].filter(Boolean).join(' ')}
+                          aria-label={`Soal ${index + 1}${isMarkedForReview ? ', ditandai ragu-ragu' : ''}`}
+                          title={isMarkedForReview ? `Soal ${index + 1} ditandai ragu-ragu` : `Soal ${index + 1}`}
+                        >
+                          {index + 1}
+                          {isMarkedForReview && <span className="test-nav-chip-flag" aria-hidden="true" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="test-nav-legend">
+                    <p><span className="test-nav-legend-dot test-nav-legend-dot-current" />Soal aktif</p>
+                    <p><span className="test-nav-legend-dot test-nav-legend-dot-done" />Sudah dijawab</p>
+                    <p><span className="test-nav-legend-dot test-nav-legend-dot-review" />Ragu-ragu</p>
+                    <p><span className="test-nav-legend-dot test-nav-legend-dot-empty" />Belum dijawab</p>
+                  </div>
+                </div>
+
                 <div className="test-question-head">
                   <div className="test-question-heading">
                     <span className="test-question-number">Soal {questionTitleNumber}</span>
@@ -702,6 +806,16 @@ export default function Test() {
                         Selanjutnya →
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => toggleReviewFlag(currentQuestion.id)}
+                      className={`btn btn-outline test-action-button ${
+                        isCurrentQuestionMarkedForReview ? 'test-action-button-review-active' : ''
+                      }`}
+                    >
+                      {isCurrentQuestionMarkedForReview ? 'Batalkan Ragu-ragu' : 'Tandai Ragu-ragu'}
+                    </button>
                   </div>
 
                   {isUtbkMode && (
@@ -731,7 +845,7 @@ export default function Test() {
                           disabled={isAdvancingSection || isSubmitting}
                           className="btn btn-primary test-action-button disabled:opacity-50"
                         >
-                          {isAdvancingSection ? 'Membuka Subtes...' : `Lanjut ke ${nextSection.name} →`}
+                          {isAdvancingSection ? 'Membuka test berikutnya...' : 'Lanjut ke test berikutnya →'}
                         </button>
                       ) : (
                         <button
@@ -772,97 +886,6 @@ export default function Test() {
                 <div className="test-header-stat">
                   <p className="test-header-stat-label">Sisa Waktu Total</p>
                   <p className="test-header-stat-value">{formatTime(attemptState.remainingSeconds)}</p>
-                </div>
-              )}
-            </div>
-
-            {isUtbkMode && sections.length > 0 && (
-              <div className="card test-sidebar-card test-sidebar-card-flow">
-                <h3 className="test-sidebar-title">Flow Subtes</h3>
-                <div className="test-section-flow">
-                  {sections.map((section, index) => {
-                    const isCurrentSection = section.code === attemptState.activeSectionCode;
-                    const isCompletedSection = attemptState.completedSectionCodes.includes(section.code);
-                    const isLockedSection = attemptState.lockedSectionCodes.includes(section.code);
-
-                    return (
-                      <div
-                        key={section.code}
-                        className={[
-                          'test-section-flow-item',
-                          isCurrentSection ? 'test-section-flow-item-active' : '',
-                          isCompletedSection ? 'test-section-flow-item-done' : '',
-                          isLockedSection ? 'test-section-flow-item-locked' : '',
-                        ].filter(Boolean).join(' ')}
-                      >
-                        <span className="test-section-flow-index">{index + 1}</span>
-                        <div className="test-section-flow-copy">
-                          <strong>{section.name}</strong>
-                          <small>{section.question_count || 0} soal</small>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="card test-sidebar-card">
-              <h3 className="test-sidebar-title">Navigasi Soal</h3>
-
-              {isCpnsMode ? (
-                <>
-                  <div className="test-question-strip test-question-strip-grid" role="tablist" aria-label="Navigasi soal">
-                    {questions.map((question, index) => {
-                      const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
-
-                      return (
-                        <button
-                          key={question.id}
-                          type="button"
-                          onClick={() => goToQuestion(question.id)}
-                          className={`test-nav-chip test-nav-chip-button ${
-                            Number(question.id) === Number(currentQuestion?.id)
-                              ? 'test-nav-chip-current'
-                              : savedValue
-                              ? 'test-nav-chip-done'
-                              : 'test-nav-chip-empty'
-                          }`}
-                        >
-                          {index + 1}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="test-nav-legend">
-                    <p><span className="test-nav-legend-dot test-nav-legend-dot-done" />Sudah tersimpan</p>
-                    <p><span className="test-nav-legend-dot test-nav-legend-dot-empty" />Belum dijawab</p>
-                  </div>
-                </>
-              ) : (
-                <div className="test-question-strip test-question-strip-stack" role="tablist" aria-label="Navigasi soal subtes aktif">
-                  {activeQuestions.map((question, index) => {
-                    const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
-                    return (
-                      <button
-                        key={question.id}
-                        type="button"
-                        onClick={() => goToQuestion(question.id)}
-                        className={`test-subtest-chip test-subtest-chip-inline ${
-                          Number(question.id) === Number(currentQuestion?.id)
-                            ? 'test-subtest-chip-current'
-                            : savedValue
-                            ? 'test-subtest-chip-done'
-                            : 'test-subtest-chip-idle'
-                        }`}
-                      >
-                        <p className="test-subtest-chip-title">Soal {index + 1}</p>
-                        <p className="test-subtest-chip-status">
-                          {savedValue ? 'Sudah dijawab' : 'Belum dijawab'}
-                        </p>
-                      </button>
-                    );
-                  })}
                 </div>
               )}
             </div>

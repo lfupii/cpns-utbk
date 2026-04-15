@@ -3398,6 +3398,12 @@ html[data-theme='dark'] .theme-toggle-thumb {
   margin-top: 0.25rem;
 }
 
+.learning-option-copy {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
 .learning-test-result {
   margin-bottom: 1rem;
   padding: 0.9rem 1rem;
@@ -6041,6 +6047,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-question-form-modern {
   gap: 1rem;
+}
+
+.admin-learning-media-tools {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .admin-test-editor-question-card {

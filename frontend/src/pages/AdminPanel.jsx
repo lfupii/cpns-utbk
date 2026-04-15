@@ -72,6 +72,7 @@ const QUESTION_IMAGE_LAYOUT_OPTIONS = [
 const createEmptyLearningQuestion = (order = 1) => ({
   id: null,
   question_text: '',
+  question_image_url: '',
   difficulty: 'medium',
   question_order: order,
   options: [
@@ -294,6 +295,7 @@ export default function AdminPanel() {
   const [questionSaving, setQuestionSaving] = useState(false);
   const [importingQuestions, setImportingQuestions] = useState(false);
   const [workflowSaving, setWorkflowSaving] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [packageForm, setPackageForm] = useState(null);
@@ -545,6 +547,7 @@ export default function AdminPanel() {
     setLearningQuestionsForm(nextLearningQuestions.map((question, index) => ({
       id: question.id || null,
       question_text: question.question_text || '',
+      question_image_url: question.question_image_url || '',
       difficulty: question.difficulty || 'medium',
       question_order: Number(question.question_order || index + 1),
       options: (question.options || []).map((option, optionIndex) => ({
@@ -876,6 +879,98 @@ export default function AdminPanel() {
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menghapus soal');
     }
+  };
+
+  const uploadAdminMedia = async (file, context, uploadKey) => {
+    if (!file) {
+      return null;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('context', context);
+
+    setMediaUploading((current) => ({
+      ...current,
+      [uploadKey]: true,
+    }));
+
+    try {
+      const response = await apiClient.post('/admin/media-upload', formData);
+      return response.data?.data?.url || '';
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal mengupload gambar');
+      return null;
+    } finally {
+      setMediaUploading((current) => ({
+        ...current,
+        [uploadKey]: false,
+      }));
+    }
+  };
+
+  const handleQuestionImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const uploadedUrl = await uploadAdminMedia(file, 'tryout-question', 'tryout-question');
+    if (uploadedUrl) {
+      setQuestionForm((current) => ({
+        ...current,
+        question_image_url: uploadedUrl,
+      }));
+      setShowQuestionImageTools(true);
+    }
+
+    event.target.value = '';
+  };
+
+  const handleQuestionOptionImageUpload = async (index, event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const uploadedUrl = await uploadAdminMedia(file, 'tryout-option', `tryout-option-${index}`);
+    if (uploadedUrl) {
+      handleOptionFieldChange(index, 'image_url', uploadedUrl);
+      setOpenOptionImageEditors((current) => ({
+        ...current,
+        [index]: true,
+      }));
+    }
+
+    event.target.value = '';
+  };
+
+  const handleLearningQuestionImageUpload = async (questionIndex, event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const uploadedUrl = await uploadAdminMedia(file, 'mini-test-question', `learning-question-${questionIndex}`);
+    if (uploadedUrl) {
+      updateLearningQuestion(questionIndex, 'question_image_url', uploadedUrl);
+    }
+
+    event.target.value = '';
+  };
+
+  const handleLearningOptionImageUpload = async (questionIndex, optionIndex, event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const uploadedUrl = await uploadAdminMedia(file, 'mini-test-option', `learning-option-${questionIndex}-${optionIndex}`);
+    if (uploadedUrl) {
+      updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', uploadedUrl);
+    }
+
+    event.target.value = '';
   };
 
   const updateLearningQuestion = (questionIndex, field, value) => {
@@ -1674,6 +1769,43 @@ export default function AdminPanel() {
                                     onChange={(event) => updateLearningQuestion(questionIndex, 'question_text', event.target.value)}
                                   />
                                 </div>
+                                <div className="admin-learning-media-tools">
+                                  <div className="form-group">
+                                    <label>URL Gambar Soal</label>
+                                    <input
+                                      name={`learning_question_image_main_${questionIndex}`}
+                                      type="url"
+                                      value={question.question_image_url || ''}
+                                      onChange={(event) => updateLearningQuestion(questionIndex, 'question_image_url', event.target.value)}
+                                      placeholder="https://..."
+                                    />
+                                  </div>
+                                  <div className="admin-option-inline-actions">
+                                    <label className="btn btn-outline admin-option-inline-button admin-file-button">
+                                      {mediaUploading[`learning-question-${questionIndex}`] ? 'Mengupload...' : 'Upload Gambar Soal'}
+                                      <input
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp,image/gif"
+                                        onChange={(event) => handleLearningQuestionImageUpload(questionIndex, event)}
+                                        hidden
+                                      />
+                                    </label>
+                                    {question.question_image_url && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline admin-option-inline-button"
+                                        onClick={() => updateLearningQuestion(questionIndex, 'question_image_url', '')}
+                                      >
+                                        Hapus Gambar
+                                      </button>
+                                    )}
+                                  </div>
+                                  <AdminImagePreview
+                                    src={question.question_image_url}
+                                    alt={`Preview soal mini test ${questionIndex + 1}`}
+                                    className="admin-editor-preview-image"
+                                  />
+                                </div>
                                 <div className="account-form-grid">
                                   <div className="form-group">
                                     <label>Kesulitan</label>
@@ -1700,7 +1832,7 @@ export default function AdminPanel() {
                                 </div>
                                 <div className="admin-options-editor-list">
                                   {(question.options || []).map((option, optionIndex) => (
-                                    <div key={`learning-option-inline-${questionIndex}-${optionIndex}`} className="admin-option-row">
+                                    <div key={`learning-option-inline-${questionIndex}-${optionIndex}`} className="admin-option-row admin-option-row-rich">
                                       <button
                                         type="button"
                                         className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
@@ -1709,12 +1841,48 @@ export default function AdminPanel() {
                                         {option.is_correct ? 'Benar' : 'Pilih'}
                                       </button>
                                       <strong>{option.letter}</strong>
-                                      <input
-                                        name={`learning_option_text_main_${questionIndex}_${optionIndex}`}
-                                        value={option.text}
-                                        onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'text', event.target.value)}
-                                        placeholder={`Opsi ${option.letter}`}
-                                      />
+                                      <div className="admin-option-input-stack">
+                                        <input
+                                          name={`learning_option_text_main_${questionIndex}_${optionIndex}`}
+                                          value={option.text}
+                                          onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'text', event.target.value)}
+                                          placeholder={`Opsi ${option.letter}`}
+                                        />
+                                        <div className="admin-option-image-tools">
+                                          <input
+                                            name={`learning_option_image_main_${questionIndex}_${optionIndex}`}
+                                            type="url"
+                                            value={option.image_url || ''}
+                                            onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', event.target.value)}
+                                            placeholder="https://..."
+                                          />
+                                          <AdminImagePreview
+                                            src={option.image_url}
+                                            alt={`Preview opsi ${option.letter}`}
+                                            className="admin-editor-preview-image admin-editor-preview-image-small"
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="admin-option-inline-actions">
+                                        <label className="btn btn-outline admin-option-inline-button admin-file-button">
+                                          {mediaUploading[`learning-option-${questionIndex}-${optionIndex}`] ? 'Mengupload...' : 'Upload Gambar'}
+                                          <input
+                                            type="file"
+                                            accept="image/png,image/jpeg,image/webp,image/gif"
+                                            onChange={(event) => handleLearningOptionImageUpload(questionIndex, optionIndex, event)}
+                                            hidden
+                                          />
+                                        </label>
+                                        {option.image_url && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-outline admin-option-inline-button"
+                                            onClick={() => updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', '')}
+                                          >
+                                            Hapus Gambar
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -2020,6 +2188,18 @@ export default function AdminPanel() {
                                 />
                               </div>
 
+                              <div className="admin-option-inline-actions">
+                                <label className="btn btn-outline admin-option-inline-button admin-file-button">
+                                  {mediaUploading['tryout-question'] ? 'Mengupload...' : 'Upload dari Komputer'}
+                                  <input
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp,image/gif"
+                                    onChange={handleQuestionImageUpload}
+                                    hidden
+                                  />
+                                </label>
+                              </div>
+
                               <div className="form-group">
                                 <label>Posisi Gambar Soal</label>
                                 <div className="admin-layout-toggle-group">
@@ -2110,6 +2290,15 @@ export default function AdminPanel() {
                                       )}
                                     </div>
                                     <div className="admin-option-inline-actions">
+                                      <label className="btn btn-outline admin-option-inline-button admin-file-button">
+                                        {mediaUploading[`tryout-option-${index}`] ? 'Mengupload...' : 'Upload Gambar'}
+                                        <input
+                                          type="file"
+                                          accept="image/png,image/jpeg,image/webp,image/gif"
+                                          onChange={(event) => handleQuestionOptionImageUpload(index, event)}
+                                          hidden
+                                        />
+                                      </label>
                                       <button
                                         type="button"
                                         className="btn btn-outline admin-option-inline-button"

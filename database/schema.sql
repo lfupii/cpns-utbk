@@ -76,12 +76,12 @@ CREATE TABLE questions (
   package_id INT NOT NULL,
   question_text LONGTEXT NOT NULL,
   question_image_url VARCHAR(1000) DEFAULT NULL,
+  question_image_layout VARCHAR(20) NOT NULL DEFAULT 'top',
   question_type ENUM('single_choice', 'multiple_choice') DEFAULT 'single_choice',
   difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
   section_code VARCHAR(100) DEFAULT NULL,
   section_name VARCHAR(150) DEFAULT NULL,
   section_order INT NOT NULL DEFAULT 1,
-  question_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
   INDEX (package_id)

@@ -13,8 +13,9 @@ apiClient.interceptors.request.use(
     const method = (config.method || 'get').toLowerCase();
     const publicPaths = ['/questions/packages', '/payment/methods'];
     const requestUrl = config.url || '';
+    const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData;
 
-    if (['post', 'put', 'patch', 'delete'].includes(method)) {
+    if (['post', 'put', 'patch', 'delete'].includes(method) && !isFormData) {
       config.headers['Content-Type'] = 'application/json';
     } else if (config.headers?.['Content-Type']) {
       delete config.headers['Content-Type'];

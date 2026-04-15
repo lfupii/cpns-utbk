@@ -139,6 +139,11 @@ export default function Test() {
     activeQuestions.findIndex((question) => Number(question.id) === Number(currentQuestion?.id))
   ), [activeQuestions, currentQuestion]);
 
+  const currentQuestionImageLayout = useMemo(() => {
+    const layout = String(currentQuestion?.question_image_layout || 'top').toLowerCase();
+    return ['top', 'bottom', 'left', 'right'].includes(layout) ? layout : 'top';
+  }, [currentQuestion]);
+
   const orderedQuestions = useMemo(() => (
     workflow?.mode === MODE_UTBK ? activeQuestions : questions
   ), [activeQuestions, questions, workflow]);
@@ -741,16 +746,24 @@ export default function Test() {
                     </p>
                   </div>
                 </div>
-                {currentQuestion.question_text && (
-                  <p className="test-question-text">{currentQuestion.question_text}</p>
-                )}
-                {currentQuestion.question_image_url && (
-                  <img
-                    src={currentQuestion.question_image_url}
-                    alt={`Soal ${currentQuestionIndex + 1}`}
-                    className="test-question-image"
-                    loading="lazy"
-                  />
+                {(currentQuestion.question_text || currentQuestion.question_image_url) && (
+                  <div className={`test-question-media test-question-media-${currentQuestionImageLayout}`}>
+                    {currentQuestion.question_text && (
+                      <div className="test-question-text-block">
+                        <p className="test-question-text">{currentQuestion.question_text}</p>
+                      </div>
+                    )}
+                    {currentQuestion.question_image_url && (
+                      <div className="test-question-image-frame">
+                        <img
+                          src={currentQuestion.question_image_url}
+                          alt={`Soal ${currentQuestionIndex + 1}`}
+                          className="test-question-image"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
 
               <div className="space-y-3 mb-8">

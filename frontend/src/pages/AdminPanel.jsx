@@ -5,10 +5,10 @@ import apiClient from '../api';
 
 const CSV_HEADERS = [
   'section_code',
-  'question_order',
   'difficulty',
   'question_text',
   'question_image_url',
+  'question_image_layout',
   'option_a',
   'option_a_image_url',
   'option_b',
@@ -23,10 +23,10 @@ const CSV_HEADERS = [
 
 const CSV_TEMPLATE_ROW = {
   section_code: 'twk',
-  question_order: '1',
   difficulty: 'easy',
   question_text: 'Contoh soal: Ibu kota Indonesia adalah ...',
   question_image_url: 'https://contoh.com/gambar-soal.jpg',
+  question_image_layout: 'top',
   option_a: 'Bandung',
   option_a_image_url: '',
   option_b: '*Jakarta',
@@ -50,10 +50,10 @@ const createEmptyQuestionForm = (sectionCode = '') => ({
   question_id: null,
   question_text: '',
   question_image_url: '',
+  question_image_layout: 'top',
   difficulty: 'medium',
   question_type: 'single_choice',
   section_code: sectionCode,
-  question_order: 1,
   options: [
     createOption(0),
     createOption(1),
@@ -61,6 +61,13 @@ const createEmptyQuestionForm = (sectionCode = '') => ({
     createOption(3),
   ],
 });
+
+const QUESTION_IMAGE_LAYOUT_OPTIONS = [
+  { value: 'top', label: 'Atas' },
+  { value: 'bottom', label: 'Bawah' },
+  { value: 'left', label: 'Kiri' },
+  { value: 'right', label: 'Kanan' },
+];
 
 const createEmptyLearningQuestion = (order = 1) => ({
   id: null,
@@ -241,10 +248,10 @@ function createImportPayload(rows, defaultSectionCode) {
     return {
       question_text: questionText,
       question_image_url: questionImageUrl,
+      question_image_layout: String(row.question_image_layout || 'top').trim() || 'top',
       difficulty: String(row.difficulty || 'medium').trim() || 'medium',
       question_type: 'single_choice',
       section_code: String(row.section_code || defaultSectionCode || '').trim(),
-      question_order: Number(row.question_order || rowIndex + 1),
       options,
     };
   });
@@ -297,6 +304,8 @@ export default function AdminPanel() {
   const [questionSectionFilter, setQuestionSectionFilter] = useState('');
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState('');
+  const [showQuestionImageTools, setShowQuestionImageTools] = useState(false);
+  const [openOptionImageEditors, setOpenOptionImageEditors] = useState({});
   const [learningContent, setLearningContent] = useState([]);
   const [loadingLearningContent, setLoadingLearningContent] = useState(false);
   const [learningSectionCode, setLearningSectionCode] = useState('');
@@ -414,6 +423,8 @@ export default function AdminPanel() {
       return haystack.includes(needle);
     });
   }, [questionQuery, questionSectionFilter, questions]);
+
+  const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -569,6 +580,8 @@ export default function AdminPanel() {
   const resetQuestionForm = () => {
     setQuestionForm(createEmptyQuestionForm(preferredSectionCode));
     setShowQuestionEditor(false);
+    setShowQuestionImageTools(false);
+    setOpenOptionImageEditors({});
   };
 
   const handlePackageChange = (event) => {
@@ -663,7 +676,7 @@ export default function AdminPanel() {
     const { name, value } = event.target;
     setQuestionForm((current) => ({
       ...current,
-      [name]: ['question_order'].includes(name) ? Number(value) : value,
+      [name]: value,
     }));
   };
 
@@ -672,6 +685,30 @@ export default function AdminPanel() {
       ...current,
       options: current.options.map((option, optionIndex) => (
         optionIndex === index ? { ...option, [field]: value } : option
+      )),
+    }));
+  };
+
+  const toggleOptionImageEditor = (index) => {
+    setOpenOptionImageEditors((current) => ({
+      ...current,
+      [index]: !current[index],
+    }));
+  };
+
+  const clearQuestionImage = () => {
+    setQuestionForm((current) => ({
+      ...current,
+      question_image_url: '',
+      question_image_layout: 'top',
+    }));
+  };
+
+  const clearOptionImage = (index) => {
+    setQuestionForm((current) => ({
+      ...current,
+      options: current.options.map((option, optionIndex) => (
+        optionIndex === index ? { ...option, image_url: '' } : option
       )),
     }));
   };
@@ -697,8 +734,19 @@ export default function AdminPanel() {
   };
 
   const removeOption = (index) => {
+    if (questionForm.options.length <= 2) return;
+
+    setOpenOptionImageEditors((current) => Object.entries(current).reduce((nextState, [key, value]) => {
+      const numericKey = Number(key);
+      if (numericKey === index) {
+        return nextState;
+      }
+
+      nextState[numericKey > index ? numericKey - 1 : numericKey] = value;
+      return nextState;
+    }, {}));
+
     setQuestionForm((current) => {
-      if (current.options.length <= 2) return current;
       const nextOptions = current.options
         .filter((_, optionIndex) => optionIndex !== index)
         .map((option, optionIndex) => ({
@@ -757,14 +805,21 @@ export default function AdminPanel() {
   };
 
   const handleQuestionEdit = (question) => {
+    const optionImageEditorState = (question.options || []).reduce((accumulator, option, index) => {
+      if (option.image_url) {
+        accumulator[index] = true;
+      }
+      return accumulator;
+    }, {});
+
     setQuestionForm({
       question_id: Number(question.id),
       question_text: question.question_text || '',
       question_image_url: question.question_image_url || '',
+      question_image_layout: question.question_image_layout || 'top',
       difficulty: question.difficulty || 'medium',
       question_type: question.question_type || 'single_choice',
       section_code: question.section_code || defaultSectionCode,
-      question_order: Number(question.question_order || 1),
       options: (question.options || []).map((option, index) => ({
         letter: option.letter || String.fromCharCode(65 + index),
         text: option.text || '',
@@ -775,6 +830,8 @@ export default function AdminPanel() {
     setExpandedQuestionId(Number(question.id));
     setSuccess('');
     setError('');
+    setShowQuestionImageTools(Boolean(question.question_image_url));
+    setOpenOptionImageEditors(optionImageEditorState);
     setShowQuestionEditor(true);
   };
 
@@ -782,6 +839,8 @@ export default function AdminPanel() {
     setQuestionForm(createEmptyQuestionForm(preferredSectionCode));
     setSuccess('');
     setError('');
+    setShowQuestionImageTools(false);
+    setOpenOptionImageEditors({});
     setShowQuestionEditor(true);
     setAdminView('soal');
   };
@@ -1753,7 +1812,7 @@ export default function AdminPanel() {
                       <div>
                         <h3>Import Pertanyaan CSV / Excel</h3>
                         <p className="text-muted">
-                          Download template, edit di Excel/Google Sheets, lalu upload kembali sebagai CSV. Tandai jawaban benar dengan awalan <strong>*</strong>, misalnya <strong>*Jakarta</strong>.
+                          Download template, edit di Excel/Google Sheets, lalu upload kembali sebagai CSV. Soal tryout akan diacak per subtes saat attempt dimulai, jadi template tidak lagi memakai urutan soal. Tandai jawaban benar dengan awalan <strong>*</strong>, misalnya <strong>*Jakarta</strong>.
                         </p>
                       </div>
                       <div className="admin-import-actions">
@@ -1815,8 +1874,7 @@ export default function AdminPanel() {
                                 <div className="admin-question-row-main">
                                   <strong>{truncateText(question.question_text || 'Soal berbasis gambar')}</strong>
                                   <p>
-                                    Urutan {question.question_order || index + 1}
-                                    {question.question_image_url ? ' • ada gambar' : ''}
+                                    {question.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
                                   </p>
                                 </div>
 
@@ -1844,7 +1902,7 @@ export default function AdminPanel() {
                                     <div>
                                       <h3>{question.question_text || 'Soal berbasis gambar'}</h3>
                                       <p className="text-muted">
-                                        {question.section_name || 'Bagian umum'} • Urutan {question.question_order || index + 1}
+                                        {question.section_name || 'Bagian umum'}
                                       </p>
                                     </div>
                                     <AdminImagePreview
@@ -1893,35 +1951,45 @@ export default function AdminPanel() {
                         </button>
                       </div>
 
-                      <form onSubmit={handleQuestionSubmit} className="admin-question-form">
-                        <div className="form-group">
-                          <label>Pertanyaan</label>
-                          <textarea
-                            name="question_text"
-                            rows="4"
-                            value={questionForm.question_text}
-                            onChange={handleQuestionChange}
-                            placeholder="Tulis soal di sini"
-                          />
-                        </div>
+                      <form onSubmit={handleQuestionSubmit} className="admin-question-form admin-question-form-modern">
+                        <div className="admin-learning-page-card admin-learning-question-card-modern admin-test-editor-question-card">
+                          <div className="admin-option-editor-head">
+                            <strong>{questionForm.question_id ? 'Edit Soal Tryout' : 'Soal Baru Tryout'}</strong>
+                            <button
+                              type="button"
+                              className="btn btn-outline admin-option-delete"
+                              onClick={() => setShowQuestionImageTools((current) => !current)}
+                            >
+                              {questionImagePanelVisible ? 'Tutup Gambar Soal' : 'Tambah Gambar Soal'}
+                            </button>
+                          </div>
 
-                        <div className="form-group">
-                          <label>URL Gambar Soal</label>
-                          <input
-                            type="url"
-                            name="question_image_url"
-                            value={questionForm.question_image_url}
-                            onChange={handleQuestionChange}
-                            placeholder="https://..."
-                          />
-                          <AdminImagePreview
-                            src={questionForm.question_image_url}
-                            alt="Preview gambar soal"
-                            className="admin-editor-preview-image"
-                          />
-                        </div>
+                          <div className="form-group">
+                            <label>Pertanyaan</label>
+                            <textarea
+                              name="question_text"
+                              rows="4"
+                              value={questionForm.question_text}
+                              onChange={handleQuestionChange}
+                              placeholder="Tulis soal di sini"
+                            />
+                          </div>
 
-                        <div className="account-form-grid">
+                          <div className="account-form-grid">
+                            <div className="form-group">
+                              <label>Kesulitan</label>
+                              <select
+                                name="difficulty"
+                                value={questionForm.difficulty}
+                                onChange={handleQuestionChange}
+                              >
+                                <option value="easy">Mudah</option>
+                                <option value="medium">Sedang</option>
+                                <option value="hard">Sulit</option>
+                              </select>
+                            </div>
+                          </div>
+
                           <div className="form-group">
                             <label>Bagian / Subtes</label>
                             <select
@@ -1939,76 +2007,139 @@ export default function AdminPanel() {
                             </select>
                           </div>
 
-                          <div className="form-group">
-                            <label>Urutan Soal</label>
-                            <input
-                              type="number"
-                              min="1"
-                              name="question_order"
-                              value={questionForm.question_order}
-                              onChange={handleQuestionChange}
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div className="admin-options-header">
-                          <h3>Opsi Jawaban</h3>
-                          <button type="button" className="btn btn-outline" onClick={addOption} disabled={questionForm.options.length >= 5}>
-                            Tambah Opsi
-                          </button>
-                        </div>
-
-                        <div className="admin-options-editor-list">
-                          {questionForm.options.map((option, index) => (
-                            <div key={`${option.letter}-main-${index}`} className="admin-option-editor-card">
-                              <div className="admin-option-editor-head">
-                                <button
-                                  type="button"
-                                  className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
-                                  onClick={() => handleCorrectOptionChange(index)}
-                                >
-                                  {option.is_correct ? 'Benar' : 'Pilih'}
-                                </button>
-                                <span className="admin-option-letter">{option.letter}</span>
-                                <button
-                                  type="button"
-                                  className="btn btn-outline admin-option-delete"
-                                  onClick={() => removeOption(index)}
-                                  disabled={questionForm.options.length <= 2}
-                                >
-                                  Hapus
-                                </button>
-                              </div>
-
+                          {questionImagePanelVisible && (
+                            <div className="admin-question-image-tools">
                               <div className="form-group">
-                                <label>Teks Opsi {option.letter}</label>
+                                <label>URL Gambar Soal</label>
                                 <input
-                                  name={`option_text_main_${option.letter}_${index}`}
-                                  type="text"
-                                  value={option.text}
-                                  onChange={(event) => handleOptionFieldChange(index, 'text', event.target.value)}
-                                  placeholder={`Isi opsi ${option.letter}`}
-                                />
-                              </div>
-
-                              <div className="form-group">
-                                <label>URL Gambar Opsi {option.letter}</label>
-                                <input
-                                  name={`option_image_url_main_${option.letter}_${index}`}
                                   type="url"
-                                  value={option.image_url}
-                                  onChange={(event) => handleOptionFieldChange(index, 'image_url', event.target.value)}
+                                  name="question_image_url"
+                                  value={questionForm.question_image_url}
+                                  onChange={handleQuestionChange}
                                   placeholder="https://..."
                                 />
-                                <AdminImagePreview
-                                  src={option.image_url}
-                                  alt={`Preview opsi ${option.letter}`}
-                                  className="admin-editor-preview-image admin-editor-preview-image-small"
-                                />
+                              </div>
+
+                              <div className="form-group">
+                                <label>Posisi Gambar Soal</label>
+                                <div className="admin-layout-toggle-group">
+                                  {QUESTION_IMAGE_LAYOUT_OPTIONS.map((layoutOption) => (
+                                    <button
+                                      key={layoutOption.value}
+                                      type="button"
+                                      className={`admin-layout-toggle ${questionForm.question_image_layout === layoutOption.value ? 'admin-layout-toggle-active' : ''}`}
+                                      onClick={() => setQuestionForm((current) => ({
+                                        ...current,
+                                        question_image_layout: layoutOption.value,
+                                      }))}
+                                    >
+                                      {layoutOption.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="admin-question-image-preview-shell">
+                                <div className={`admin-question-media-preview admin-question-media-preview-${questionForm.question_image_layout || 'top'}`}>
+                                  {questionForm.question_text && (
+                                    <div className="admin-question-media-copy-preview">
+                                      <span>Preview pertanyaan</span>
+                                      <p>{questionForm.question_text}</p>
+                                    </div>
+                                  )}
+                                  <AdminImagePreview
+                                    src={questionForm.question_image_url}
+                                    alt="Preview gambar soal"
+                                    className="admin-question-media-image-preview"
+                                  />
+                                </div>
+                                {questionForm.question_image_url && (
+                                  <button type="button" className="btn btn-outline admin-inline-secondary-action" onClick={clearQuestionImage}>
+                                    Hapus Gambar Soal
+                                  </button>
+                                )}
                               </div>
                             </div>
-                          ))}
+                          )}
+
+                          <div className="admin-options-header">
+                            <h3>Opsi Jawaban</h3>
+                            <button type="button" className="btn btn-outline" onClick={addOption} disabled={questionForm.options.length >= 5}>
+                              Tambah Opsi
+                            </button>
+                          </div>
+
+                          <div className="admin-options-editor-list admin-options-editor-list-modern">
+                            {questionForm.options.map((option, index) => {
+                              const isOptionImageEditorVisible = openOptionImageEditors[index] || Boolean(option.image_url);
+
+                              return (
+                                <div key={`${option.letter}-main-${index}`} className="admin-option-editor-card admin-option-editor-card-inline">
+                                  <div className="admin-option-row admin-option-row-rich">
+                                    <button
+                                      type="button"
+                                      className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
+                                      onClick={() => handleCorrectOptionChange(index)}
+                                    >
+                                      {option.is_correct ? 'Benar' : 'Pilih'}
+                                    </button>
+                                    <span className="admin-option-letter">{option.letter}</span>
+                                    <div className="admin-option-input-stack">
+                                      <input
+                                        name={`option_text_main_${option.letter}_${index}`}
+                                        type="text"
+                                        value={option.text}
+                                        onChange={(event) => handleOptionFieldChange(index, 'text', event.target.value)}
+                                        placeholder={`Isi opsi ${option.letter}`}
+                                      />
+                                      {isOptionImageEditorVisible && (
+                                        <div className="admin-option-image-tools">
+                                          <input
+                                            name={`option_image_url_main_${option.letter}_${index}`}
+                                            type="url"
+                                            value={option.image_url}
+                                            onChange={(event) => handleOptionFieldChange(index, 'image_url', event.target.value)}
+                                            placeholder="https://..."
+                                          />
+                                          <AdminImagePreview
+                                            src={option.image_url}
+                                            alt={`Preview opsi ${option.letter}`}
+                                            className="admin-editor-preview-image admin-editor-preview-image-small"
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="admin-option-inline-actions">
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline admin-option-inline-button"
+                                        onClick={() => toggleOptionImageEditor(index)}
+                                      >
+                                        {isOptionImageEditorVisible ? 'Tutup Gambar' : 'Tambah Gambar'}
+                                      </button>
+                                      {option.image_url && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-outline admin-option-inline-button"
+                                          onClick={() => clearOptionImage(index)}
+                                        >
+                                          Hapus Gambar
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline admin-option-delete"
+                                        onClick={() => removeOption(index)}
+                                        disabled={questionForm.options.length <= 2}
+                                      >
+                                        Hapus
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
 
                         <div className="account-form-actions">
@@ -2326,8 +2457,7 @@ export default function AdminPanel() {
                           <div className="admin-question-row-main">
                             <strong>{truncateText(question.question_text || 'Soal berbasis gambar')}</strong>
                             <p>
-                              Urutan {question.question_order || index + 1}
-                              {question.question_image_url ? ' • ada gambar' : ''}
+                              {question.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
                             </p>
                           </div>
 
@@ -2355,7 +2485,7 @@ export default function AdminPanel() {
                               <div>
                                 <h3>{question.question_text || 'Soal berbasis gambar'}</h3>
                                 <p className="text-muted">
-                                  {question.section_name || 'Bagian umum'} • Urutan {question.question_order || index + 1}
+                                  {question.section_name || 'Bagian umum'}
                                 </p>
                               </div>
                               <AdminImagePreview
@@ -2450,17 +2580,6 @@ export default function AdminPanel() {
                       </select>
                     </div>
 
-                    <div className="form-group">
-                      <label>Urutan Soal</label>
-                      <input
-                        type="number"
-                        min="1"
-                        name="question_order"
-                        value={questionForm.question_order}
-                        onChange={handleQuestionChange}
-                        required
-                      />
-                    </div>
                   </div>
 
                   <div className="admin-options-header">

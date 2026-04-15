@@ -213,7 +213,7 @@ class QuestionController {
                       LEFT JOIN question_options qo ON qo.question_id = q.id
                       WHERE q.package_id = ? AND q.section_code = ?
                       GROUP BY q.id
-                      ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
+                      ORDER BY q.section_order ASC, q.id ASC";
             $stmt = $this->mysqli->prepare($query);
             $stmt->bind_param('is', $packageId, $activeSectionCode);
         } else {
@@ -231,7 +231,7 @@ class QuestionController {
                       LEFT JOIN question_options qo ON qo.question_id = q.id
                       WHERE q.package_id = ?
                       GROUP BY q.id
-                      ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
+                      ORDER BY q.section_order ASC, q.id ASC";
             $stmt = $this->mysqli->prepare($query);
             $stmt->bind_param('i', $packageId);
         }
@@ -243,7 +243,6 @@ class QuestionController {
         while ($row = $result->fetch_assoc()) {
             $row['id'] = (int) $row['id'];
             $row['section_order'] = (int) ($row['section_order'] ?? 1);
-            $row['question_order'] = (int) ($row['question_order'] ?? 0);
             $row['selected_option_id'] = isset($savedAnswers[(string) $row['id']])
                 ? (int) $savedAnswers[(string) $row['id']]
                 : null;

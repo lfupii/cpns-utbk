@@ -6,9 +6,77 @@ require_once __DIR__ . '/../middleware/Response.php';
 
 class AdminController {
     private $mysqli;
+    private const ADMIN_MEDIA_UPLOAD_DIR = __DIR__ . '/../uploads/admin-media';
+    private const ADMIN_MEDIA_MAX_SIZE = 5242880;
 
     public function __construct($mysqli) {
         $this->mysqli = $mysqli;
+    }
+
+    private function buildPublicMediaUrl(string $relativePath): string {
+        $baseUrl = rtrim((string) API_URL, '/');
+        $normalizedPath = ltrim(str_replace(DIRECTORY_SEPARATOR, '/', $relativePath), '/');
+
+        return $baseUrl . '/' . $normalizedPath;
+    }
+
+    private function ensureAdminMediaDirectory(string $directory): void {
+        if (is_dir($directory)) {
+            return;
+        }
+
+        if (!mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new RuntimeException('Folder upload gambar tidak dapat dibuat', 500);
+        }
+    }
+
+    private function storeUploadedImage(array $file, string $context = 'question'): array {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('Upload gambar gagal diproses', 422);
+        }
+
+        $size = (int) ($file['size'] ?? 0);
+        if ($size <= 0 || $size > self::ADMIN_MEDIA_MAX_SIZE) {
+            throw new RuntimeException('Ukuran gambar maksimal 5MB', 422);
+        }
+
+        $tmpName = (string) ($file['tmp_name'] ?? '');
+        if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+            throw new RuntimeException('File upload tidak valid', 422);
+        }
+
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mimeType = (string) ($finfo->file($tmpName) ?: '');
+        $allowedMimeTypes = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/gif' => 'gif',
+        ];
+
+        if (!isset($allowedMimeTypes[$mimeType])) {
+            throw new RuntimeException('Format gambar harus JPG, PNG, WEBP, atau GIF', 422);
+        }
+
+        $contextSlug = preg_replace('/[^a-z0-9_-]+/i', '-', strtolower(trim($context))) ?: 'question';
+        $dateSegment = date('Y/m');
+        $targetDirectory = self::ADMIN_MEDIA_UPLOAD_DIR . '/' . $contextSlug . '/' . $dateSegment;
+        $this->ensureAdminMediaDirectory($targetDirectory);
+
+        $fileName = bin2hex(random_bytes(16)) . '.' . $allowedMimeTypes[$mimeType];
+        $targetPath = $targetDirectory . '/' . $fileName;
+        if (!move_uploaded_file($tmpName, $targetPath)) {
+            throw new RuntimeException('Gagal menyimpan gambar ke server', 500);
+        }
+
+        $relativePath = 'uploads/admin-media/' . $contextSlug . '/' . $dateSegment . '/' . $fileName;
+
+        return [
+            'url' => $this->buildPublicMediaUrl($relativePath),
+            'path' => $relativePath,
+            'mime_type' => $mimeType,
+            'size' => $size,
+        ];
     }
 
     private function syncQuestionCount(int $packageId): void {
@@ -246,11 +314,12 @@ class AdminController {
 
     private function normalizeLearningQuestionPayload(array $data, int $order): array {
         $questionText = trim((string) ($data['question_text'] ?? ''));
+        $questionImageUrl = $this->normalizeMediaUrl($data['question_image_url'] ?? null);
         $difficulty = trim((string) ($data['difficulty'] ?? 'medium'));
         $options = $data['options'] ?? [];
 
-        if ($questionText === '') {
-            sendResponse('error', 'Pertanyaan mini test wajib diisi', null, 422);
+        if ($questionText === '' && $questionImageUrl === null) {
+            sendResponse('error', 'Pertanyaan mini test wajib memiliki teks atau gambar', null, 422);
         }
 
         if (!in_array($difficulty, ['easy', 'medium', 'hard'], true)) {
@@ -266,9 +335,10 @@ class AdminController {
         foreach ($options as $index => $option) {
             $letter = strtoupper(substr(trim((string) ($option['letter'] ?? chr(65 + $index))), 0, 5));
             $text = trim((string) ($option['text'] ?? ''));
+            $imageUrl = $this->normalizeMediaUrl($option['image_url'] ?? null);
             $isCorrect = !empty($option['is_correct']);
 
-            if ($text === '') {
+            if ($text === '' && $imageUrl === null) {
                 continue;
             }
 
@@ -279,12 +349,13 @@ class AdminController {
             $normalizedOptions[] = [
                 'letter' => $letter,
                 'text' => $text,
+                'image_url' => $imageUrl,
                 'is_correct' => $isCorrect ? 1 : 0,
             ];
         }
 
         if (count($normalizedOptions) < 2) {
-            sendResponse('error', 'Mini test minimal memiliki 2 opsi berisi teks', null, 422);
+            sendResponse('error', 'Mini test minimal memiliki 2 opsi berisi teks atau gambar', null, 422);
         }
 
         if ($correctCount !== 1) {
@@ -293,6 +364,7 @@ class AdminController {
 
         return [
             'question_text' => $questionText,
+            'question_image_url' => $questionImageUrl,
             'difficulty' => $difficulty,
             'question_order' => max(1, (int) ($data['question_order'] ?? $order)),
             'options' => $normalizedOptions,
@@ -311,23 +383,28 @@ class AdminController {
     private function normalizeQuestionPayload(int $packageId, array $data): array {
         $questionText = trim((string) ($data['question_text'] ?? ''));
         $questionImageUrl = $this->normalizeMediaUrl($data['question_image_url'] ?? null);
+        $questionImageLayout = strtolower(trim((string) ($data['question_image_layout'] ?? 'top')));
         $difficulty = (string) ($data['difficulty'] ?? 'medium');
         $questionType = (string) ($data['question_type'] ?? 'single_choice');
         $sectionCode = trim((string) ($data['section_code'] ?? ''));
-        $questionOrder = max(1, (int) ($data['question_order'] ?? 1));
         $options = $data['options'] ?? [];
 
         if ($questionText === '' && $questionImageUrl === null) {
-            sendResponse('error', 'Pertanyaan harus memiliki teks atau gambar', null, 422);
+            throw new RuntimeException('Pertanyaan harus memiliki teks atau gambar', 422);
         }
 
         $allowedDifficulty = ['easy', 'medium', 'hard'];
         if (!in_array($difficulty, $allowedDifficulty, true)) {
-            sendResponse('error', 'Tingkat kesulitan tidak valid', null, 422);
+            throw new RuntimeException('Tingkat kesulitan tidak valid', 422);
         }
 
         if ($questionType !== 'single_choice') {
-            sendResponse('error', 'Tipe soal belum didukung', null, 422);
+            throw new RuntimeException('Tipe soal belum didukung', 422);
+        }
+
+        $allowedImageLayouts = ['top', 'bottom', 'left', 'right'];
+        if (!in_array($questionImageLayout, $allowedImageLayouts, true)) {
+            $questionImageLayout = 'top';
         }
 
         $package = $this->getPackage($packageId);
@@ -344,11 +421,11 @@ class AdminController {
         }
 
         if (!isset($sectionLookup[$sectionCode])) {
-            sendResponse('error', 'Bagian/subtes soal tidak valid untuk paket ini', null, 422);
+            throw new RuntimeException('Bagian/subtes soal tidak valid untuk paket ini', 422);
         }
 
         if (!is_array($options) || count($options) < 2) {
-            sendResponse('error', 'Minimal harus ada 2 opsi jawaban', null, 422);
+            throw new RuntimeException('Minimal harus ada 2 opsi jawaban', 422);
         }
 
         $normalizedOptions = [];
@@ -364,7 +441,7 @@ class AdminController {
             }
 
             if ($text === '' && $imageUrl === null) {
-                sendResponse('error', 'Setiap opsi jawaban harus memiliki teks atau gambar', null, 422);
+                throw new RuntimeException('Setiap opsi jawaban harus memiliki teks atau gambar', 422);
             }
 
             if ($isCorrect) {
@@ -380,18 +457,18 @@ class AdminController {
         }
 
         if ($correctCount !== 1) {
-            sendResponse('error', 'Harus ada tepat 1 jawaban benar', null, 422);
+            throw new RuntimeException('Harus ada tepat 1 jawaban benar', 422);
         }
 
         return [
             'question_text' => $questionText,
             'question_image_url' => $questionImageUrl,
+            'question_image_layout' => $questionImageLayout,
             'difficulty' => $difficulty,
             'question_type' => $questionType,
             'section_code' => $sectionCode,
             'section_name' => (string) $sectionLookup[$sectionCode]['name'],
             'section_order' => (int) ($sectionLookup[$sectionCode]['order'] ?? 1),
-            'question_order' => $questionOrder,
             'options' => $normalizedOptions,
         ];
     }
@@ -402,25 +479,25 @@ class AdminController {
                 package_id,
                 question_text,
                 question_image_url,
+                question_image_layout,
                 question_type,
                 difficulty,
                 section_code,
                 section_name,
-                section_order,
-                question_order
+                section_order
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $insertQuestion->bind_param(
-            'issssssii',
+            'isssssssi',
             $packageId,
             $payload['question_text'],
             $payload['question_image_url'],
+            $payload['question_image_layout'],
             $payload['question_type'],
             $payload['difficulty'],
             $payload['section_code'],
             $payload['section_name'],
-            $payload['section_order'],
-            $payload['question_order']
+            $payload['section_order']
         );
         $insertQuestion->execute();
         $questionId = (int) $insertQuestion->insert_id;
@@ -605,7 +682,7 @@ class AdminController {
                   LEFT JOIN question_options qo ON qo.question_id = q.id
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
+                  ORDER BY q.section_order ASC, q.id ASC";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -629,17 +706,25 @@ class AdminController {
             sendResponse('error', 'Package ID harus diisi', null, 400);
         }
 
-        $payload = $this->normalizeQuestionPayload($packageId, $data);
-        $this->mysqli->begin_transaction();
-
+        $transactionStarted = false;
         try {
+            $payload = $this->normalizeQuestionPayload($packageId, $data);
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
             $questionId = $this->insertQuestionWithOptions($packageId, $payload);
 
             $this->syncQuestionCount($packageId);
             $this->mysqli->commit();
             sendResponse('success', 'Soal berhasil ditambahkan', ['question_id' => $questionId], 201);
+        } catch (RuntimeException $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 422);
         } catch (Throwable $error) {
-            $this->mysqli->rollback();
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
             sendResponse('error', 'Gagal menambahkan soal', ['details' => $error->getMessage()], 500);
         }
     }
@@ -654,32 +739,33 @@ class AdminController {
             sendResponse('error', 'Question ID dan Package ID harus diisi', null, 400);
         }
 
-        $payload = $this->normalizeQuestionPayload($packageId, $data);
-        $this->mysqli->begin_transaction();
-
+        $transactionStarted = false;
         try {
+            $payload = $this->normalizeQuestionPayload($packageId, $data);
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
             $updateQuestion = $this->mysqli->prepare(
                 'UPDATE questions
                  SET question_text = ?,
                      question_image_url = ?,
+                     question_image_layout = ?,
                      question_type = ?,
                      difficulty = ?,
                      section_code = ?,
                      section_name = ?,
-                     section_order = ?,
-                     question_order = ?
+                     section_order = ?
                  WHERE id = ? AND package_id = ?'
             );
             $updateQuestion->bind_param(
-                'ssssssiiii',
+                'sssssssiii',
                 $payload['question_text'],
                 $payload['question_image_url'],
+                $payload['question_image_layout'],
                 $payload['question_type'],
                 $payload['difficulty'],
                 $payload['section_code'],
                 $payload['section_name'],
                 $payload['section_order'],
-                $payload['question_order'],
                 $questionId,
                 $packageId
             );
@@ -707,8 +793,15 @@ class AdminController {
             $this->syncQuestionCount($packageId);
             $this->mysqli->commit();
             sendResponse('success', 'Soal berhasil diperbarui');
+        } catch (RuntimeException $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 422);
         } catch (Throwable $error) {
-            $this->mysqli->rollback();
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
             sendResponse('error', 'Gagal memperbarui soal', ['details' => $error->getMessage()], 500);
         }
     }
@@ -732,16 +825,22 @@ class AdminController {
             sendResponse('error', 'Maksimal 500 soal per sekali import', null, 422);
         }
 
-        $this->mysqli->begin_transaction();
-
+        $transactionStarted = false;
         try {
-            $imported = 0;
+            $payloads = [];
             foreach ($rows as $row) {
                 if (!is_array($row)) {
                     throw new RuntimeException('Format baris import tidak valid', 422);
                 }
 
-                $payload = $this->normalizeQuestionPayload($packageId, $row);
+                $payloads[] = $this->normalizeQuestionPayload($packageId, $row);
+            }
+
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
+
+            $imported = 0;
+            foreach ($payloads as $payload) {
                 $this->insertQuestionWithOptions($packageId, $payload);
                 $imported++;
             }
@@ -752,10 +851,14 @@ class AdminController {
                 'imported_count' => $imported,
             ], 201);
         } catch (RuntimeException $error) {
-            $this->mysqli->rollback();
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
             sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 422);
         } catch (Throwable $error) {
-            $this->mysqli->rollback();
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
             sendResponse('error', 'Gagal mengimpor soal', ['details' => $error->getMessage()], 500);
         }
     }
@@ -785,6 +888,25 @@ class AdminController {
 
         $this->syncQuestionCount((int) $question['package_id']);
         sendResponse('success', 'Soal berhasil dihapus');
+    }
+
+    public function uploadMedia() {
+        verifyAdmin();
+
+        try {
+            if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
+                throw new RuntimeException('File gambar wajib dipilih', 422);
+            }
+
+            $context = trim((string) ($_POST['context'] ?? 'question'));
+            $uploaded = $this->storeUploadedImage($_FILES['file'], $context);
+
+            sendResponse('success', 'Gambar berhasil diupload', $uploaded, 201);
+        } catch (RuntimeException $error) {
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 422);
+        } catch (Throwable $error) {
+            sendResponse('error', 'Gagal mengupload gambar', ['details' => $error->getMessage()], 500);
+        }
     }
 
     public function getLearningContent() {
@@ -817,6 +939,7 @@ class AdminController {
                                 'id', qo.id,
                                 'letter', qo.option_letter,
                                 'text', qo.option_text,
+                                'image_url', qo.option_image_url,
                                 'is_correct', qo.is_correct
                               ) ORDER BY qo.id SEPARATOR ','
                             ) AS options
@@ -944,27 +1067,29 @@ class AdminController {
             $deleteQuestions->execute();
 
             $insertQuestion = $this->mysqli->prepare(
-                'INSERT INTO learning_section_questions (package_id, section_code, question_text, difficulty, question_order)
-                 VALUES (?, ?, ?, ?, ?)'
+                'INSERT INTO learning_section_questions (package_id, section_code, question_text, question_image_url, difficulty, question_order)
+                 VALUES (?, ?, ?, ?, ?, ?)'
             );
             $insertOption = $this->mysqli->prepare(
-                'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, is_correct)
-                 VALUES (?, ?, ?, ?)'
+                'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, option_image_url, is_correct)
+                 VALUES (?, ?, ?, ?, ?)'
             );
 
             foreach ($normalizedQuestions as $question) {
                 $questionText = $question['question_text'];
+                $questionImageUrl = $question['question_image_url'];
                 $difficulty = $question['difficulty'];
                 $questionOrder = $question['question_order'];
-                $insertQuestion->bind_param('isssi', $packageId, $sectionCode, $questionText, $difficulty, $questionOrder);
+                $insertQuestion->bind_param('issssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $difficulty, $questionOrder);
                 $insertQuestion->execute();
                 $questionId = (int) $insertQuestion->insert_id;
 
                 foreach ($question['options'] as $option) {
                     $letter = $option['letter'];
                     $text = $option['text'];
+                    $imageUrl = $option['image_url'];
                     $isCorrect = $option['is_correct'];
-                    $insertOption->bind_param('issi', $questionId, $letter, $text, $isCorrect);
+                    $insertOption->bind_param('isssi', $questionId, $letter, $text, $imageUrl, $isCorrect);
                     $insertOption->execute();
                 }
             }

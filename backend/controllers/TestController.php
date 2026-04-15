@@ -156,7 +156,7 @@ class TestController {
     }
 
     private function getPackageQuestionIds(int $packageId): array {
-        $query = 'SELECT id FROM questions WHERE package_id = ? ORDER BY section_order ASC, question_order ASC, id ASC';
+        $query = 'SELECT id FROM questions WHERE package_id = ? ORDER BY section_order ASC, id ASC';
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -175,7 +175,7 @@ class TestController {
     }
 
     private function getQuestion(int $packageId, int $questionId): ?array {
-        $query = 'SELECT id, package_id, section_code, section_name, section_order, question_order
+        $query = 'SELECT id, package_id, section_code, section_name, section_order
                   FROM questions
                   WHERE id = ? AND package_id = ?
                   LIMIT 1';

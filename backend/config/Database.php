@@ -210,13 +210,18 @@ function ensureTestWorkflowSchema(mysqli $mysqli): void {
         $schemaChanged = true;
     }
 
-    if (!databaseColumnExists($mysqli, 'questions', 'question_order')) {
-        $mysqli->query("ALTER TABLE questions ADD COLUMN question_order INT NOT NULL DEFAULT 0 AFTER section_order");
+    if (!databaseColumnExists($mysqli, 'questions', 'question_image_url')) {
+        $mysqli->query("ALTER TABLE questions ADD COLUMN question_image_url VARCHAR(1000) NULL AFTER question_text");
         $schemaChanged = true;
     }
 
-    if (!databaseColumnExists($mysqli, 'questions', 'question_image_url')) {
-        $mysqli->query("ALTER TABLE questions ADD COLUMN question_image_url VARCHAR(1000) NULL AFTER question_text");
+    if (!databaseColumnExists($mysqli, 'questions', 'question_image_layout')) {
+        $mysqli->query("ALTER TABLE questions ADD COLUMN question_image_layout VARCHAR(20) NOT NULL DEFAULT 'top' AFTER question_image_url");
+        $schemaChanged = true;
+    }
+
+    if (databaseColumnExists($mysqli, 'questions', 'question_order')) {
+        $mysqli->query("ALTER TABLE questions DROP COLUMN question_order");
         $schemaChanged = true;
     }
 
@@ -225,7 +230,7 @@ function ensureTestWorkflowSchema(mysqli $mysqli): void {
         $schemaChanged = true;
     }
 
-    $workflowSchemaVersion = '20260406_test_workflow_modes_v2';
+    $workflowSchemaVersion = '20260415_test_workflow_modes_v4';
     $appliedWorkflowSchemaVersion = getSystemSetting($mysqli, 'test_workflow_schema_version');
     if ($schemaChanged || $appliedWorkflowSchemaVersion !== $workflowSchemaVersion) {
         backfillTestWorkflowData($mysqli);
@@ -483,8 +488,7 @@ function backfillTestWorkflowData(mysqli $mysqli): void {
     $countQuestionsStmt = $mysqli->prepare(
         "SELECT COUNT(*) AS total,
                 SUM(CASE WHEN section_code IS NULL OR section_code = '' THEN 1 ELSE 0 END) AS missing_section_code,
-                SUM(CASE WHEN section_name IS NULL OR section_name = '' THEN 1 ELSE 0 END) AS missing_section_name,
-                SUM(CASE WHEN question_order IS NULL OR question_order <= 0 THEN 1 ELSE 0 END) AS missing_question_order
+                SUM(CASE WHEN section_name IS NULL OR section_name = '' THEN 1 ELSE 0 END) AS missing_section_name
          FROM questions
          WHERE package_id = ?"
     );
@@ -492,7 +496,7 @@ function backfillTestWorkflowData(mysqli $mysqli): void {
         'SELECT id FROM questions WHERE package_id = ? ORDER BY id ASC'
     );
     $updateQuestionStmt = $mysqli->prepare(
-        'UPDATE questions SET section_code = ?, section_name = ?, section_order = ?, question_order = ? WHERE id = ?'
+        'UPDATE questions SET section_code = ?, section_name = ?, section_order = ? WHERE id = ?'
     );
 
     while ($package = $packageResult->fetch_assoc()) {
@@ -530,8 +534,7 @@ function backfillTestWorkflowData(mysqli $mysqli): void {
         }
 
         $needsRebuild = (int) ($questionMeta['missing_section_code'] ?? 0) > 0
-            || (int) ($questionMeta['missing_section_name'] ?? 0) > 0
-            || (int) ($questionMeta['missing_question_order'] ?? 0) > 0;
+            || (int) ($questionMeta['missing_section_name'] ?? 0) > 0;
 
         if (!$needsRebuild) {
             continue;
@@ -565,7 +568,7 @@ function backfillTestWorkflowData(mysqli $mysqli): void {
                 $sectionName = (string) $section['name'];
                 $sectionOrder = (int) ($section['order'] ?? ($sectionIndex + 1));
 
-                $updateQuestionStmt->bind_param('ssiii', $sectionCode, $sectionName, $sectionOrder, $order, $questionId);
+                $updateQuestionStmt->bind_param('ssii', $sectionCode, $sectionName, $sectionOrder, $questionId);
                 $updateQuestionStmt->execute();
                 $questionIndex++;
             }
@@ -577,9 +580,7 @@ function backfillTestWorkflowData(mysqli $mysqli): void {
             $sectionCode = (string) $fallbackSection['code'];
             $sectionName = (string) $fallbackSection['name'];
             $sectionOrder = (int) ($fallbackSection['order'] ?? count($sections));
-            $questionOrder = $questionIndex + 1;
-
-            $updateQuestionStmt->bind_param('ssiii', $sectionCode, $sectionName, $sectionOrder, $questionOrder, $questionId);
+            $updateQuestionStmt->bind_param('ssii', $sectionCode, $sectionName, $sectionOrder, $questionId);
             $updateQuestionStmt->execute();
             $questionIndex++;
         }

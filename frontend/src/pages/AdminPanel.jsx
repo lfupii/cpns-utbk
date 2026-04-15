@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 
@@ -111,7 +111,7 @@ function createSectionClone(section, sections) {
 
 function createEmptyMaterialPage(pageNumber) {
   return {
-    title: `Halaman ${pageNumber}`,
+    title: `Submateri ${pageNumber}`,
     points: [''],
     closing: '',
     content_html: '',
@@ -275,6 +275,7 @@ function AdminImagePreview({ src, alt, className = '' }) {
 }
 
 export default function AdminPanel() {
+  const navigate = useNavigate();
   const [packages, setPackages] = useState([]);
   const [selectedPackageId, setSelectedPackageId] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -312,6 +313,7 @@ export default function AdminPanel() {
   const [packagesExpanded, setPackagesExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
   const [editingSectionActionsCode, setEditingSectionActionsCode] = useState('');
+  const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
 
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
@@ -961,6 +963,10 @@ export default function AdminPanel() {
     if (sectionCode) {
       setLearningSectionCode(sectionCode);
       setQuestionSectionFilter(sectionCode);
+      setExpandedMaterialSections((current) => ({
+        ...current,
+        [sectionCode]: true,
+      }));
     }
     setEditingSectionActionsCode('');
     setAdminView('materi');
@@ -974,6 +980,14 @@ export default function AdminPanel() {
     setAdminView('soal');
     setLearningEditorMode('');
     setEditingSectionActionsCode('');
+  };
+
+  const openMaterialTopicEditor = (sectionCode, topicIndex = 0) => {
+    if (!selectedPackageId || !sectionCode) {
+      return;
+    }
+
+    navigate(`/admin/learning-material/${selectedPackageId}/${sectionCode}?topic=${Math.max(0, topicIndex)}`);
   };
 
   const updateWorkflowSections = async (nextSections, nextActiveSectionCode, successMessage) => {
@@ -1027,6 +1041,10 @@ export default function AdminPanel() {
     const nextSections = [...packageSections];
     nextSections.splice(insertIndex + 1, 0, nextSection);
     await updateWorkflowSections(nextSections, nextSection.code, `Subtest ${nextSection.name} berhasil ditambahkan.`);
+    setExpandedMaterialSections((current) => ({
+      ...current,
+      [nextSection.code]: true,
+    }));
   };
 
   const handleCreateSubtest = async () => {
@@ -1077,9 +1095,13 @@ export default function AdminPanel() {
 
       await refreshAdminData(Number(selectedPackageId));
       setLearningSectionCode(section.code);
+      setExpandedMaterialSections((current) => ({
+        ...current,
+        [section.code]: true,
+      }));
       setSuccess(successMessage);
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal memperbarui halaman materi subtest');
+      setError(err.response?.data?.message || 'Gagal memperbarui topik materi subtest');
     } finally {
       setWorkflowSaving(false);
     }
@@ -1095,20 +1117,20 @@ export default function AdminPanel() {
     await updateSectionMaterialPages(
       section,
       nextPages,
-      `Halaman baru untuk ${section.name} berhasil ditambahkan.`
+      `Topik materi baru untuk ${section.name} berhasil ditambahkan.`
     );
   };
 
   const handleRemoveSectionChildPage = async (section) => {
     const currentPages = Array.isArray(section?.material?.pages) ? section.material.pages : [];
     if (currentPages.length <= 1) {
-      setError('Minimal harus ada 1 halaman materi di setiap subtest.');
+      setError('Minimal harus ada 1 topik materi di setiap subtest.');
       return;
     }
 
     const lastPage = currentPages[currentPages.length - 1];
     const confirmed = window.confirm(
-      `Hapus halaman terakhir "${lastPage?.title || `Halaman ${currentPages.length}`}" dari ${section.name}?`
+      `Hapus topik terakhir "${lastPage?.title || `Topik ${currentPages.length}`}" dari ${section.name}?`
     );
     if (!confirmed) {
       return;
@@ -1117,7 +1139,7 @@ export default function AdminPanel() {
     await updateSectionMaterialPages(
       section,
       currentPages.slice(0, -1),
-      `Halaman terakhir dari ${section.name} berhasil dihapus.`
+      `Topik terakhir dari ${section.name} berhasil dihapus.`
     );
   };
 
@@ -1225,59 +1247,82 @@ export default function AdminPanel() {
                 {materialsExpanded && (
                   <div className="learning-sidebar-list">
                     {learningContent.map((section) => (
-                      <div key={section.code} className="admin-section-sidebar-row">
-                        <button
-                          type="button"
-                          className={adminView === 'materi' && section.code === activeLearningSection?.code ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
-                          onClick={() => openLearningView(section.code)}
-                        >
-                          <strong>{section.name}</strong>
-                          <small>{section.material?.pages?.length || 0} halaman</small>
-                        </button>
-                        <div className="admin-section-sidebar-actions">
+                      <div key={section.code} className="admin-section-sidebar-entry">
+                        <div className="admin-section-sidebar-row">
                           <button
                             type="button"
-                            className={`admin-section-action-btn admin-section-action-btn-edit ${
-                              editingSectionActionsCode === section.code ? 'admin-section-action-btn-edit-active' : ''
-                            }`}
-                            aria-label={`Kelola aksi subtest ${section.name}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditingSectionActionsCode((current) => current === section.code ? '' : section.code);
-                            }}
-                            disabled={workflowSaving}
+                            className={adminView === 'materi' && section.code === activeLearningSection?.code ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
+                            onClick={() => openLearningView(section.code)}
                           >
-                            ✎
+                            <span className="admin-section-sidebar-item-copy">
+                              <strong>{section.name}</strong>
+                              <small>{section.material?.pages?.length || 0} topik</small>
+                            </span>
+                            <span className="admin-section-sidebar-caret" aria-hidden="true">
+                              {expandedMaterialSections[section.code] ? '▾' : '▸'}
+                            </span>
                           </button>
-                          {editingSectionActionsCode === section.code && (
-                            <>
-                              <button
-                                type="button"
-                                className="admin-section-action-btn"
-                                aria-label={`Tambah halaman materi untuk ${section.name}`}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleAddSectionChildPage(section);
-                                }}
-                                disabled={workflowSaving}
-                              >
-                                +
-                              </button>
-                              <button
-                                type="button"
-                                className="admin-section-action-btn"
-                                aria-label={`Kurangi halaman materi ${section.name}`}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleRemoveSectionChildPage(section);
-                                }}
-                                disabled={workflowSaving || (section.material?.pages?.length || 0) <= 1}
-                              >
-                                -
-                              </button>
-                            </>
-                          )}
+                          <div className="admin-section-sidebar-actions">
+                            <button
+                              type="button"
+                              className={`admin-section-action-btn admin-section-action-btn-edit ${
+                                editingSectionActionsCode === section.code ? 'admin-section-action-btn-edit-active' : ''
+                              }`}
+                              aria-label={`Kelola aksi subtest ${section.name}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setEditingSectionActionsCode((current) => current === section.code ? '' : section.code);
+                              }}
+                              disabled={workflowSaving}
+                            >
+                              ✎
+                            </button>
+                            {editingSectionActionsCode === section.code && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="admin-section-action-btn"
+                                  aria-label={`Tambah topik materi untuk ${section.name}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleAddSectionChildPage(section);
+                                  }}
+                                  disabled={workflowSaving}
+                                >
+                                  +
+                                </button>
+                                <button
+                                  type="button"
+                                  className="admin-section-action-btn"
+                                  aria-label={`Kurangi topik materi ${section.name}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleRemoveSectionChildPage(section);
+                                  }}
+                                  disabled={workflowSaving || (section.material?.pages?.length || 0) <= 1}
+                                >
+                                  -
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
+
+                        {expandedMaterialSections[section.code] && (section.material?.pages?.length || 0) > 0 && (
+                          <div className="admin-section-sidebar-children">
+                            {(section.material?.pages || []).map((page, index) => (
+                              <button
+                                key={`${section.code}-page-${index}`}
+                                type="button"
+                                className="admin-section-sidebar-child"
+                                onClick={() => openMaterialTopicEditor(section.code, index)}
+                              >
+                                <span>{index + 1}</span>
+                                <strong>{page.title || `Submateri ${index + 1}`}</strong>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1481,7 +1526,7 @@ export default function AdminPanel() {
                     {activeLearningSection && (
                       <div className="learning-hero-actions">
                         <Link
-                          to={`/admin/learning-material/${selectedPackageId}/${activeLearningSection.code}`}
+                          to={`/admin/learning-material/${selectedPackageId}/${activeLearningSection.code}?topic=0`}
                           className="btn btn-primary"
                         >
                           Edit Materi
@@ -1497,7 +1542,7 @@ export default function AdminPanel() {
                     <>
                       <div className="learning-summary-grid admin-user-summary-grid">
                         <div>
-                          <span>Halaman materi</span>
+                          <span>Topik materi</span>
                           <strong>{activeLearningSection.material?.pages?.length || 0}</strong>
                         </div>
                         <div>
@@ -1516,13 +1561,13 @@ export default function AdminPanel() {
                           <h3>{activeLearningSection.material?.title || activeLearningSection.name}</h3>
                           <p>
                             {(activeLearningSection.material?.pages || []).length > 0
-                              ? `${activeLearningSection.material.pages.length} halaman siap dikelola.`
-                              : 'Materi belum memiliki halaman. Buka editor untuk mulai menulis materi.'}
+                              ? `${activeLearningSection.material.pages.length} topik siap dikelola.`
+                              : 'Materi belum memiliki topik. Tambahkan topik materi terlebih dahulu.'}
                           </p>
                           {(activeLearningSection.material?.pages || []).length > 0 && (
                             <ul>
                               {activeLearningSection.material.pages.map((page, index) => (
-                                <li key={`${activeLearningSection.code}-page-${index}`}>{page.title || `Halaman ${index + 1}`}</li>
+                                <li key={`${activeLearningSection.code}-page-${index}`}>{page.title || `Topik ${index + 1}`}</li>
                               ))}
                             </ul>
                           )}
@@ -2027,12 +2072,12 @@ export default function AdminPanel() {
                         <h3>{section.name}</h3>
                         <p>{section.material?.title || 'Materi belum diberi judul'}</p>
                         <div className="admin-learning-overview-stats">
-                          <span>{pageCount} halaman materi</span>
+                          <span>{pageCount} topik materi</span>
                           <span>{questionCount} soal mini test</span>
                         </div>
                         <div className="admin-learning-overview-actions">
                           <Link
-                            to={`/admin/learning-material/${selectedPackageId}/${section.code}`}
+                            to={`/admin/learning-material/${selectedPackageId}/${section.code}?topic=0`}
                             className="btn btn-primary"
                           >
                             Edit Materi

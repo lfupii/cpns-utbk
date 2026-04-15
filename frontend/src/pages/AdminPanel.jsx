@@ -109,6 +109,15 @@ function createSectionClone(section, sections) {
   };
 }
 
+function createEmptyMaterialPage(pageNumber) {
+  return {
+    title: `Halaman ${pageNumber}`,
+    points: [''],
+    closing: '',
+    content_html: '',
+  };
+}
+
 function csvEscape(value) {
   const normalized = String(value ?? '');
   if (normalized.includes(',') || normalized.includes('"') || normalized.includes('\n')) {
@@ -302,6 +311,7 @@ export default function AdminPanel() {
   const [adminView, setAdminView] = useState('dashboard');
   const [packagesExpanded, setPackagesExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
+  const [editingSectionActionsCode, setEditingSectionActionsCode] = useState('');
 
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
@@ -938,11 +948,13 @@ export default function AdminPanel() {
   const openDashboardView = () => {
     setAdminView('dashboard');
     setLearningEditorMode('');
+    setEditingSectionActionsCode('');
   };
 
   const openPackageView = () => {
     setAdminView('paket');
     setLearningEditorMode('');
+    setEditingSectionActionsCode('');
   };
 
   const openLearningView = (sectionCode = null, mode = '') => {
@@ -950,6 +962,7 @@ export default function AdminPanel() {
       setLearningSectionCode(sectionCode);
       setQuestionSectionFilter(sectionCode);
     }
+    setEditingSectionActionsCode('');
     setAdminView('materi');
     setLearningEditorMode(mode);
   };
@@ -960,6 +973,7 @@ export default function AdminPanel() {
     }
     setAdminView('soal');
     setLearningEditorMode('');
+    setEditingSectionActionsCode('');
   };
 
   const updateWorkflowSections = async (nextSections, nextActiveSectionCode, successMessage) => {
@@ -1015,6 +1029,14 @@ export default function AdminPanel() {
     await updateWorkflowSections(nextSections, nextSection.code, `Subtest ${nextSection.name} berhasil ditambahkan.`);
   };
 
+  const handleCreateSubtest = async () => {
+    const referenceSection = packageSections[packageSections.length - 1] || activeLearningSection || {
+      code: 'subtest',
+      name: 'Subtest',
+    };
+    await handleAddSection(referenceSection);
+  };
+
   const handleDeleteSection = async (section) => {
     if (packageSections.length <= 1) {
       setError('Minimal harus ada 1 subtest.');
@@ -1033,6 +1055,69 @@ export default function AdminPanel() {
       nextSections,
       fallbackSection?.code || '',
       `Subtest ${section.name} berhasil dihapus.`
+    );
+  };
+
+  const updateSectionMaterialPages = async (section, nextPages, successMessage) => {
+    if (!selectedPackageId || !section?.code) {
+      return;
+    }
+
+    setWorkflowSaving(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await apiClient.put('/admin/learning-material', {
+        package_id: Number(selectedPackageId),
+        section_code: section.code,
+        title: section.material?.title || section.name,
+        pages: nextPages,
+      });
+
+      await refreshAdminData(Number(selectedPackageId));
+      setLearningSectionCode(section.code);
+      setSuccess(successMessage);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal memperbarui halaman materi subtest');
+    } finally {
+      setWorkflowSaving(false);
+    }
+  };
+
+  const handleAddSectionChildPage = async (section) => {
+    const currentPages = Array.isArray(section?.material?.pages) ? section.material.pages : [];
+    const nextPages = [
+      ...currentPages,
+      createEmptyMaterialPage(currentPages.length + 1),
+    ];
+
+    await updateSectionMaterialPages(
+      section,
+      nextPages,
+      `Halaman baru untuk ${section.name} berhasil ditambahkan.`
+    );
+  };
+
+  const handleRemoveSectionChildPage = async (section) => {
+    const currentPages = Array.isArray(section?.material?.pages) ? section.material.pages : [];
+    if (currentPages.length <= 1) {
+      setError('Minimal harus ada 1 halaman materi di setiap subtest.');
+      return;
+    }
+
+    const lastPage = currentPages[currentPages.length - 1];
+    const confirmed = window.confirm(
+      `Hapus halaman terakhir "${lastPage?.title || `Halaman ${currentPages.length}`}" dari ${section.name}?`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await updateSectionMaterialPages(
+      section,
+      currentPages.slice(0, -1),
+      `Halaman terakhir dari ${section.name} berhasil dihapus.`
     );
   };
 
@@ -1084,6 +1169,7 @@ export default function AdminPanel() {
                           resetQuestionForm();
                           setExpandedQuestionId(null);
                           setLearningEditorMode('');
+                          setEditingSectionActionsCode('');
                           setAdminView('dashboard');
                         }}
                       >
@@ -1126,6 +1212,17 @@ export default function AdminPanel() {
                 </button>
 
                 {materialsExpanded && (
+                  <button
+                    type="button"
+                    className="learning-sidebar-link admin-material-add-subtest"
+                    onClick={handleCreateSubtest}
+                    disabled={workflowSaving || !selectedPackageId}
+                  >
+                    + Tambah Subtest
+                  </button>
+                )}
+
+                {materialsExpanded && (
                   <div className="learning-sidebar-list">
                     {learningContent.map((section) => (
                       <div key={section.code} className="admin-section-sidebar-row">
@@ -1140,28 +1237,46 @@ export default function AdminPanel() {
                         <div className="admin-section-sidebar-actions">
                           <button
                             type="button"
-                            className="admin-section-action-btn"
-                            aria-label={`Tambah subtest setelah ${section.name}`}
+                            className={`admin-section-action-btn admin-section-action-btn-edit ${
+                              editingSectionActionsCode === section.code ? 'admin-section-action-btn-edit-active' : ''
+                            }`}
+                            aria-label={`Kelola aksi subtest ${section.name}`}
                             onClick={(event) => {
                               event.stopPropagation();
-                              handleAddSection(section);
+                              setEditingSectionActionsCode((current) => current === section.code ? '' : section.code);
                             }}
                             disabled={workflowSaving}
                           >
-                            +
+                            ✎
                           </button>
-                          <button
-                            type="button"
-                            className="admin-section-action-btn"
-                            aria-label={`Hapus subtest ${section.name}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleDeleteSection(section);
-                            }}
-                            disabled={workflowSaving || packageSections.length <= 1}
-                          >
-                            -
-                          </button>
+                          {editingSectionActionsCode === section.code && (
+                            <>
+                              <button
+                                type="button"
+                                className="admin-section-action-btn"
+                                aria-label={`Tambah halaman materi untuk ${section.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleAddSectionChildPage(section);
+                                }}
+                                disabled={workflowSaving}
+                              >
+                                +
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-section-action-btn"
+                                aria-label={`Kurangi halaman materi ${section.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleRemoveSectionChildPage(section);
+                                }}
+                                disabled={workflowSaving || (section.material?.pages?.length || 0) <= 1}
+                              >
+                                -
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}

@@ -677,6 +677,14 @@ export default function Learning() {
                         {currentSectionTest.questions.map((question, questionIndex) => (
                           <div key={question.id} className="learning-question">
                             <h4>{questionIndex + 1}. {question.question_text}</h4>
+                            {question.question_image_url && (
+                              <img
+                                src={question.question_image_url}
+                                alt={`Mini test ${questionIndex + 1}`}
+                                className="test-question-image"
+                                loading="lazy"
+                              />
+                            )}
                             <div className="learning-option-list">
                               {(question.options || []).map((option) => (
                                 <label key={option.id} className="learning-option">
@@ -686,7 +694,17 @@ export default function Learning() {
                                     checked={Number(currentSectionTest.answers?.[question.id]) === Number(option.id)}
                                     onChange={() => setSectionAnswer(activeSection.code, question.id, option.id)}
                                   />
-                                  <span>{option.letter}. {option.text}</span>
+                                  <span className="learning-option-copy">
+                                    <span>{option.letter}. {option.text}</span>
+                                    {option.image_url && (
+                                      <img
+                                        src={option.image_url}
+                                        alt={`Opsi ${option.letter}`}
+                                        className="test-option-image"
+                                        loading="lazy"
+                                      />
+                                    )}
+                                  </span>
                                 </label>
                               ))}
                             </div>

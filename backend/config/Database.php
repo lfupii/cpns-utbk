@@ -357,6 +357,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             package_id INT NOT NULL,
             section_code VARCHAR(100) NOT NULL,
             question_text LONGTEXT NOT NULL,
+            question_image_url VARCHAR(1000) DEFAULT NULL,
             difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
             question_order INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -372,12 +373,21 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             question_id INT NOT NULL,
             option_letter VARCHAR(5) NOT NULL,
             option_text LONGTEXT NOT NULL,
+            option_image_url VARCHAR(1000) DEFAULT NULL,
             is_correct BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (question_id) REFERENCES learning_section_questions(id) ON DELETE CASCADE,
             INDEX (question_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+
+    if (!databaseColumnExists($mysqli, 'learning_section_questions', 'question_image_url')) {
+        $mysqli->query("ALTER TABLE learning_section_questions ADD COLUMN question_image_url VARCHAR(1000) NULL AFTER question_text");
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_question_options', 'option_image_url')) {
+        $mysqli->query("ALTER TABLE learning_section_question_options ADD COLUMN option_image_url VARCHAR(1000) NULL AFTER option_text");
+    }
 
     seedDefaultLearningContent($mysqli);
 }
@@ -412,12 +422,12 @@ function seedDefaultLearningContent(mysqli $mysqli): void {
         'SELECT COUNT(*) AS total FROM learning_section_questions WHERE package_id = ? AND section_code = ?'
     );
     $insertQuestion = $mysqli->prepare(
-        'INSERT INTO learning_section_questions (package_id, section_code, question_text, difficulty, question_order)
-         VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO learning_section_questions (package_id, section_code, question_text, question_image_url, difficulty, question_order)
+         VALUES (?, ?, ?, ?, ?, ?)'
     );
     $insertOption = $mysqli->prepare(
-        'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, is_correct)
-         VALUES (?, ?, ?, ?)'
+        'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, option_image_url, is_correct)
+         VALUES (?, ?, ?, ?, ?)'
     );
 
     while ($package = $packageResult->fetch_assoc()) {
@@ -454,15 +464,17 @@ function seedDefaultLearningContent(mysqli $mysqli): void {
                 $difficulty = (string) ($question['difficulty'] ?? 'medium');
                 $questionOrder = (int) ($question['question_order'] ?? 1);
                 $questionText = (string) $question['question_text'];
-                $insertQuestion->bind_param('isssi', $packageId, $sectionCode, $questionText, $difficulty, $questionOrder);
+                $questionImageUrl = null;
+                $insertQuestion->bind_param('issssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $difficulty, $questionOrder);
                 $insertQuestion->execute();
                 $questionId = (int) $insertQuestion->insert_id;
 
                 foreach ($question['options'] as $option) {
                     $letter = (string) $option['letter'];
                     $text = (string) $option['text'];
+                    $imageUrl = null;
                     $isCorrect = (int) $option['is_correct'];
-                    $insertOption->bind_param('issi', $questionId, $letter, $text, $isCorrect);
+                    $insertOption->bind_param('isssi', $questionId, $letter, $text, $imageUrl, $isCorrect);
                     $insertOption->execute();
                 }
             }

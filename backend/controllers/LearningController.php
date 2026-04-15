@@ -526,12 +526,13 @@ class LearningController {
                 throw new RuntimeException('Subtest tidak ditemukan pada paket ini', 404);
             }
 
-            $query = "SELECT q.id, q.question_text, q.section_code,
+            $query = "SELECT q.id, q.question_text, q.question_image_url, q.section_code,
                              GROUP_CONCAT(
                                 JSON_OBJECT(
                                     'id', qo.id,
                                     'letter', qo.option_letter,
-                                    'text', qo.option_text
+                                    'text', qo.option_text,
+                                    'image_url', qo.option_image_url
                                 )
                                 ORDER BY qo.id SEPARATOR ','
                              ) AS options

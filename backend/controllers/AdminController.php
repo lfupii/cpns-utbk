@@ -1126,6 +1126,8 @@ if (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 
     $controller->updateQuestion();
 } elseif (strpos($requestPath, '/api/admin/questions') !== false && $requestMethod === 'DELETE') {
     $controller->deleteQuestion();
+} elseif (strpos($requestPath, '/api/admin/media-upload') !== false && $requestMethod === 'POST') {
+    $controller->uploadMedia();
 } elseif (strpos($requestPath, '/api/admin/learning-content') !== false && $requestMethod === 'GET') {
     $controller->getLearningContent();
 } elseif (strpos($requestPath, '/api/admin/learning-material') !== false && $requestMethod === 'PUT') {

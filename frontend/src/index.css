@@ -4893,7 +4893,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-learning-editor-shell-page {
-  overflow: hidden;
+  overflow: visible;
   border-radius: 1.4rem;
   background:
     radial-gradient(circle at top right, rgba(45, 140, 255, 0.12), transparent 26%),

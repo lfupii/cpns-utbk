@@ -1259,11 +1259,12 @@ export default function AdminPanel() {
       return;
     }
 
+    const nextExpanded = !expandedMaterialSections[sectionCode];
     setExpandedMaterialSections((current) => ({
       ...current,
-      [sectionCode]: !current[sectionCode],
+      [sectionCode]: nextExpanded,
     }));
-    openLearningView(sectionCode);
+    openLearningView(sectionCode, '', nextExpanded);
   };
 
   const openQuestionView = () => {
@@ -1537,6 +1538,17 @@ export default function AdminPanel() {
 
           <section className="learning-workspace admin-user-workspace">
             <aside className="learning-sidebar admin-user-sidebar">
+              <div className="learning-sidebar-card admin-user-sidebar-card admin-package-settings-card">
+                <p className="learning-sidebar-label">Pengaturan paket</p>
+                <button
+                  type="button"
+                  className={adminView === 'paket' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+                  onClick={openPackageView}
+                >
+                  Kelola Paket
+                </button>
+              </div>
+
               <div className="learning-sidebar-card admin-user-sidebar-card">
                 <p className="learning-sidebar-label">Jenis paket</p>
                 <button
@@ -1583,14 +1595,6 @@ export default function AdminPanel() {
                   onClick={openDashboardView}
                 >
                   Dashboard
-                </button>
-
-                <button
-                  type="button"
-                  className={adminView === 'paket' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
-                  onClick={openPackageView}
-                >
-                  Pengaturan Paket
                 </button>
 
                 <button

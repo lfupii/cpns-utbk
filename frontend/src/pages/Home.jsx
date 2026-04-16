@@ -15,14 +15,8 @@ export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [dashboardData, setDashboardData] = useState({
-    activePackages: [],
-    history: [],
-    loading: false,
-  });
 
   const displayName = user?.full_name || 'Pejuang ASN';
-  const firstName = displayName.trim().split(/\s+/)[0] || 'Pejuang';
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -39,47 +33,6 @@ export default function Home() {
 
     fetchPackages();
   }, []);
-
-  useEffect(() => {
-    let ignore = false;
-
-    if (!user) {
-      setDashboardData({
-        activePackages: [],
-        history: [],
-        loading: false,
-      });
-      return undefined;
-    }
-
-    const fetchDashboardData = async () => {
-      setDashboardData((current) => ({
-        ...current,
-        loading: true,
-      }));
-
-      const [activePackagesResult, historyResult] = await Promise.allSettled([
-        apiClient.get('/auth/active-packages'),
-        apiClient.get('/auth/test-history'),
-      ]);
-
-      if (ignore) {
-        return;
-      }
-
-      setDashboardData({
-        activePackages: activePackagesResult.status === 'fulfilled' ? activePackagesResult.value.data.data || [] : [],
-        history: historyResult.status === 'fulfilled' ? historyResult.value.data.data || [] : [],
-        loading: false,
-      });
-    };
-
-    fetchDashboardData();
-
-    return () => {
-      ignore = true;
-    };
-  }, [user]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -151,79 +104,6 @@ export default function Home() {
         `Durasi ${cpnsSource?.time_limit || 120} menit`,
         'Progress tracker harian',
       ],
-    },
-  ];
-  const activePackageCount = dashboardData.activePackages.length;
-  const completedTryoutCount = dashboardData.history.length;
-  const totalRemainingAttempts = dashboardData.activePackages.reduce(
-    (total, item) => total + Number(item.remaining_attempts || 0),
-    0
-  );
-  const hasActivePackage = activePackageCount > 0;
-  const dashboardPercent = user
-    ? hasActivePackage
-      ? Math.min(92, 34 + activePackageCount * 18 + completedTryoutCount * 7)
-      : 18
-    : 8;
-  const dashboardSummaryLabel = !user
-    ? 'Mode preview'
-    : hasActivePackage
-      ? 'Akun belajar aktif'
-      : 'Akun siap diaktifkan';
-  const dashboardSummaryTitle = !user
-    ? 'Preview dulu. Lanjut saat siap.'
-    : hasActivePackage
-      ? `Halo ${firstName}, progresmu siap dilanjutkan.`
-      : `Halo ${firstName}, pilih paket untuk mulai penuh.`;
-  const dashboardSummaryText = !user
-    ? 'Guest hanya lihat preview.'
-    : hasActivePackage
-      ? 'Data diambil dari akun aktif.'
-      : 'Belum ada paket aktif di akun ini.';
-  const dashboardQueue = !user
-    ? [
-        'Login & simpan',
-        'Lihat preview',
-        'Aktifkan paket',
-      ]
-    : hasActivePackage
-      ? [
-          'Lanjutkan materi',
-          'Mini test',
-          'Tryout penuh',
-        ]
-      : [
-          'Pilih paket',
-          'Cek preview',
-          'Aktifkan akses',
-        ];
-  const heroProofs = [
-    {
-      value: user ? activePackageCount : 2,
-      label: user ? 'Paket aktif di akun ini' : 'Pilihan program utama',
-    },
-    {
-      value: user ? completedTryoutCount : 'Preview',
-      label: user ? 'Tryout selesai' : 'Materi awal bisa dibuka',
-    },
-    {
-      value: user ? totalRemainingAttempts : 'Instan',
-      label: user ? 'Sisa attempt aktif' : 'Hasil evaluasi cepat',
-    },
-  ];
-  const heroBenefits = ['Preview materi', 'Mini test', 'Tryout penuh'];
-  const sideHighlights = [
-    {
-      title: 'UTBK',
-      detail: '7 subtes',
-    },
-    {
-      title: 'CPNS',
-      detail: 'TWK TIU TKP',
-    },
-    {
-      title: 'Guest',
-      detail: 'Preview',
     },
   ];
   const featureMindmap = [
@@ -348,90 +228,6 @@ export default function Home() {
             {error}
           </div>
         )}
-
-        <section className="landing-hero">
-          <div className="container landing-hero-asymmetric">
-            <div className="landing-hero-copy landing-hero-copy-modern">
-              <span className="landing-kicker">UTBK dan CPNS dalam satu ritme belajar</span>
-              <h1>
-                Belajar,
-                <br />
-                Latihan,
-                <br />
-                <span>Naikkan Skor.</span>
-              </h1>
-
-              <p>
-                Preview dulu, simpan progres saat login, dan buka materi penuh saat paket aktif.
-              </p>
-
-              <div className="landing-benefit-strip" aria-label="Fitur utama">
-                {heroBenefits.map((item) => (
-                  <span key={item} className="landing-benefit-pill">{item}</span>
-                ))}
-              </div>
-
-              <div className="landing-hero-actions">
-                <a href="#paket" className="btn btn-primary landing-cta-secondary">
-                  Lihat Paket
-                </a>
-              </div>
-
-              <div className="landing-hero-proof-grid" aria-label="Ringkasan layanan">
-                {heroProofs.map((proof) => (
-                  <div className="landing-hero-proof-card" key={proof.label}>
-                    <strong>{proof.value}</strong>
-                    <span>{proof.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="landing-hero-visual" key={user?.userId || 'guest'}>
-              <div className="landing-hero-dashboard">
-                <div className="landing-hero-dashboard-head">
-                  <div className="landing-hero-dashboard-copy">
-                    <span className="landing-showcase-badge">{dashboardSummaryLabel}</span>
-                    <h3>{dashboardSummaryTitle}</h3>
-                    <p>{dashboardSummaryText}</p>
-                  </div>
-
-                  <div className="landing-hero-score-pill">
-                    <strong>{dashboardPercent}%</strong>
-                    <small>{dashboardData.loading ? 'sync...' : user ? 'akun aktif' : 'preview'}</small>
-                  </div>
-                </div>
-
-                <div className="landing-showcase-progress landing-showcase-progress-hero">
-                  <span style={{ width: `${dashboardPercent}%` }} />
-                </div>
-
-                <div className="landing-hero-dashboard-grid">
-                  <div className="landing-hero-dashboard-panel">
-                    <span className="landing-showcase-lane-label">Lanjut berikutnya</span>
-                    <div className="landing-hero-step-list">
-                      {dashboardQueue.map((item, index) => (
-                        <div className="landing-hero-step" key={item}>
-                          <span>{index + 1}</span>
-                          <strong>{item}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="landing-hero-dashboard-panel landing-hero-dashboard-panel-stats">
-                    {sideHighlights.map((item) => (
-                      <div className="landing-side-highlight" key={item.title}>
-                        <strong>{item.title}</strong>
-                        <span>{item.detail}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
         <section className="landing-section landing-section-about" id="tentang">
           <div className="container">

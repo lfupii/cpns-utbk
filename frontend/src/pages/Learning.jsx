@@ -32,6 +32,24 @@ function sanitizeMaterialHtml(html) {
   return doc.body.innerHTML;
 }
 
+function getSectionTopics(section) {
+  if (Array.isArray(section?.material?.topics) && section.material.topics.length > 0) {
+    return section.material.topics;
+  }
+
+  if (Array.isArray(section?.pages) && section.pages.length > 0) {
+    return section.pages.map((page, index) => ({
+      title: page.title || `Topik ${index + 1}`,
+      pages: [page],
+      total_page_count: 1,
+      visible_page_count: 1,
+      locked_page_count: 0,
+    }));
+  }
+
+  return [];
+}
+
 export default function Learning() {
   const { packageId } = useParams();
   const navigate = useNavigate();
@@ -42,8 +60,10 @@ export default function Learning() {
   const [sectionTests, setSectionTests] = useState({});
   const [activePackages, setActivePackages] = useState([]);
   const [contentView, setContentView] = useState('dashboard');
+  const [activeTopicIndex, setActiveTopicIndex] = useState(0);
   const [packagesExpanded, setPackagesExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
+  const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
@@ -61,6 +81,7 @@ export default function Learning() {
       const payload = response.data.data;
       setLearning(payload);
       setActiveSectionCode((current) => current || payload.sections?.[0]?.code || '');
+      setActiveTopicIndex(0);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal memuat ruang belajar');
     } finally {
@@ -76,6 +97,8 @@ export default function Learning() {
     setContentView('dashboard');
     setPackagesExpanded(false);
     setMaterialsExpanded(true);
+    setExpandedMaterialSections({});
+    setActiveTopicIndex(0);
   }, [numericPackageId]);
 
   useEffect(() => {
@@ -111,6 +134,23 @@ export default function Learning() {
     () => sections.find((section) => section.code === activeSectionCode) || sections[0] || null,
     [activeSectionCode, sections]
   );
+  const activeSectionTopics = useMemo(
+    () => getSectionTopics(activeSection),
+    [activeSection]
+  );
+  const activeTopic = useMemo(
+    () => activeSectionTopics[activeTopicIndex] || activeSectionTopics[0] || null,
+    [activeSectionTopics, activeTopicIndex]
+  );
+  useEffect(() => {
+    if (activeSectionTopics.length === 0) {
+      return;
+    }
+
+    if (activeTopicIndex > activeSectionTopics.length - 1) {
+      setActiveTopicIndex(0);
+    }
+  }, [activeSectionTopics, activeTopicIndex]);
   const hasAccess = Boolean(learning?.has_access);
   const viewerIsAuthenticated = Boolean(learning?.is_authenticated ?? isAuthenticated);
   const summary = learning?.summary || {};
@@ -170,10 +210,26 @@ export default function Learning() {
   );
   const resumeSection = lastReadSection || nextLearningSection || activeSection || null;
 
-  const jumpToSectionMaterial = (sectionCode) => {
+  const jumpToSectionMaterial = (sectionCode, topicIndex = 0) => {
     setContentView('materi');
     setActiveSectionCode(sectionCode);
+    setActiveTopicIndex(topicIndex);
     setMaterialsExpanded(true);
+    setExpandedMaterialSections((current) => ({
+      ...current,
+      [sectionCode]: true,
+    }));
+  };
+
+  const toggleMaterialSection = (sectionCode) => {
+    setContentView('materi');
+    setActiveSectionCode(sectionCode);
+    setActiveTopicIndex(0);
+    setMaterialsExpanded(true);
+    setExpandedMaterialSections((current) => ({
+      ...current,
+      [sectionCode]: !current[sectionCode],
+    }));
   };
 
   const updateSectionProgress = (sectionCode, progressPatch) => {
@@ -460,19 +516,41 @@ export default function Learning() {
                   const sectionSubtestDone = Boolean(section.progress.subtest_test_completed);
 
                   return (
-                    <button
-                      type="button"
-                      key={section.code}
-                      className={contentView === 'materi' && section.code === activeSection?.code ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
-                      onClick={() => jumpToSectionMaterial(section.code)}
-                    >
-                      <strong>{section.name}</strong>
-                      <small>
-                        {sectionMaterialDone && sectionSubtestDone
-                          ? 'Materi dan mini test selesai'
-                          : `${section.visible_page_count}/${section.total_page_count} halaman`}
-                      </small>
-                    </button>
+                    <div key={section.code} className="admin-section-sidebar-entry">
+                      <button
+                        type="button"
+                        className={contentView === 'materi' && section.code === activeSection?.code ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
+                        onClick={() => toggleMaterialSection(section.code)}
+                      >
+                        <span className="admin-section-sidebar-item-copy">
+                          <strong>{section.name}</strong>
+                          <small>
+                            {sectionMaterialDone && sectionSubtestDone
+                              ? 'Materi dan mini test selesai'
+                              : `${section.visible_topic_count || getSectionTopics(section).length}/${section.total_topic_count || getSectionTopics(section).length} topik`}
+                          </small>
+                        </span>
+                        <span className="admin-section-sidebar-caret" aria-hidden="true">
+                          {expandedMaterialSections[section.code] ? '▾' : '▸'}
+                        </span>
+                      </button>
+
+                      {expandedMaterialSections[section.code] && getSectionTopics(section).length > 0 && (
+                        <div className="admin-section-sidebar-children">
+                          {getSectionTopics(section).map((topic, topicIndex) => (
+                            <button
+                              key={`${section.code}-topic-${topicIndex}`}
+                              type="button"
+                              className={contentView === 'materi' && section.code === activeSection?.code && topicIndex === activeTopicIndex ? 'admin-section-sidebar-child admin-section-sidebar-child-active' : 'admin-section-sidebar-child'}
+                              onClick={() => jumpToSectionMaterial(section.code, topicIndex)}
+                            >
+                              <span>{topicIndex + 1}</span>
+                              <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -591,7 +669,7 @@ export default function Learning() {
                   <h2>{activeSection.name}</h2>
                   <p>
                     {hasAccess
-                      ? 'Materi penuh terbuka. Baca sampai akhir, lalu tandai selesai dan kerjakan mini test.'
+                      ? 'Materi penuh terbuka. Ikuti urutan topik lalu halaman seperti alur belajar di admin.'
                       : `Preview ${activeSection.visible_page_count} dari ${activeSection.total_page_count} halaman materi.`}
                   </p>
                 </div>
@@ -600,29 +678,65 @@ export default function Learning() {
                 )}
               </div>
 
-              <div className="learning-page-list">
-                {activeSection.pages.map((page, index) => (
-                  <section key={page.title} className="learning-page">
-                    <span>Halaman {index + 1}</span>
-                    <h3>{page.title}</h3>
-                    {page.content_html ? (
-                      <div
-                        className="learning-rich-content"
-                        dangerouslySetInnerHTML={{ __html: sanitizeMaterialHtml(page.content_html) }}
-                      />
-                    ) : (
-                      <>
-                        <ul>
-                          {page.points.map((point) => (
-                            <li key={point}>{point}</li>
-                          ))}
-                        </ul>
-                        <p>{page.closing}</p>
-                      </>
-                    )}
+              {activeSectionTopics.length > 0 && (
+                <div className="learning-topic-list">
+                  {activeSectionTopics.map((topic, topicIndex) => (
+                    <button
+                      key={`${activeSection.code}-topic-tab-${topicIndex}`}
+                      type="button"
+                      className={topicIndex === activeTopicIndex ? 'learning-topic-button learning-topic-button-active' : 'learning-topic-button'}
+                      onClick={() => setActiveTopicIndex(topicIndex)}
+                    >
+                      <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
+                      <small>{topic.visible_page_count || topic.pages?.length || 0} halaman terbuka</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {activeTopic ? (
+                <div className="learning-page-list">
+                  <section className="learning-page learning-page-topic-intro">
+                    <span>{`Topik ${activeTopicIndex + 1}`}</span>
+                    <h3>{activeTopic.title || `Topik ${activeTopicIndex + 1}`}</h3>
+                    <p>
+                      {hasAccess
+                        ? `${activeTopic.pages?.length || 0} halaman siap dibaca di topik ini.`
+                        : `Preview ${activeTopic.visible_page_count || activeTopic.pages?.length || 0} dari ${activeTopic.total_page_count || activeTopic.pages?.length || 0} halaman di topik ini.`}
+                    </p>
                   </section>
-                ))}
-              </div>
+
+                  {(activeTopic.pages || []).map((page, index) => (
+                    <section key={`${activeTopic.title || 'topic'}-${index}`} className="learning-page">
+                      <span>Halaman {index + 1}</span>
+                      <h3>{page.title}</h3>
+                      {page.content_html ? (
+                        <div
+                          className="learning-rich-content"
+                          dangerouslySetInnerHTML={{ __html: sanitizeMaterialHtml(page.content_html) }}
+                        />
+                      ) : (
+                        <>
+                          <ul>
+                            {(page.points || []).map((point) => (
+                              <li key={point}>{point}</li>
+                            ))}
+                          </ul>
+                          <p>{page.closing}</p>
+                        </>
+                      )}
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <div className="learning-page-list">
+                  <section className="learning-page">
+                    <span>Materi</span>
+                    <h3>Topik belum tersedia</h3>
+                    <p>Topik materi untuk subtest ini masih disiapkan.</p>
+                  </section>
+                </div>
+              )}
 
               {!hasAccess && activeSection.locked_page_count > 0 && (
                 <div className="learning-locked-pages">

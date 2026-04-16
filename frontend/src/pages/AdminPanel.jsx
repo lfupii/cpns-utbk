@@ -119,11 +119,33 @@ function createSectionClone(section, sections) {
 
 function createEmptyMaterialPage(pageNumber) {
   return {
-    title: `Submateri ${pageNumber}`,
+    title: `Halaman ${pageNumber}`,
     points: [''],
     closing: '',
     content_html: '',
   };
+}
+
+function createEmptyMaterialTopic(topicNumber, firstPageNumber = 1) {
+  return {
+    title: `Topik ${topicNumber}`,
+    pages: [createEmptyMaterialPage(firstPageNumber)],
+  };
+}
+
+function getMaterialTopics(material) {
+  if (Array.isArray(material?.topics) && material.topics.length > 0) {
+    return material.topics;
+  }
+
+  if (Array.isArray(material?.pages) && material.pages.length > 0) {
+    return material.pages.map((page, index) => ({
+      title: page.title || `Topik ${index + 1}`,
+      pages: [page],
+    }));
+  }
+
+  return [];
 }
 
 function csvEscape(value) {
@@ -349,11 +371,11 @@ export default function AdminPanel() {
   );
   const selectedPackageSummary = useMemo(() => ({
     sectionCount: packageSections.length,
-    materialPageCount: learningContent.reduce((total, section) => total + (section.material?.pages?.length || 0), 0),
+    materialPageCount: learningContent.reduce((total, section) => total + getMaterialTopics(section.material).length, 0),
     questionCount: questions.length,
   }), [learningContent, packageSections.length, questions.length]);
   const completedMaterialSections = useMemo(
-    () => learningContent.filter((section) => (section.material?.pages?.length || 0) > 0).length,
+    () => learningContent.filter((section) => getMaterialTopics(section.material).length > 0).length,
     [learningContent]
   );
   const completedQuizSections = useMemo(
@@ -1113,18 +1135,32 @@ export default function AdminPanel() {
     setEditingSectionActionsCode('');
   };
 
-  const openLearningView = (sectionCode = null, mode = '') => {
+  const openLearningView = (sectionCode = null, mode = '', shouldExpand = true) => {
     if (sectionCode) {
       setLearningSectionCode(sectionCode);
       setQuestionSectionFilter(sectionCode);
-      setExpandedMaterialSections((current) => ({
-        ...current,
-        [sectionCode]: true,
-      }));
+      if (shouldExpand) {
+        setExpandedMaterialSections((current) => ({
+          ...current,
+          [sectionCode]: true,
+        }));
+      }
     }
     setEditingSectionActionsCode('');
     setAdminView('materi');
     setLearningEditorMode(mode);
+  };
+
+  const toggleMaterialSection = (sectionCode) => {
+    if (!sectionCode) {
+      return;
+    }
+
+    setExpandedMaterialSections((current) => ({
+      ...current,
+      [sectionCode]: !current[sectionCode],
+    }));
+    openLearningView(sectionCode);
   };
 
   const openQuestionView = () => {
@@ -1141,7 +1177,8 @@ export default function AdminPanel() {
       return;
     }
 
-    navigate(`/admin/learning-material/${selectedPackageId}/${sectionCode}?topic=${Math.max(0, topicIndex)}`);
+    const resolvedTopic = topicIndex === 'new' ? 'new' : Math.max(0, Number(topicIndex) || 0);
+    navigate(`/admin/learning-material/${selectedPackageId}/${sectionCode}?topic=${resolvedTopic}`);
   };
 
   const updateWorkflowSections = async (nextSections, nextActiveSectionCode, successMessage) => {
@@ -1230,7 +1267,7 @@ export default function AdminPanel() {
     );
   };
 
-  const updateSectionMaterialPages = async (section, nextPages, successMessage) => {
+  const updateSectionMaterialTopics = async (section, nextTopics, successMessage) => {
     if (!selectedPackageId || !section?.code) {
       return;
     }
@@ -1244,7 +1281,7 @@ export default function AdminPanel() {
         package_id: Number(selectedPackageId),
         section_code: section.code,
         title: section.material?.title || section.name,
-        pages: nextPages,
+        topics: nextTopics,
       });
 
       await refreshAdminData(Number(selectedPackageId));
@@ -1261,39 +1298,63 @@ export default function AdminPanel() {
     }
   };
 
-  const handleAddSectionChildPage = async (section) => {
-    const currentPages = Array.isArray(section?.material?.pages) ? section.material.pages : [];
-    const nextPages = [
-      ...currentPages,
-      createEmptyMaterialPage(currentPages.length + 1),
-    ];
+  const handleAddSectionChildPage = (section) => {
+    openMaterialTopicEditor(section.code, 'new');
+  };
 
-    await updateSectionMaterialPages(
+  const handleRenameSectionChildPage = async (section, topicIndex) => {
+    const currentTopics = getMaterialTopics(section.material);
+    const currentTopic = currentTopics[topicIndex];
+    if (!currentTopic) {
+      return;
+    }
+
+    const nextTitle = window.prompt(
+      `Ubah nama topik untuk ${section.name}`,
+      currentTopic.title || `Topik ${topicIndex + 1}`
+    );
+    if (nextTitle === null) {
+      return;
+    }
+
+    const trimmedTitle = nextTitle.trim();
+    if (!trimmedTitle) {
+      setError('Nama topik tidak boleh kosong.');
+      return;
+    }
+
+    const nextTopics = currentTopics.map((topic, index) => (
+      index === topicIndex ? { ...topic, title: trimmedTitle } : topic
+    ));
+
+    await updateSectionMaterialTopics(
       section,
-      nextPages,
-      `Topik materi baru untuk ${section.name} berhasil ditambahkan.`
+      nextTopics,
+      `Nama topik ${section.name} berhasil diperbarui.`
     );
   };
 
-  const handleRemoveSectionChildPage = async (section) => {
-    const currentPages = Array.isArray(section?.material?.pages) ? section.material.pages : [];
-    if (currentPages.length <= 1) {
+  const handleRemoveSectionChildPage = async (section, topicIndex) => {
+    const currentTopics = getMaterialTopics(section.material);
+    if (currentTopics.length <= 1) {
       setError('Minimal harus ada 1 topik materi di setiap subtest.');
       return;
     }
 
-    const lastPage = currentPages[currentPages.length - 1];
+    const topic = currentTopics[topicIndex];
     const confirmed = window.confirm(
-      `Hapus topik terakhir "${lastPage?.title || `Topik ${currentPages.length}`}" dari ${section.name}?`
+      `Hapus topik "${topic?.title || `Topik ${topicIndex + 1}`}" dari ${section.name}?`
     );
     if (!confirmed) {
       return;
     }
 
-    await updateSectionMaterialPages(
+    const nextTopics = currentTopics.filter((_, index) => index !== topicIndex);
+
+    await updateSectionMaterialTopics(
       section,
-      currentPages.slice(0, -1),
-      `Topik terakhir dari ${section.name} berhasil dihapus.`
+      nextTopics,
+      `Topik ${topic?.title || `Topik ${topicIndex + 1}`} berhasil dihapus dari ${section.name}.`
     );
   };
 
@@ -1400,22 +1461,25 @@ export default function AdminPanel() {
 
                 {materialsExpanded && (
                   <div className="learning-sidebar-list">
-                    {learningContent.map((section) => (
-                      <div key={section.code} className="admin-section-sidebar-entry">
-                        <div className="admin-section-sidebar-row">
-                          <button
-                            type="button"
-                            className={adminView === 'materi' && section.code === activeLearningSection?.code ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
-                            onClick={() => openLearningView(section.code)}
-                          >
-                            <span className="admin-section-sidebar-item-copy">
-                              <strong>{section.name}</strong>
-                              <small>{section.material?.pages?.length || 0} topik</small>
-                            </span>
-                            <span className="admin-section-sidebar-caret" aria-hidden="true">
-                              {expandedMaterialSections[section.code] ? '▾' : '▸'}
-                            </span>
-                          </button>
+                    {learningContent.map((section) => {
+                      const topics = getMaterialTopics(section.material);
+
+                      return (
+                        <div key={section.code} className="admin-section-sidebar-entry">
+                          <div className="admin-section-sidebar-row">
+                            <button
+                              type="button"
+                              className={adminView === 'materi' && section.code === activeLearningSection?.code ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
+                              onClick={() => toggleMaterialSection(section.code)}
+                            >
+                              <span className="admin-section-sidebar-item-copy">
+                                <strong>{section.name}</strong>
+                                <small>{topics.length || 0} topik</small>
+                              </span>
+                              <span className="admin-section-sidebar-caret" aria-hidden="true">
+                                {expandedMaterialSections[section.code] ? '▾' : '▸'}
+                              </span>
+                            </button>
                           <div className="admin-section-sidebar-actions">
                             <button
                               type="button"
@@ -1445,40 +1509,50 @@ export default function AdminPanel() {
                                 >
                                   +
                                 </button>
-                                <button
-                                  type="button"
-                                  className="admin-section-action-btn"
-                                  aria-label={`Kurangi topik materi ${section.name}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleRemoveSectionChildPage(section);
-                                  }}
-                                  disabled={workflowSaving || (section.material?.pages?.length || 0) <= 1}
-                                >
-                                  -
-                                </button>
                               </>
                             )}
                           </div>
                         </div>
 
-                        {expandedMaterialSections[section.code] && (section.material?.pages?.length || 0) > 0 && (
-                          <div className="admin-section-sidebar-children">
-                            {(section.material?.pages || []).map((page, index) => (
-                              <button
-                                key={`${section.code}-page-${index}`}
-                                type="button"
-                                className="admin-section-sidebar-child"
-                                onClick={() => openMaterialTopicEditor(section.code, index)}
-                              >
-                                <span>{index + 1}</span>
-                                <strong>{page.title || `Submateri ${index + 1}`}</strong>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                          {expandedMaterialSections[section.code] && topics.length > 0 && (
+                            <div className="admin-section-sidebar-children">
+                              {topics.map((topic, index) => (
+                                <div key={`${section.code}-topic-${index}`} className="admin-section-sidebar-child-row">
+                                  <button
+                                    type="button"
+                                    className="admin-section-sidebar-child"
+                                    onClick={() => openMaterialTopicEditor(section.code, index)}
+                                  >
+                                    <span>{index + 1}</span>
+                                    <strong>{topic.title || `Topik ${index + 1}`}</strong>
+                                  </button>
+                                  <div className="admin-section-sidebar-child-actions">
+                                    <button
+                                      type="button"
+                                      className="admin-section-action-btn admin-section-action-btn-inline"
+                                      aria-label={`Edit nama topik ${topic.title || `Topik ${index + 1}`}`}
+                                      onClick={() => handleRenameSectionChildPage(section, index)}
+                                      disabled={workflowSaving}
+                                    >
+                                      ✎
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="admin-section-action-btn admin-section-action-btn-inline admin-section-action-btn-danger"
+                                      aria-label={`Hapus topik ${topic.title || `Topik ${index + 1}`}`}
+                                      onClick={() => handleRemoveSectionChildPage(section, index)}
+                                      disabled={workflowSaving || topics.length <= 1}
+                                    >
+                                      🗑
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1555,7 +1629,7 @@ export default function AdminPanel() {
                         className={[
                           'learning-path-card',
                           section.code === activeLearningSection?.code ? 'learning-path-card-active' : '',
-                          (section.material?.pages?.length || 0) > 0 && (section.questions?.length || 0) > 0 ? 'learning-path-card-done' : '',
+                          getMaterialTopics(section.material).length > 0 && (section.questions?.length || 0) > 0 ? 'learning-path-card-done' : '',
                         ].filter(Boolean).join(' ')}
                       >
                         <span className="learning-path-index">{index + 1}</span>
@@ -1697,7 +1771,7 @@ export default function AdminPanel() {
                       <div className="learning-summary-grid admin-user-summary-grid">
                         <div>
                           <span>Topik materi</span>
-                          <strong>{activeLearningSection.material?.pages?.length || 0}</strong>
+                          <strong>{getMaterialTopics(activeLearningSection.material).length || 0}</strong>
                         </div>
                         <div>
                           <span>Mini test</span>
@@ -1714,14 +1788,14 @@ export default function AdminPanel() {
                           <span>Materi aktif</span>
                           <h3>{activeLearningSection.material?.title || activeLearningSection.name}</h3>
                           <p>
-                            {(activeLearningSection.material?.pages || []).length > 0
-                              ? `${activeLearningSection.material.pages.length} topik siap dikelola.`
+                            {getMaterialTopics(activeLearningSection.material).length > 0
+                              ? `${getMaterialTopics(activeLearningSection.material).length} topik siap dikelola.`
                               : 'Materi belum memiliki topik. Tambahkan topik materi terlebih dahulu.'}
                           </p>
-                          {(activeLearningSection.material?.pages || []).length > 0 && (
+                          {getMaterialTopics(activeLearningSection.material).length > 0 && (
                             <ul>
-                              {activeLearningSection.material.pages.map((page, index) => (
-                                <li key={`${activeLearningSection.code}-page-${index}`}>{page.title || `Topik ${index + 1}`}</li>
+                              {getMaterialTopics(activeLearningSection.material).map((topic, index) => (
+                                <li key={`${activeLearningSection.code}-topic-${index}`}>{topic.title || `Topik ${index + 1}`}</li>
                               ))}
                             </ul>
                           )}

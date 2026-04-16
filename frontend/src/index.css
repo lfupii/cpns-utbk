@@ -1397,6 +1397,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .landing-section-about {
+  padding: 2.8rem 0 3rem;
+  margin: 0 0 2rem;
+}
+
+.landing-section-featured {
   position: relative;
   padding: 3.35rem 0;
   margin: 0 0 3rem;
@@ -1407,7 +1412,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   overflow: hidden;
 }
 
-.landing-section-about::before {
+.landing-section-featured::before {
   content: '';
   position: absolute;
   inset: 1rem 1.25rem;
@@ -1419,7 +1424,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   pointer-events: none;
 }
 
-.landing-section-about .container {
+.landing-section-featured .container {
   position: relative;
   z-index: 1;
 }
@@ -3233,6 +3238,53 @@ html[data-theme='dark'] .theme-toggle-thumb {
   gap: 1.15rem;
 }
 
+.learning-topic-list {
+  margin-top: 1.15rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.learning-topic-button {
+  display: grid;
+  gap: 0.25rem;
+  min-height: 74px;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.94);
+  color: inherit;
+  text-align: left;
+  box-shadow: 0 12px 26px rgba(31, 63, 109, 0.06);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.learning-topic-button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(45, 140, 255, 0.28);
+  box-shadow: 0 18px 34px rgba(31, 63, 109, 0.1);
+}
+
+.learning-topic-button strong {
+  color: #1d2b43;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.learning-topic-button small {
+  color: #708198;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.learning-topic-button-active {
+  border-color: rgba(45, 140, 255, 0.42);
+  background:
+    linear-gradient(90deg, rgba(45, 140, 255, 0.12), rgba(45, 140, 255, 0.03)),
+    linear-gradient(180deg, rgba(240, 247, 255, 1) 0%, rgba(230, 241, 255, 1) 100%);
+  box-shadow: 0 18px 36px rgba(45, 140, 255, 0.12);
+}
+
 .learning-page,
 .learning-subtest-box,
 .learning-locked-pages {
@@ -3284,6 +3336,12 @@ html[data-theme='dark'] .theme-toggle-thumb {
   font-weight: 500;
   font-size: 0.98rem;
   line-height: 1.76;
+}
+
+.learning-page-topic-intro {
+  background:
+    radial-gradient(circle at top right, rgba(45, 140, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(247, 251, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
 }
 
 .learning-rich-content {
@@ -3915,6 +3973,13 @@ html[data-theme='dark'] .theme-toggle-thumb {
   border-left: 2px solid rgba(45, 140, 255, 0.12);
 }
 
+.admin-section-sidebar-child-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+
 .admin-section-sidebar-child {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
@@ -3938,6 +4003,14 @@ html[data-theme='dark'] .theme-toggle-thumb {
   box-shadow: 0 12px 24px rgba(31, 63, 109, 0.08);
 }
 
+.admin-section-sidebar-child-active {
+  border-color: rgba(45, 140, 255, 0.36);
+  background:
+    linear-gradient(90deg, rgba(45, 140, 255, 0.12), rgba(45, 140, 255, 0.03)),
+    rgba(247, 251, 255, 0.96);
+  box-shadow: 0 14px 28px rgba(45, 140, 255, 0.12);
+}
+
 .admin-section-sidebar-child span {
   display: inline-flex;
   align-items: center;
@@ -3958,6 +4031,46 @@ html[data-theme='dark'] .theme-toggle-thumb {
   font-weight: 700;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.admin-section-sidebar-child-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.admin-section-action-btn-inline {
+  width: 36px;
+  min-height: 42px;
+  border-radius: 0.9rem;
+  font-size: 0.9rem;
+}
+
+.admin-section-action-btn-danger {
+  background: rgba(254, 226, 226, 0.92);
+  color: #dc2626;
+}
+
+.admin-learning-page-tabs {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.admin-learning-page-tab {
+  min-height: 40px;
+  padding: 0 0.9rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  border-radius: 0.8rem;
+  background: rgba(246, 250, 255, 0.96);
+  color: #52647e;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.admin-learning-page-tab:hover {
+  border-color: rgba(45, 140, 255, 0.28);
+  background: #f0f7ff;
 }
 
 .admin-dashboard-path-actions .learning-path-step {
@@ -8062,14 +8175,14 @@ html[data-theme='dark'] .profile-dropdown-item:hover {
   background: rgba(22, 41, 73, 0.92);
 }
 
-html[data-theme='dark'] .landing-section-about {
+html[data-theme='dark'] .landing-section-featured {
   background:
     linear-gradient(135deg, rgba(35, 76, 140, 0.22) 0%, rgba(15, 30, 58, 0.16) 52%, rgba(41, 91, 169, 0.2) 100%);
   border-top-color: rgba(93, 129, 180, 0.22);
   border-bottom-color: rgba(93, 129, 180, 0.22);
 }
 
-html[data-theme='dark'] .landing-section-about::before {
+html[data-theme='dark'] .landing-section-featured::before {
   border-color: rgba(142, 175, 222, 0.1);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
@@ -8353,9 +8466,50 @@ html[data-theme='dark'] .admin-section-sidebar-child:hover {
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
 }
 
+html[data-theme='dark'] .admin-section-sidebar-child-active {
+  background:
+    linear-gradient(90deg, rgba(95, 168, 255, 0.16), rgba(95, 168, 255, 0.04)),
+    rgba(14, 24, 42, 0.94);
+  border-color: rgba(123, 184, 255, 0.34);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
+}
+
 html[data-theme='dark'] .admin-section-sidebar-child span {
   background: rgba(95, 168, 255, 0.16);
   color: #8cc3ff;
+}
+
+html[data-theme='dark'] .admin-section-action-btn-danger {
+  background: rgba(127, 29, 29, 0.32);
+  color: #fca5a5;
+}
+
+html[data-theme='dark'] .learning-topic-button,
+html[data-theme='dark'] .admin-learning-page-tab {
+  background: rgba(11, 18, 33, 0.82);
+  border-color: rgba(112, 142, 186, 0.24);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+html[data-theme='dark'] .learning-topic-button:hover,
+html[data-theme='dark'] .admin-learning-page-tab:hover {
+  background: rgba(18, 28, 48, 0.94);
+  border-color: rgba(123, 184, 255, 0.3);
+}
+
+html[data-theme='dark'] .learning-topic-button-active {
+  background:
+    linear-gradient(90deg, rgba(95, 168, 255, 0.16), rgba(95, 168, 255, 0.04)),
+    rgba(11, 18, 33, 0.92);
+  border-color: rgba(123, 184, 255, 0.34);
+}
+
+html[data-theme='dark'] .learning-topic-button strong {
+  color: #f3f7fd;
+}
+
+html[data-theme='dark'] .learning-topic-button small {
+  color: #9fb0c7;
 }
 
 html[data-theme='dark'] .admin-section-sidebar-caret {

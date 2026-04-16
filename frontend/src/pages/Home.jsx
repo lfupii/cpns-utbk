@@ -288,7 +288,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="landing-section" id="keunggulan">
+        <section className="landing-section landing-section-featured" id="keunggulan">
           <div className="container">
             <div className="landing-section-heading">
               <h2>Fitur yang saling nyambung dalam satu flow belajar</h2>

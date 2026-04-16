@@ -267,7 +267,112 @@ class AdminController {
         }
     }
 
-    private function normalizeMaterialPages(array $pages): array {
+    private function buildFallbackMaterialPage(string $title, string $point = 'Materi sedang disiapkan.'): array {
+        return [
+            'title' => $title,
+            'points' => [$point],
+            'closing' => '',
+            'content_html' => '',
+        ];
+    }
+
+    private function hydrateMaterialPages(array $pages): array {
+        $normalized = [];
+        foreach ($pages as $index => $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+
+            $title = trim((string) ($page['title'] ?? ''));
+            $closing = trim((string) ($page['closing'] ?? ''));
+            $contentHtml = trim((string) ($page['content_html'] ?? ''));
+            $points = $page['points'] ?? [];
+            if (!is_array($points)) {
+                $points = explode("\n", (string) $points);
+            }
+
+            $points = array_values(array_filter(array_map(static function ($point): string {
+                return trim((string) $point);
+            }, $points)));
+
+            if (count($points) === 0 && $contentHtml !== '') {
+                $plainText = trim(preg_replace('/\s+/', "\n", strip_tags($contentHtml)) ?? '');
+                $points = array_values(array_filter(array_map(static function ($point): string {
+                    return trim((string) $point);
+                }, explode("\n", $plainText))));
+            }
+
+            $resolvedTitle = $title !== '' ? $title : 'Halaman ' . ($index + 1);
+            if (count($points) === 0 && $contentHtml === '') {
+                $points = ['Materi sedang disiapkan.'];
+            }
+
+            $normalized[] = [
+                'title' => $resolvedTitle,
+                'points' => $points,
+                'closing' => $closing,
+                'content_html' => $contentHtml,
+            ];
+        }
+
+        return count($normalized) > 0 ? $normalized : [
+            $this->buildFallbackMaterialPage('Halaman 1'),
+        ];
+    }
+
+    private function buildTopicsFromPages(array $pages): array {
+        $hydratedPages = $this->hydrateMaterialPages($pages);
+        $topics = [];
+
+        foreach ($hydratedPages as $index => $page) {
+            $topics[] = [
+                'title' => trim((string) ($page['title'] ?? '')) ?: 'Topik ' . ($index + 1),
+                'pages' => [$page],
+            ];
+        }
+
+        return $topics;
+    }
+
+    private function hydrateMaterialTopics($payload, array $fallbackPages = []): array {
+        if (is_array($payload) && isset($payload['topics']) && is_array($payload['topics'])) {
+            $topics = $payload['topics'];
+        } elseif (is_array($payload) && array_values($payload) === $payload) {
+            $topics = $this->buildTopicsFromPages($payload);
+        } else {
+            $topics = $this->buildTopicsFromPages($fallbackPages);
+        }
+
+        $normalized = [];
+        foreach ($topics as $index => $topic) {
+            if (!is_array($topic)) {
+                continue;
+            }
+
+            $title = trim((string) ($topic['title'] ?? '')) ?: 'Topik ' . ($index + 1);
+            $pages = $this->hydrateMaterialPages(is_array($topic['pages'] ?? null) ? $topic['pages'] : []);
+
+            $normalized[] = [
+                'title' => $title,
+                'pages' => $pages,
+            ];
+        }
+
+        return count($normalized) > 0 ? $normalized : $this->buildTopicsFromPages($fallbackPages);
+    }
+
+    private function flattenMaterialTopics(array $topics): array {
+        $pages = [];
+        foreach ($topics as $topic) {
+            foreach (($topic['pages'] ?? []) as $page) {
+                $pages[] = $page;
+            }
+        }
+
+        return $pages;
+    }
+
+    private function normalizeMaterialPages(array $pages, string $errorContext = ''): array {
         if (count($pages) === 0) {
             sendResponse('error', 'Materi minimal memiliki 1 halaman', null, 422);
         }
@@ -298,7 +403,7 @@ class AdminController {
             }
 
             if ($title === '' || (count($points) === 0 && $contentHtml === '')) {
-                sendResponse('error', 'Judul dan poin materi wajib diisi pada halaman ' . ($index + 1), null, 422);
+                sendResponse('error', 'Judul dan poin materi wajib diisi pada halaman ' . ($index + 1) . $errorContext, null, 422);
             }
 
             $normalized[] = [
@@ -306,6 +411,35 @@ class AdminController {
                 'points' => $points,
                 'closing' => $closing,
                 'content_html' => $contentHtml,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeMaterialTopics(array $topics): array {
+        if (count($topics) === 0) {
+            sendResponse('error', 'Materi minimal memiliki 1 topik', null, 422);
+        }
+
+        $normalized = [];
+        foreach ($topics as $index => $topic) {
+            if (!is_array($topic)) {
+                sendResponse('error', 'Format topik materi tidak valid', null, 422);
+            }
+
+            $title = trim((string) ($topic['title'] ?? ''));
+            if ($title === '') {
+                sendResponse('error', 'Nama topik wajib diisi pada topik ' . ($index + 1), null, 422);
+            }
+
+            $pages = $topic['pages'] ?? [];
+            $normalized[] = [
+                'title' => $title,
+                'pages' => $this->normalizeMaterialPages(
+                    is_array($pages) ? $pages : [],
+                    ' di topik ' . $title
+                ),
             ];
         }
 
@@ -926,10 +1060,12 @@ class AdminController {
         $materialResult = $stmt->get_result();
         $materialMap = [];
         while ($row = $materialResult->fetch_assoc()) {
-            $pages = json_decode((string) ($row['content_json'] ?? ''), true);
+            $materialPayload = json_decode((string) ($row['content_json'] ?? ''), true);
+            $topics = $this->hydrateMaterialTopics($materialPayload, []);
             $materialMap[(string) $row['section_code']] = [
                 'title' => $row['title'],
-                'pages' => is_array($pages) ? $pages : [],
+                'topics' => $topics,
+                'pages' => $this->flattenMaterialTopics($topics),
             ];
         }
 
@@ -969,6 +1105,7 @@ class AdminController {
         foreach ($workflow['sections'] as $section) {
             $sectionCode = (string) $section['code'];
             $defaultPages = LearningContent::defaultMaterialPages($section, (string) $workflow['mode']);
+            $defaultTopics = $this->buildTopicsFromPages($defaultPages);
             $sections[] = [
                 'code' => $sectionCode,
                 'name' => $section['name'],
@@ -976,6 +1113,7 @@ class AdminController {
                 'order' => $section['order'],
                 'material' => $materialMap[$sectionCode] ?? [
                     'title' => (string) $section['name'],
+                    'topics' => $defaultTopics,
                     'pages' => $defaultPages,
                 ],
                 'questions' => $questionMap[$sectionCode] ?? LearningContent::defaultSectionQuestions($section, (string) $workflow['mode']),
@@ -993,6 +1131,7 @@ class AdminController {
         $data = json_decode(file_get_contents('php://input'), true);
         $packageId = (int) ($data['package_id'] ?? 0);
         $sectionCode = trim((string) ($data['section_code'] ?? ''));
+        $topics = $data['topics'] ?? null;
         $pages = $data['pages'] ?? [];
 
         if ($packageId <= 0 || $sectionCode === '') {
@@ -1000,13 +1139,19 @@ class AdminController {
         }
 
         [, , $section] = $this->getWorkflowSection($packageId, $sectionCode);
-        $normalizedPages = $this->normalizeMaterialPages(is_array($pages) ? $pages : []);
+        if (is_array($topics) && count($topics) > 0) {
+            $normalizedTopics = $this->normalizeMaterialTopics($topics);
+        } else {
+            $normalizedTopics = $this->buildTopicsFromPages($this->normalizeMaterialPages(is_array($pages) ? $pages : []));
+        }
         $title = trim((string) ($data['title'] ?? $section['name']));
         if ($title === '') {
             $title = (string) $section['name'];
         }
 
-        $contentJson = json_encode($normalizedPages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $contentJson = json_encode([
+            'topics' => $normalizedTopics,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $query = "INSERT INTO learning_materials (package_id, section_code, title, content_json)
                   VALUES (?, ?, ?, ?)
                   ON DUPLICATE KEY UPDATE

@@ -13,10 +13,15 @@ const FONT_SIZE_COMMANDS = {
 };
 
 const createEmptyMaterialPage = (order = 1) => ({
-  title: `Topik ${order}`,
+  title: `Halaman ${order}`,
   points: [''],
   closing: '',
   content_html: '<p>Tulis materi di sini.</p>',
+});
+
+const createEmptyMaterialTopic = (order = 1) => ({
+  title: `Topik ${order}`,
+  pages: [createEmptyMaterialPage(1)],
 });
 
 function escapeHtml(value) {
@@ -80,13 +85,29 @@ function extractPointsFromHtml(html) {
     .filter(Boolean);
 }
 
+function getMaterialTopics(material) {
+  if (Array.isArray(material?.topics) && material.topics.length > 0) {
+    return material.topics;
+  }
+
+  if (Array.isArray(material?.pages) && material.pages.length > 0) {
+    return material.pages.map((page, index) => ({
+      title: page.title || `Topik ${index + 1}`,
+      pages: [page],
+    }));
+  }
+
+  return [createEmptyMaterialTopic(1)];
+}
+
 export default function AdminLearningMaterialEditor() {
   const { packageId, sectionCode } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const editorRef = useRef(null);
   const [learningContent, setLearningContent] = useState([]);
-  const [materialForm, setMaterialForm] = useState({ title: '', pages: [createEmptyMaterialPage()] });
+  const [materialForm, setMaterialForm] = useState({ title: '', topics: [createEmptyMaterialTopic(1)] });
+  const [activeTopicIndex, setActiveTopicIndex] = useState(0);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,8 +115,22 @@ export default function AdminLearningMaterialEditor() {
   const [success, setSuccess] = useState('');
 
   const numericPackageId = Number(packageId);
+  const requestedTopicParam = searchParams.get('topic') || '0';
+  const shouldCreateTopic = requestedTopicParam === 'new';
   const requestedTopicIndex = useMemo(() => {
-    const parsed = Number(searchParams.get('topic') || 0);
+    if (shouldCreateTopic) {
+      return -1;
+    }
+
+    const parsed = Number(requestedTopicParam || 0);
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+
+    return Math.max(0, Math.floor(parsed));
+  }, [requestedTopicParam, shouldCreateTopic]);
+  const requestedPageIndex = useMemo(() => {
+    const parsed = Number(searchParams.get('page') || 0);
     if (!Number.isFinite(parsed)) {
       return 0;
     }
@@ -106,7 +141,15 @@ export default function AdminLearningMaterialEditor() {
     () => learningContent.find((section) => section.code === sectionCode) || null,
     [learningContent, sectionCode]
   );
-  const activePage = materialForm.pages[activePageIndex] || materialForm.pages[0] || createEmptyMaterialPage(1);
+  const activeTopic = materialForm.topics[activeTopicIndex] || materialForm.topics[0] || createEmptyMaterialTopic(1);
+  const activePage = activeTopic.pages[activePageIndex] || activeTopic.pages[0] || createEmptyMaterialPage(1);
+
+  const syncSelectionInUrl = useCallback((topicIndex, pageIndex = 0) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('topic', String(Math.max(0, topicIndex)));
+    nextParams.set('page', String(Math.max(0, pageIndex)));
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const fetchLearningContent = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !sectionCode) {
@@ -126,70 +169,110 @@ export default function AdminLearningMaterialEditor() {
         return;
       }
 
+      const persistedTopics = getMaterialTopics(section.material);
+      const nextTopics = shouldCreateTopic
+        ? [...persistedTopics, createEmptyMaterialTopic(persistedTopics.length + 1)]
+        : persistedTopics;
+
       setMaterialForm({
         title: section.material?.title || section.name || '',
-        pages: (section.material?.pages || [createEmptyMaterialPage()]).map((page, index) => ({
-          title: page.title || `Topik ${index + 1}`,
-          points: Array.isArray(page.points) ? page.points : String(page.points || '').split('\n'),
-          closing: page.closing || '',
-          content_html: pageToHtml(page),
+        topics: nextTopics.map((topic, topicIndex) => ({
+          title: topic.title || `Topik ${topicIndex + 1}`,
+          pages: (topic.pages || [createEmptyMaterialPage(1)]).map((page, pageIndex) => ({
+            title: page.title || `Halaman ${pageIndex + 1}`,
+            points: Array.isArray(page.points) ? page.points : String(page.points || '').split('\n'),
+            closing: page.closing || '',
+            content_html: pageToHtml(page),
+          })),
         })),
       });
-      const pageCount = (section.material?.pages || [createEmptyMaterialPage()]).length;
-      setActivePageIndex(Math.min(requestedTopicIndex, Math.max(0, pageCount - 1)));
+      const resolvedTopicIndex = shouldCreateTopic
+        ? Math.max(0, nextTopics.length - 1)
+        : Math.min(requestedTopicIndex, Math.max(0, nextTopics.length - 1));
+      const resolvedPageCount = nextTopics[resolvedTopicIndex]?.pages?.length || 1;
+      const resolvedPageIndex = Math.min(requestedPageIndex, Math.max(0, resolvedPageCount - 1));
+      setActiveTopicIndex(resolvedTopicIndex);
+      setActivePageIndex(resolvedPageIndex);
+      if (!shouldCreateTopic && requestedPageIndex !== resolvedPageIndex) {
+        syncSelectionInUrl(resolvedTopicIndex, resolvedPageIndex);
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal memuat materi subtest');
     } finally {
       setLoading(false);
     }
-  }, [numericPackageId, requestedTopicIndex, sectionCode]);
+  }, [numericPackageId, sectionCode, shouldCreateTopic]);
 
   useEffect(() => {
     fetchLearningContent();
   }, [fetchLearningContent]);
 
   useEffect(() => {
-    if (materialForm.pages.length === 0) {
+    if (materialForm.topics.length === 0) {
       return;
     }
 
-    const nextIndex = Math.min(requestedTopicIndex, materialForm.pages.length - 1);
-    if (nextIndex !== activePageIndex) {
-      setActivePageIndex(nextIndex);
+    const nextTopicIndex = Math.min(Math.max(requestedTopicIndex, 0), materialForm.topics.length - 1);
+    if (!shouldCreateTopic && nextTopicIndex !== activeTopicIndex) {
+      setActiveTopicIndex(nextTopicIndex);
     }
-  }, [activePageIndex, materialForm.pages.length, requestedTopicIndex]);
+  }, [activeTopicIndex, materialForm.topics.length, requestedTopicIndex, shouldCreateTopic]);
 
-  const syncTopicInUrl = useCallback((pageIndex) => {
-    const normalizedIndex = Math.max(0, pageIndex);
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set('topic', String(normalizedIndex));
-    setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+  useEffect(() => {
+    const pageCount = activeTopic.pages?.length || 0;
+    if (pageCount === 0) {
+      return;
+    }
 
-  const readPagesFromEditor = () => materialForm.pages.map((page, pageIndex) => {
-    const rawHtml = pageIndex === activePageIndex
-      ? editorRef.current?.innerHTML || page.content_html || ''
-      : page.content_html || '';
-    const contentHtml = sanitizeEditorHtml(rawHtml);
-    return {
-      title: page.title || `Topik ${pageIndex + 1}`,
-      points: extractPointsFromHtml(contentHtml),
-      closing: '',
-      content_html: contentHtml,
-    };
-  });
+    const nextPageIndex = Math.min(requestedPageIndex, pageCount - 1);
+    if (nextPageIndex !== activePageIndex) {
+      setActivePageIndex(nextPageIndex);
+    }
+  }, [activePageIndex, activeTopic.pages, requestedPageIndex]);
 
-  const updatePageTitle = (pageIndex, title) => {
+  const readTopicsFromEditor = () => materialForm.topics.map((topic, topicIndex) => ({
+    ...topic,
+    pages: topic.pages.map((page, pageIndex) => {
+      const rawHtml = topicIndex === activeTopicIndex && pageIndex === activePageIndex
+        ? editorRef.current?.innerHTML || page.content_html || ''
+        : page.content_html || '';
+      const contentHtml = sanitizeEditorHtml(rawHtml);
+      return {
+        title: page.title || `Halaman ${pageIndex + 1}`,
+        points: extractPointsFromHtml(contentHtml),
+        closing: '',
+        content_html: contentHtml,
+      };
+    }),
+  }));
+
+  const updateTopicTitle = (topicIndex, title) => {
     setMaterialForm((current) => ({
       ...current,
-      pages: current.pages.map((page, index) => (
-        index === pageIndex ? { ...page, title } : page
+      topics: current.topics.map((topic, index) => (
+        index === topicIndex ? { ...topic, title } : topic
       )),
     }));
   };
 
-  const updatePageContent = (pageIndex) => {
-    if (pageIndex !== activePageIndex) {
+  const updatePageTitle = (topicIndex, pageIndex, title) => {
+    setMaterialForm((current) => ({
+      ...current,
+      topics: current.topics.map((topic, currentTopicIndex) => (
+        currentTopicIndex === topicIndex
+          ? {
+              ...topic,
+              pages: topic.pages.map((page, currentPageIndex) => (
+                currentPageIndex === pageIndex ? { ...page, title } : page
+              )),
+            }
+          : topic
+      )),
+    }));
+  };
+
+  const updatePageContent = (topicIndex, pageIndex) => {
+    if (topicIndex !== activeTopicIndex || pageIndex !== activePageIndex) {
       return;
     }
 
@@ -197,52 +280,95 @@ export default function AdminLearningMaterialEditor() {
     const contentHtml = sanitizeEditorHtml(rawHtml);
     setMaterialForm((current) => ({
       ...current,
-      pages: current.pages.map((page, index) => (
-        index === pageIndex
+      topics: current.topics.map((topic, currentTopicIndex) => (
+        currentTopicIndex === topicIndex
           ? {
-              ...page,
-              content_html: contentHtml,
-              points: extractPointsFromHtml(contentHtml),
+              ...topic,
+              pages: topic.pages.map((page, currentPageIndex) => (
+                currentPageIndex === pageIndex
+                  ? {
+                      ...page,
+                      content_html: contentHtml,
+                      points: extractPointsFromHtml(contentHtml),
+                    }
+                  : page
+              )),
             }
-          : page
+          : topic
       )),
     }));
   };
 
-  const selectTopic = (pageIndex) => {
+  const selectTopic = (topicIndex) => {
     setMaterialForm((current) => ({
       ...current,
-      pages: readPagesFromEditor(),
+      topics: readTopicsFromEditor(),
+    }));
+    setActiveTopicIndex(topicIndex);
+    setActivePageIndex(0);
+    syncSelectionInUrl(topicIndex, 0);
+  };
+
+  const selectPage = (pageIndex) => {
+    setMaterialForm((current) => ({
+      ...current,
+      topics: readTopicsFromEditor(),
     }));
     setActivePageIndex(pageIndex);
-    syncTopicInUrl(pageIndex);
+    syncSelectionInUrl(activeTopicIndex, pageIndex);
+  };
+
+  const addTopic = () => {
+    const nextTopics = [...readTopicsFromEditor(), createEmptyMaterialTopic(materialForm.topics.length + 1)];
+    const nextTopicIndex = nextTopics.length - 1;
+    setMaterialForm((current) => ({
+      ...current,
+      topics: nextTopics,
+    }));
+    setActiveTopicIndex(nextTopicIndex);
+    setActivePageIndex(0);
+    syncSelectionInUrl(nextTopicIndex, 0);
   };
 
   const addMaterialPage = () => {
-    const nextPages = [...readPagesFromEditor(), createEmptyMaterialPage(materialForm.pages.length + 1)];
-    const nextIndex = nextPages.length - 1;
+    const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
+      topicIndex === activeTopicIndex
+        ? {
+            ...topic,
+            pages: [...topic.pages, createEmptyMaterialPage(topic.pages.length + 1)],
+          }
+        : topic
+    ));
+    const nextPageIndex = (nextTopics[activeTopicIndex]?.pages?.length || 1) - 1;
     setMaterialForm((current) => ({
       ...current,
-      pages: nextPages,
+      topics: nextTopics,
     }));
-    setActivePageIndex(nextIndex);
-    syncTopicInUrl(nextIndex);
+    setActivePageIndex(nextPageIndex);
+    syncSelectionInUrl(activeTopicIndex, nextPageIndex);
   };
 
   const removeMaterialPage = (pageIndex) => {
-    if (materialForm.pages.length <= 1) {
+    if ((activeTopic.pages?.length || 0) <= 1) {
       return;
     }
 
-    const nextPages = readPagesFromEditor().filter((_, index) => index !== pageIndex);
-    const nextIndex = Math.max(0, Math.min(pageIndex === activePageIndex ? activePageIndex - 1 : activePageIndex, nextPages.length - 1));
+    const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
+      topicIndex === activeTopicIndex
+        ? {
+            ...topic,
+            pages: topic.pages.filter((_, index) => index !== pageIndex),
+          }
+        : topic
+    ));
+    const nextIndex = Math.max(0, Math.min(pageIndex === activePageIndex ? activePageIndex - 1 : activePageIndex, (nextTopics[activeTopicIndex]?.pages?.length || 1) - 1));
 
     setMaterialForm((current) => ({
       ...current,
-      pages: nextPages,
+      topics: nextTopics,
     }));
     setActivePageIndex(nextIndex);
-    syncTopicInUrl(nextIndex);
+    syncSelectionInUrl(activeTopicIndex, nextIndex);
   };
 
   const runCommand = (command, value = null) => {
@@ -279,7 +405,7 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
-    const pages = readPagesFromEditor();
+    const topics = readTopicsFromEditor();
     setSaving(true);
     setError('');
     setSuccess('');
@@ -289,9 +415,9 @@ export default function AdminLearningMaterialEditor() {
         package_id: numericPackageId,
         section_code: activeSection.code,
         title: materialForm.title,
-        pages,
+        topics,
       });
-      setMaterialForm((current) => ({ ...current, pages }));
+      setMaterialForm((current) => ({ ...current, topics }));
       setSuccess('Materi berhasil disimpan.');
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyimpan materi');
@@ -328,7 +454,8 @@ export default function AdminLearningMaterialEditor() {
               <h3>{activeSection.name}</h3>
             </div>
             <div className="admin-doc-toolbar-actions">
-              <button type="button" className="btn btn-outline" onClick={addMaterialPage}>Tambah Topik</button>
+              <button type="button" className="btn btn-outline" onClick={addTopic}>Tambah Topik</button>
+              <button type="button" className="btn btn-outline" onClick={addMaterialPage}>Tambah Halaman</button>
               <button type="button" className="btn btn-outline" onClick={() => navigate('/admin')}>Tutup Editor</button>
             </div>
           </div>
@@ -375,14 +502,14 @@ export default function AdminLearningMaterialEditor() {
           <div className="admin-doc-editor admin-material-doc-editor admin-learning-editor-workspace">
             <aside className="admin-doc-outline admin-learning-editor-sidebar">
               <strong>Topik Materi</strong>
-              {materialForm.pages.map((page, pageIndex) => (
+              {materialForm.topics.map((topic, topicIndex) => (
                 <button
-                  key={`outline-${pageIndex}`}
+                  key={`outline-topic-${topicIndex}`}
                   type="button"
-                  className={pageIndex === activePageIndex ? 'admin-doc-outline-item-active' : ''}
-                  onClick={() => selectTopic(pageIndex)}
+                  className={topicIndex === activeTopicIndex ? 'admin-doc-outline-item-active' : ''}
+                  onClick={() => selectTopic(topicIndex)}
                 >
-                  {pageIndex + 1}. {page.title || `Topik ${pageIndex + 1}`}
+                  {topicIndex + 1}. {topic.title || `Topik ${topicIndex + 1}`}
                 </button>
               ))}
             </aside>
@@ -397,26 +524,50 @@ export default function AdminLearningMaterialEditor() {
                 />
               </div>
 
+              {activeTopic && (
+                <section className="admin-doc-cover admin-learning-cover-card">
+                  <label>Nama Topik</label>
+                  <input
+                    name={`material_topic_title_${activeTopicIndex}`}
+                    value={activeTopic.title}
+                    onChange={(event) => updateTopicTitle(activeTopicIndex, event.target.value)}
+                    placeholder="Nama topik"
+                  />
+                  <div className="admin-learning-page-tabs">
+                    {activeTopic.pages.map((page, pageIndex) => (
+                      <button
+                        key={`page-tab-${activeTopicIndex}-${pageIndex}`}
+                        type="button"
+                        className={pageIndex === activePageIndex ? 'admin-doc-outline-item-active admin-learning-page-tab' : 'admin-learning-page-tab'}
+                        onClick={() => selectPage(pageIndex)}
+                      >
+                        {`Halaman ${pageIndex + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {activePage && (
                 <section key={`material-page-${activePageIndex}`} className="admin-doc-page admin-word-page admin-learning-page-shell">
                   <div className="admin-doc-page-head">
-                    <span>Topik {activePageIndex + 1}</span>
+                    <span>{`Topik ${activeTopicIndex + 1} • Halaman ${activePageIndex + 1}`}</span>
                     <button
                       type="button"
                       className="btn btn-outline admin-option-delete"
                       onClick={() => removeMaterialPage(activePageIndex)}
-                      disabled={materialForm.pages.length <= 1}
+                      disabled={(activeTopic.pages?.length || 0) <= 1}
                     >
                       Hapus
                     </button>
                   </div>
                   <input
-                    name={`material_page_title_${activePageIndex}`}
+                    name={`material_page_title_${activeTopicIndex}_${activePageIndex}`}
                     className="admin-doc-title-input"
                     value={activePage.title}
-                    onChange={(event) => updatePageTitle(activePageIndex, event.target.value)}
+                    onChange={(event) => updatePageTitle(activeTopicIndex, activePageIndex, event.target.value)}
                     onFocus={() => setActivePageIndex(activePageIndex)}
-                    placeholder="Nama topik materi"
+                    placeholder="Judul halaman materi"
                   />
                   <div
                     ref={editorRef}
@@ -424,7 +575,7 @@ export default function AdminLearningMaterialEditor() {
                     contentEditable
                     suppressContentEditableWarning
                     onFocus={() => setActivePageIndex(activePageIndex)}
-                    onBlur={() => updatePageContent(activePageIndex)}
+                    onBlur={() => updatePageContent(activeTopicIndex, activePageIndex)}
                     dangerouslySetInnerHTML={{ __html: activePage.content_html || '<p>Tulis materi di sini.</p>' }}
                   />
                 </section>

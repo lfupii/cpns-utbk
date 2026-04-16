@@ -302,9 +302,14 @@ class LearningController {
         $sections = [];
         foreach ($workflow['sections'] as $section) {
             $sectionCode = (string) $section['code'];
-            $allPages = $this->getMaterialPages($package, $workflow, $section);
+            $material = $this->getMaterialContent($package, $workflow, $section);
+            $allTopics = $material['topics'];
+            $allPages = $this->flattenMaterialTopics($allTopics);
             $previewPageCount = min(2, count($allPages));
-            $visiblePages = $hasAccess ? $allPages : array_slice($allPages, 0, $previewPageCount);
+            $visibleTopics = $hasAccess
+                ? $this->decorateMaterialTopics($allTopics)
+                : $this->limitMaterialTopicsForAccess($allTopics, $previewPageCount);
+            $visiblePages = $this->flattenMaterialTopics($visibleTopics);
             $sectionProgress = $progress[$sectionCode] ?? [];
 
             $sections[] = [
@@ -316,10 +321,16 @@ class LearningController {
                 'duration_minutes' => $section['duration_minutes'] ?? null,
                 'target_question_count' => $section['target_question_count'] ?? null,
                 'preview_page_count' => $previewPageCount,
+                'total_topic_count' => count($allTopics),
+                'visible_topic_count' => count($visibleTopics),
                 'total_page_count' => count($allPages),
                 'visible_page_count' => count($visiblePages),
                 'locked_page_count' => max(0, count($allPages) - count($visiblePages)),
                 'has_full_access' => $hasAccess,
+                'material' => [
+                    'title' => $material['title'],
+                    'topics' => $visibleTopics,
+                ],
                 'pages' => $visiblePages,
                 'progress' => [
                     'material_read' => isset($sectionProgress['material_read']),
@@ -334,27 +345,18 @@ class LearningController {
         return $sections;
     }
 
-    private function getMaterialPages(array $package, array $workflow, array $section): array {
-        $packageId = (int) ($package['id'] ?? 0);
-        $sectionCode = (string) ($section['code'] ?? '');
-        if ($packageId > 0 && $sectionCode !== '') {
-            $query = 'SELECT content_json FROM learning_materials WHERE package_id = ? AND section_code = ? LIMIT 1';
-            $stmt = $this->mysqli->prepare($query);
-            $stmt->bind_param('is', $packageId, $sectionCode);
-            $stmt->execute();
-            $row = $stmt->get_result()->fetch_assoc();
-            $pages = json_decode((string) ($row['content_json'] ?? ''), true);
-            if (is_array($pages) && count($pages) > 0) {
-                return $this->normalizeMaterialPages($pages);
-            }
-        }
-
-        return LearningContent::defaultMaterialPages($section, (string) ($workflow['mode'] ?? ''));
+    private function buildFallbackMaterialPage(string $title, string $point = 'Materi sedang disiapkan.'): array {
+        return [
+            'title' => $title,
+            'points' => [$point],
+            'closing' => '',
+            'content_html' => '',
+        ];
     }
 
-    private function normalizeMaterialPages(array $pages): array {
+    private function hydrateMaterialPages(array $pages): array {
         $normalized = [];
-        foreach ($pages as $page) {
+        foreach ($pages as $index => $page) {
             if (!is_array($page)) {
                 continue;
             }
@@ -365,9 +367,17 @@ class LearningController {
             }
 
             $contentHtml = trim((string) ($page['content_html'] ?? ''));
+            if (count($points) === 0 && $contentHtml !== '') {
+                $plainText = trim(preg_replace('/\s+/', "\n", strip_tags($contentHtml)) ?? '');
+                $points = array_values(array_filter(array_map('trim', explode("\n", $plainText))));
+            }
+
+            if (count($points) === 0 && $contentHtml === '') {
+                $points = ['Materi sedang disiapkan.'];
+            }
 
             $normalized[] = [
-                'title' => trim((string) ($page['title'] ?? 'Materi')),
+                'title' => trim((string) ($page['title'] ?? '')) ?: 'Halaman ' . ($index + 1),
                 'points' => array_values(array_filter(array_map(static function ($point): string {
                     return trim((string) $point);
                 }, $points))),
@@ -377,7 +387,130 @@ class LearningController {
         }
 
         return count($normalized) > 0 ? $normalized : [
-            $this->buildPage('Materi', ['Materi sedang disiapkan.'], 'Silakan cek kembali nanti.'),
+            $this->buildFallbackMaterialPage('Halaman 1'),
+        ];
+    }
+
+    private function buildTopicsFromPages(array $pages): array {
+        $hydratedPages = $this->hydrateMaterialPages($pages);
+        $topics = [];
+
+        foreach ($hydratedPages as $index => $page) {
+            $topics[] = [
+                'title' => trim((string) ($page['title'] ?? '')) ?: 'Topik ' . ($index + 1),
+                'pages' => [$page],
+            ];
+        }
+
+        return $topics;
+    }
+
+    private function hydrateMaterialTopics($payload, array $fallbackPages = []): array {
+        if (is_array($payload) && isset($payload['topics']) && is_array($payload['topics'])) {
+            $topics = $payload['topics'];
+        } elseif (is_array($payload) && array_values($payload) === $payload) {
+            $topics = $this->buildTopicsFromPages($payload);
+        } else {
+            $topics = $this->buildTopicsFromPages($fallbackPages);
+        }
+
+        $normalized = [];
+        foreach ($topics as $index => $topic) {
+            if (!is_array($topic)) {
+                continue;
+            }
+
+            $normalized[] = [
+                'title' => trim((string) ($topic['title'] ?? '')) ?: 'Topik ' . ($index + 1),
+                'pages' => $this->hydrateMaterialPages(is_array($topic['pages'] ?? null) ? $topic['pages'] : []),
+            ];
+        }
+
+        return count($normalized) > 0 ? $normalized : $this->buildTopicsFromPages($fallbackPages);
+    }
+
+    private function decorateMaterialTopics(array $topics): array {
+        return array_map(static function (array $topic, int $index): array {
+            $pageCount = count($topic['pages'] ?? []);
+            return [
+                'title' => $topic['title'],
+                'topic_index' => $index,
+                'page_count' => $pageCount,
+                'total_page_count' => $pageCount,
+                'visible_page_count' => $pageCount,
+                'locked_page_count' => 0,
+                'pages' => $topic['pages'],
+            ];
+        }, $topics, array_keys($topics));
+    }
+
+    private function limitMaterialTopicsForAccess(array $topics, int $visiblePageLimit): array {
+        $remaining = max(0, $visiblePageLimit);
+        $visibleTopics = [];
+
+        foreach ($topics as $index => $topic) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $pages = $topic['pages'] ?? [];
+            $visiblePages = array_slice($pages, 0, $remaining);
+            $visibleCount = count($visiblePages);
+            if ($visibleCount === 0) {
+                continue;
+            }
+
+            $totalPageCount = count($pages);
+            $visibleTopics[] = [
+                'title' => $topic['title'],
+                'topic_index' => $index,
+                'page_count' => $totalPageCount,
+                'total_page_count' => $totalPageCount,
+                'visible_page_count' => $visibleCount,
+                'locked_page_count' => max(0, $totalPageCount - $visibleCount),
+                'pages' => $visiblePages,
+            ];
+            $remaining -= $visibleCount;
+        }
+
+        return $visibleTopics;
+    }
+
+    private function flattenMaterialTopics(array $topics): array {
+        $pages = [];
+        foreach ($topics as $topic) {
+            foreach (($topic['pages'] ?? []) as $page) {
+                $pages[] = $page;
+            }
+        }
+
+        return $pages;
+    }
+
+    private function getMaterialContent(array $package, array $workflow, array $section): array {
+        $packageId = (int) ($package['id'] ?? 0);
+        $sectionCode = (string) ($section['code'] ?? '');
+        $defaultPages = LearningContent::defaultMaterialPages($section, (string) ($workflow['mode'] ?? ''));
+        $defaultTopics = $this->buildTopicsFromPages($defaultPages);
+
+        if ($packageId > 0 && $sectionCode !== '') {
+            $query = 'SELECT title, content_json FROM learning_materials WHERE package_id = ? AND section_code = ? LIMIT 1';
+            $stmt = $this->mysqli->prepare($query);
+            $stmt->bind_param('is', $packageId, $sectionCode);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $materialPayload = json_decode((string) ($row['content_json'] ?? ''), true);
+            if (is_array($materialPayload) && count($materialPayload) > 0) {
+                return [
+                    'title' => trim((string) ($row['title'] ?? '')) ?: (string) ($section['name'] ?? 'Materi'),
+                    'topics' => $this->hydrateMaterialTopics($materialPayload, $defaultPages),
+                ];
+            }
+        }
+
+        return [
+            'title' => (string) ($section['name'] ?? 'Materi'),
+            'topics' => $defaultTopics,
         ];
     }
 

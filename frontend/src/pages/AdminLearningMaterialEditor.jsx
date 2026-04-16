@@ -126,12 +126,14 @@ export default function AdminLearningMaterialEditor() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const editorRef = useRef(null);
+  const imageUploadInputRef = useRef(null);
   const [learningContent, setLearningContent] = useState([]);
   const [materialForm, setMaterialForm] = useState({ title: '', topics: [] });
   const [activeTopicIndex, setActiveTopicIndex] = useState(0);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeRibbonTab, setActiveRibbonTab] = useState('home');
@@ -528,12 +530,46 @@ export default function AdminLearningMaterialEditor() {
   };
 
   const insertImage = () => {
-    const url = window.prompt('Masukkan URL gambar');
-    if (!url) {
+    imageUploadInputRef.current?.click();
+  };
+
+  const uploadAdminMedia = async (file) => {
+    if (!file) {
+      return null;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('context', 'learning-material');
+
+    setImageUploading(true);
+    setError('');
+
+    try {
+      const response = await apiClient.post('/admin/media-upload', formData);
+      return response.data?.data?.url || '';
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal mengupload gambar materi');
+      return null;
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const handleImageFileSelection = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
       return;
     }
 
-    insertHtmlBlock(getImageFigureHtml(url.trim()));
+    const uploadedUrl = await uploadAdminMedia(file);
+    if (!uploadedUrl) {
+      return;
+    }
+
+    insertHtmlBlock(getImageFigureHtml(uploadedUrl.trim()));
+    persistActivePageContent(editorRef.current?.innerHTML || '');
   };
 
   const insertHtmlBlock = (html) => {
@@ -982,7 +1018,9 @@ export default function AdminLearningMaterialEditor() {
                 <div className="admin-ribbon-group">
                   <span className="admin-ribbon-group-label">Media</span>
                   <div className="admin-ribbon-control-row">
-                    <button type="button" onClick={insertImage}>Gambar</button>
+                    <button type="button" onClick={insertImage} disabled={imageUploading}>
+                      {imageUploading ? 'Mengupload...' : 'Gambar'}
+                    </button>
                     <button type="button" onClick={insertLink}>Link</button>
                     <button type="button" onClick={insertTable}>Tabel</button>
                   </div>
@@ -1075,6 +1113,13 @@ export default function AdminLearningMaterialEditor() {
           </div>
 
           <div className="admin-doc-editor admin-material-doc-editor admin-learning-editor-workspace">
+            <input
+              ref={imageUploadInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={handleImageFileSelection}
+            />
             <div className="admin-doc-page-stack admin-learning-editor-content">
               <div className="admin-doc-cover admin-learning-cover-card">
                 <label>Nama Kelompok Materi</label>

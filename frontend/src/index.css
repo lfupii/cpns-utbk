@@ -4902,6 +4902,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-learning-editor-hero {
+  position: static;
   padding: 1.1rem 1.15rem;
   border-radius: 1.15rem;
   background:

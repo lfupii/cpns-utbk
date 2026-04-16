@@ -14,6 +14,7 @@ import ActivePackages from './pages/ActivePackages';
 import TestHistory from './pages/TestHistory';
 import AdminPanel from './pages/AdminPanel';
 import AdminLearningMaterialEditor from './pages/AdminLearningMaterialEditor';
+import AdminQuestionEditor from './pages/AdminQuestionEditor';
 import Contact from './pages/Contact';
 import TermsConditions from './pages/TermsConditions';
 import { ThemeProvider } from './ThemeContext';
@@ -160,6 +161,14 @@ function AppRoutes() {
             element={
               <AdminRoute>
                 <AdminLearningMaterialEditor />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/question-editor/:packageId/:questionId"
+            element={
+              <AdminRoute>
+                <AdminQuestionEditor />
               </AdminRoute>
             }
           />

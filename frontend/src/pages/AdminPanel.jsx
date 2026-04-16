@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 
@@ -67,6 +67,12 @@ const QUESTION_IMAGE_LAYOUT_OPTIONS = [
   { value: 'bottom', label: 'Bawah' },
   { value: 'left', label: 'Kiri' },
   { value: 'right', label: 'Kanan' },
+];
+
+const TEST_MODE_OPTIONS = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'cpns_cat', label: 'CPNS CAT' },
+  { value: 'utbk_sectioned', label: 'UTBK Bertahap' },
 ];
 
 const createEmptyLearningQuestion = (order = 1) => ({
@@ -306,7 +312,9 @@ function AdminImagePreview({ src, alt, className = '' }) {
 
 export default function AdminPanel() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [packages, setPackages] = useState([]);
+  const [packageTypes, setPackageTypes] = useState([]);
   const [selectedPackageId, setSelectedPackageId] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loadingPackages, setLoadingPackages] = useState(true);
@@ -314,6 +322,8 @@ export default function AdminPanel() {
   const [packageSaving, setPackageSaving] = useState(false);
   const [packageCreating, setPackageCreating] = useState(false);
   const [packageDeleting, setPackageDeleting] = useState(false);
+  const [packageTypeSaving, setPackageTypeSaving] = useState(false);
+  const [packageTypeDeleting, setPackageTypeDeleting] = useState(false);
   const [questionSaving, setQuestionSaving] = useState(false);
   const [importingQuestions, setImportingQuestions] = useState(false);
   const [workflowSaving, setWorkflowSaving] = useState(false);
@@ -321,6 +331,7 @@ export default function AdminPanel() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [packageForm, setPackageForm] = useState(null);
+  const [packageTypeForm, setPackageTypeForm] = useState({ category_id: 0, name: '', description: '' });
   const [questionForm, setQuestionForm] = useState(createEmptyQuestionForm());
   const [showQuestionEditor, setShowQuestionEditor] = useState(false);
   const [expandedQuestionId, setExpandedQuestionId] = useState(null);
@@ -347,6 +358,10 @@ export default function AdminPanel() {
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
   const [editingSectionActionsCode, setEditingSectionActionsCode] = useState('');
   const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
+  const routeSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const requestedAdminView = routeSearchParams.get('view') || '';
+  const requestedPackageId = Number(routeSearchParams.get('package') || 0);
+  const requestedPreviewId = Number(routeSearchParams.get('preview') || 0);
 
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
@@ -400,6 +415,11 @@ export default function AdminPanel() {
     return response.data.data?.sections || [];
   }, []);
 
+  const fetchPackageTypes = useCallback(async () => {
+    const response = await apiClient.get('/admin/package-types');
+    return response.data.data || [];
+  }, []);
+
   const sectionStats = useMemo(() => {
     const counts = questions.reduce((accumulator, question) => {
       const code = String(question.section_code || 'general');
@@ -447,17 +467,26 @@ export default function AdminPanel() {
       return haystack.includes(needle);
     });
   }, [questionQuery, questionSectionFilter, questions]);
+  const activeQuestionPreview = useMemo(
+    () => questions.find((question) => Number(question.id) === Number(expandedQuestionId)) || null,
+    [expandedQuestionId, questions]
+  );
 
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
 
   useEffect(() => {
     const fetchPackages = async () => {
       try {
-        const response = await apiClient.get('/admin/packages');
-        const nextPackages = response.data.data || [];
+        const [packagesResponse, typesResponse] = await Promise.all([
+          apiClient.get('/admin/packages'),
+          fetchPackageTypes(),
+        ]);
+        const nextPackages = packagesResponse.data.data || [];
         setPackages(nextPackages);
+        setPackageTypes(typesResponse || []);
         if (nextPackages.length > 0) {
-          setSelectedPackageId(Number(nextPackages[0].id));
+          const requestedPackage = nextPackages.find((pkg) => Number(pkg.id) === requestedPackageId);
+          setSelectedPackageId(Number((requestedPackage || nextPackages[0]).id));
         }
       } catch (err) {
         setError(err.response?.data?.message || 'Gagal memuat data admin');
@@ -467,7 +496,7 @@ export default function AdminPanel() {
     };
 
     fetchPackages();
-  }, []);
+  }, [fetchPackageTypes, requestedPackageId]);
 
   useEffect(() => {
     if (!selectedPackage) {
@@ -477,12 +506,14 @@ export default function AdminPanel() {
 
     setPackageForm({
       package_id: Number(selectedPackage.id),
+      category_id: Number(selectedPackage.category_id || 0),
       name: selectedPackage.name || '',
       description: selectedPackage.description || '',
       price: Number(selectedPackage.price || 0),
       duration_days: Number(selectedPackage.duration_days || 30),
       max_attempts: Number(selectedPackage.max_attempts || 1),
       time_limit: Number(selectedPackage.time_limit || 90),
+      test_mode: selectedPackage.test_mode || 'standard',
     });
   }, [selectedPackage]);
 
@@ -491,10 +522,11 @@ export default function AdminPanel() {
       return;
     }
 
-    const [questionsResponse, packagesResponse, learningResponse] = await Promise.all([
+    const [questionsResponse, packagesResponse, learningResponse, typesResponse] = await Promise.all([
       fetchAdminQuestions(packageId),
       apiClient.get('/admin/packages'),
       fetchLearningContent(packageId),
+      fetchPackageTypes(),
     ]);
 
     const nextQuestions = questionsResponse || [];
@@ -503,6 +535,7 @@ export default function AdminPanel() {
 
     setQuestions(nextQuestions);
     setPackages(nextPackages);
+    setPackageTypes(typesResponse || []);
     setLearningContent(nextLearningContent);
     setLearningSectionCode((current) => (
       nextLearningContent.some((section) => section.code === current)
@@ -514,6 +547,7 @@ export default function AdminPanel() {
       questions: nextQuestions,
       packages: nextPackages,
       learningContent: nextLearningContent,
+      packageTypes: typesResponse || [],
     };
   };
 
@@ -602,6 +636,24 @@ export default function AdminPanel() {
     }
   }, [questionSectionFilter, sectionStats]);
 
+  useEffect(() => {
+    if (['dashboard', 'paket', 'materi', 'soal'].includes(requestedAdminView)) {
+      setAdminView(requestedAdminView);
+    }
+  }, [requestedAdminView]);
+
+  useEffect(() => {
+    if (requestedPackageId > 0 && packages.some((pkg) => Number(pkg.id) === requestedPackageId)) {
+      setSelectedPackageId(requestedPackageId);
+    }
+  }, [packages, requestedPackageId]);
+
+  useEffect(() => {
+    if (requestedPreviewId > 0 && questions.some((question) => Number(question.id) === requestedPreviewId)) {
+      setExpandedQuestionId(requestedPreviewId);
+    }
+  }, [questions, requestedPreviewId]);
+
   const resetQuestionForm = () => {
     setQuestionForm(createEmptyQuestionForm(preferredSectionCode));
     setShowQuestionEditor(false);
@@ -613,9 +665,17 @@ export default function AdminPanel() {
     const { name, value } = event.target;
     setPackageForm((current) => ({
       ...current,
-      [name]: ['price', 'duration_days', 'max_attempts', 'time_limit'].includes(name)
+      [name]: ['price', 'duration_days', 'max_attempts', 'time_limit', 'category_id'].includes(name)
         ? Number(value)
         : value,
+    }));
+  };
+
+  const handlePackageTypeChange = (event) => {
+    const { name, value } = event.target;
+    setPackageTypeForm((current) => ({
+      ...current,
+      [name]: name === 'category_id' ? Number(value) : value,
     }));
   };
 
@@ -648,6 +708,8 @@ export default function AdminPanel() {
     try {
       const response = await apiClient.post('/admin/packages', {
         template_package_id: selectedPackage ? Number(selectedPackage.id) : null,
+        category_id: Number(packageForm?.category_id || selectedPackage?.category_id || packageTypes[0]?.id || 0),
+        test_mode: packageForm?.test_mode || selectedPackage?.test_mode || 'standard',
       });
       const createdPackageId = Number(response.data?.data?.package_id || 0);
       const packagesResponse = await apiClient.get('/admin/packages');
@@ -663,6 +725,72 @@ export default function AdminPanel() {
       setError(err.response?.data?.message || 'Gagal membuat paket baru');
     } finally {
       setPackageCreating(false);
+    }
+  };
+
+  const resetPackageTypeForm = () => {
+    setPackageTypeForm({ category_id: 0, name: '', description: '' });
+  };
+
+  const handlePackageTypeSubmit = async (event) => {
+    event.preventDefault();
+    setPackageTypeSaving(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      if (packageTypeForm.category_id > 0) {
+        await apiClient.put('/admin/package-types', packageTypeForm);
+        setSuccess('Tipe paket berhasil diperbarui.');
+      } else {
+        await apiClient.post('/admin/package-types', {
+          name: packageTypeForm.name,
+          description: packageTypeForm.description,
+        });
+        setSuccess('Tipe paket berhasil ditambahkan.');
+      }
+
+      const nextTypes = await fetchPackageTypes();
+      setPackageTypes(nextTypes);
+      resetPackageTypeForm();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal menyimpan tipe paket');
+    } finally {
+      setPackageTypeSaving(false);
+    }
+  };
+
+  const handlePackageTypeEdit = (type) => {
+    setPackageTypeForm({
+      category_id: Number(type.id),
+      name: type.name || '',
+      description: type.description || '',
+    });
+    setAdminView('paket');
+  };
+
+  const handlePackageTypeDelete = async (type) => {
+    const confirmed = window.confirm(`Hapus tipe paket "${type.name}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setPackageTypeDeleting(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await apiClient.delete(`/admin/package-types?id=${type.id}`);
+      const nextTypes = await fetchPackageTypes();
+      setPackageTypes(nextTypes);
+      if (Number(packageTypeForm.category_id) === Number(type.id)) {
+        resetPackageTypeForm();
+      }
+      setSuccess(`Tipe paket "${type.name}" berhasil dihapus.`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal menghapus tipe paket');
+    } finally {
+      setPackageTypeDeleting(false);
     }
   };
 
@@ -830,44 +958,19 @@ export default function AdminPanel() {
   };
 
   const handleQuestionEdit = (question) => {
-    const optionImageEditorState = (question.options || []).reduce((accumulator, option, index) => {
-      if (option.image_url) {
-        accumulator[index] = true;
-      }
-      return accumulator;
-    }, {});
-
-    setQuestionForm({
-      question_id: Number(question.id),
-      question_text: question.question_text || '',
-      question_image_url: question.question_image_url || '',
-      question_image_layout: question.question_image_layout || 'top',
-      difficulty: question.difficulty || 'medium',
-      question_type: question.question_type || 'single_choice',
-      section_code: question.section_code || defaultSectionCode,
-      options: (question.options || []).map((option, index) => ({
-        letter: option.letter || String.fromCharCode(65 + index),
-        text: option.text || '',
-        image_url: option.image_url || '',
-        is_correct: Boolean(Number(option.is_correct)),
-      })),
-    });
     setExpandedQuestionId(Number(question.id));
     setSuccess('');
     setError('');
-    setShowQuestionImageTools(Boolean(question.question_image_url));
-    setOpenOptionImageEditors(optionImageEditorState);
-    setShowQuestionEditor(true);
+    setAdminView('soal');
   };
 
   const handleCreateQuestion = () => {
-    setQuestionForm(createEmptyQuestionForm(preferredSectionCode));
-    setSuccess('');
-    setError('');
-    setShowQuestionImageTools(false);
-    setOpenOptionImageEditors({});
-    setShowQuestionEditor(true);
-    setAdminView('soal');
+    if (!selectedPackageId) {
+      return;
+    }
+
+    const sectionQuery = preferredSectionCode ? `?section=${encodeURIComponent(preferredSectionCode)}` : '';
+    navigate(`/admin/question-editor/${selectedPackageId}/new${sectionQuery}`);
   };
 
   const openLearningEditor = (sectionCode, mode) => {
@@ -1246,6 +1349,61 @@ export default function AdminPanel() {
     await handleAddSection(referenceSection);
   };
 
+  const handleEditSection = async (section) => {
+    const nextName = window.prompt('Nama subtest', section.name || '');
+    if (nextName === null) {
+      return;
+    }
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName) {
+      setError('Nama subtest tidak boleh kosong.');
+      return;
+    }
+
+    const nextSessionName = window.prompt('Nama grup/sesi subtest (opsional)', section.session_name || '');
+    if (nextSessionName === null) {
+      return;
+    }
+
+    const nextDuration = window.prompt('Durasi subtest dalam menit (opsional)', section.duration_minutes ?? '');
+    if (nextDuration === null) {
+      return;
+    }
+
+    const nextTargetCount = window.prompt('Target jumlah soal subtest (opsional)', section.target_question_count ?? '');
+    if (nextTargetCount === null) {
+      return;
+    }
+
+    const normalizedDuration = String(nextDuration).trim() === '' ? null : Number(nextDuration);
+    const normalizedTargetCount = String(nextTargetCount).trim() === '' ? null : Number(nextTargetCount);
+
+    if (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration < 0)) {
+      setError('Durasi subtest tidak valid.');
+      return;
+    }
+
+    if (normalizedTargetCount !== null && (!Number.isFinite(normalizedTargetCount) || normalizedTargetCount < 0)) {
+      setError('Target jumlah soal tidak valid.');
+      return;
+    }
+
+    const nextSections = packageSections.map((item) => (
+      item.code === section.code
+        ? {
+            ...item,
+            name: trimmedName,
+            session_name: nextSessionName.trim() || null,
+            duration_minutes: normalizedDuration,
+            target_question_count: normalizedTargetCount === null ? null : Math.floor(normalizedTargetCount),
+          }
+        : item
+    ));
+
+    await updateWorkflowSections(nextSections, section.code, `Subtest ${trimmedName} berhasil diperbarui.`);
+  };
+
   const handleDeleteSection = async (section) => {
     if (packageSections.length <= 1) {
       setError('Minimal harus ada 1 subtest.');
@@ -1500,6 +1658,18 @@ export default function AdminPanel() {
                                 <button
                                   type="button"
                                   className="admin-section-action-btn"
+                                  aria-label={`Edit subtest ${section.name}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleEditSection(section);
+                                  }}
+                                  disabled={workflowSaving}
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  type="button"
+                                  className="admin-section-action-btn"
                                   aria-label={`Tambah topik materi untuk ${section.name}`}
                                   onClick={(event) => {
                                     event.stopPropagation();
@@ -1508,6 +1678,18 @@ export default function AdminPanel() {
                                   disabled={workflowSaving}
                                 >
                                   +
+                                </button>
+                                <button
+                                  type="button"
+                                  className="admin-section-action-btn admin-section-action-btn-danger"
+                                  aria-label={`Hapus subtest ${section.name}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleDeleteSection(section);
+                                  }}
+                                  disabled={workflowSaving || packageSections.length <= 1}
+                                >
+                                  🗑
                                 </button>
                               </>
                             )}
@@ -1665,8 +1847,28 @@ export default function AdminPanel() {
                     <form className="admin-package-form" onSubmit={handlePackageSave}>
                       <div className="account-form-grid">
                         <div className="form-group">
+                          <label>Tipe Paket</label>
+                          <select name="category_id" value={packageForm.category_id} onChange={handlePackageChange}>
+                            {packageTypes.map((type) => (
+                              <option key={type.id} value={type.id}>
+                                {type.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
                           <label>Nama Paket</label>
                           <input name="name" value={packageForm.name} onChange={handlePackageChange} />
+                        </div>
+                        <div className="form-group">
+                          <label>Mode Ujian</label>
+                          <select name="test_mode" value={packageForm.test_mode} onChange={handlePackageChange}>
+                            {TEST_MODE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div className="form-group">
                           <label>Harga</label>
@@ -1714,6 +1916,20 @@ export default function AdminPanel() {
                             />
                           </div>
                         )}
+                        <div className="form-group form-group-full">
+                          <label>Ringkasan Struktur</label>
+                          <textarea
+                            rows="5"
+                            value={[
+                              `Mode: ${TEST_MODE_OPTIONS.find((option) => option.value === packageForm.test_mode)?.label || packageForm.test_mode}`,
+                              `Tipe paket: ${packageTypes.find((type) => Number(type.id) === Number(packageForm.category_id))?.name || '-'}`,
+                              ...packageSections.map((section) => (
+                                `${section.order}. ${section.name}${section.session_name ? ` • ${section.session_name}` : ''}${section.target_question_count ? ` • ${section.target_question_count} soal` : ''}${section.duration_minutes ? ` • ${section.duration_minutes} menit` : ''}`
+                              )),
+                            ].join('\n')}
+                            disabled
+                          />
+                        </div>
                       </div>
 
                       <div className="account-form-actions">
@@ -1733,6 +1949,59 @@ export default function AdminPanel() {
                         </button>
                       </div>
                     </form>
+                  </div>
+
+                  <div className="learning-page admin-package-form-page">
+                    <div className="admin-section-header admin-list-toolbar">
+                      <div>
+                        <h3>Tipe Paket</h3>
+                        <p className="text-muted">Kelola kategori paket agar ke depan bisa ada CPNS/UTBK standard, premium, atau varian lain.</p>
+                      </div>
+                    </div>
+
+                    <form className="admin-package-form" onSubmit={handlePackageTypeSubmit}>
+                      <div className="account-form-grid">
+                        <div className="form-group">
+                          <label>Nama Tipe Paket</label>
+                          <input name="name" value={packageTypeForm.name} onChange={handlePackageTypeChange} placeholder="Contoh: UTBK Premium" />
+                        </div>
+                        <div className="form-group form-group-full">
+                          <label>Deskripsi</label>
+                          <textarea name="description" rows="3" value={packageTypeForm.description} onChange={handlePackageTypeChange} placeholder="Keterangan singkat tipe paket" />
+                        </div>
+                      </div>
+
+                      <div className="account-form-actions">
+                        {packageTypeForm.category_id > 0 && (
+                          <button type="button" className="btn btn-outline" onClick={resetPackageTypeForm}>
+                            Batal Edit
+                          </button>
+                        )}
+                        <button type="submit" className="btn btn-primary" disabled={packageTypeSaving}>
+                          {packageTypeSaving ? 'Menyimpan...' : packageTypeForm.category_id > 0 ? 'Simpan Tipe Paket' : 'Tambah Tipe Paket'}
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="admin-package-type-list">
+                      {packageTypes.map((type) => (
+                        <div key={type.id} className="admin-package-type-card">
+                          <div>
+                            <strong>{type.name}</strong>
+                            <p>{type.description || 'Tanpa deskripsi'}</p>
+                            <small>{type.package_count} paket</small>
+                          </div>
+                          <div className="admin-package-type-actions">
+                            <button type="button" className="btn btn-outline" onClick={() => handlePackageTypeEdit(type)}>
+                              Edit
+                            </button>
+                            <button type="button" className="btn btn-danger" onClick={() => handlePackageTypeDelete(type)} disabled={packageTypeDeleting}>
+                              Hapus
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </article>
               )}
@@ -1988,7 +2257,7 @@ export default function AdminPanel() {
               )}
 
               {adminView === 'soal' && (
-                <div className={`admin-grid admin-grid-questions ${showQuestionEditor ? '' : 'admin-grid-questions-collapsed'}`}>
+                <div className="admin-grid admin-grid-questions admin-grid-questions-collapsed">
                   <section className="account-card admin-main-card admin-panel-card admin-list-card admin-test-bank-shell">
                     <div className="admin-section-header admin-list-toolbar">
                       <div>
@@ -2081,6 +2350,70 @@ export default function AdminPanel() {
                       )}
                     </div>
 
+                    {activeQuestionPreview && (
+                      <section className="admin-question-preview-shell">
+                        <div className="admin-question-preview-head">
+                          <div>
+                            <span className="admin-preview-eyebrow">Preview soal aktif</span>
+                            <h3>{truncateText(activeQuestionPreview.question_text || 'Soal berbasis gambar', 180)}</h3>
+                            <p className="text-muted">
+                              {activeQuestionPreview.section_name || 'Bagian umum'} • {(activeQuestionPreview.options || []).length} opsi
+                            </p>
+                          </div>
+                          <div className="admin-question-preview-actions">
+                            <Link
+                              className="btn btn-primary"
+                              to={`/admin/question-editor/${selectedPackageId}/${activeQuestionPreview.id}`}
+                            >
+                              Edit Soal Lagi
+                            </Link>
+                            <button
+                              type="button"
+                              className="btn btn-outline"
+                              onClick={() => setExpandedQuestionId(null)}
+                            >
+                              Tutup Preview
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="admin-question-row-detail">
+                          <div className="admin-question-row-detail-main">
+                            <div>
+                              <h3>{activeQuestionPreview.question_text || 'Soal berbasis gambar'}</h3>
+                              <p className="text-muted">
+                                {activeQuestionPreview.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
+                              </p>
+                            </div>
+                            <AdminImagePreview
+                              src={activeQuestionPreview.question_image_url}
+                              alt={`Preview soal ${activeQuestionPreview.id}`}
+                              className="admin-question-preview-image"
+                            />
+                          </div>
+
+                          <div className="admin-question-options-preview-grid">
+                            {(activeQuestionPreview.options || []).map((option) => (
+                              <div key={option.id || `${activeQuestionPreview.id}-${option.letter}`} className="admin-option-preview-card">
+                                <div className="admin-option-preview-head">
+                                  <strong>{option.letter}.</strong>
+                                  {Number(option.is_correct) === 1 && (
+                                    <span className="admin-correct-badge">Jawaban Benar</span>
+                                  )}
+                                </div>
+                                <p>{option.text || 'Opsi berbasis gambar'}</p>
+                                <AdminImagePreview
+                                  src={option.image_url}
+                                  alt={`Opsi ${option.letter}`}
+                                  className="admin-option-preview-image"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </section>
+                    )}
+
                     {loadingQuestions ? (
                       <p>Memuat soal...</p>
                     ) : filteredQuestions.length === 0 ? (
@@ -2130,7 +2463,7 @@ export default function AdminPanel() {
 
                                 <div className="admin-question-row-actions">
                                   <button type="button" className="btn btn-outline" onClick={() => handleQuestionEdit(question)}>
-                                    Edit
+                                    {Number(activeQuestionPreview?.id) === Number(question.id) ? 'Aktif' : 'Edit'}
                                   </button>
                                   <button type="button" className="btn btn-danger" onClick={() => handleQuestionDelete(question.id)}>
                                     Hapus
@@ -2180,244 +2513,6 @@ export default function AdminPanel() {
                       </div>
                     )}
                   </section>
-
-                  {showQuestionEditor && (
-                    <section className="account-card admin-main-card admin-panel-card admin-editor-card admin-test-editor-shell">
-                      <div className="admin-section-header admin-editor-header">
-                        <div>
-                          <h2>{questionForm.question_id ? 'Edit Soal' : 'Tambah Soal Baru'}</h2>
-                          <p className="text-muted">Teks, gambar, pilihan jawaban, dan kunci jawaban dikelola di sini.</p>
-                        </div>
-                        <button type="button" className="btn btn-outline" onClick={resetQuestionForm}>
-                          Tutup Editor
-                        </button>
-                      </div>
-
-                      <form onSubmit={handleQuestionSubmit} className="admin-question-form admin-question-form-modern">
-                        <div className="admin-learning-page-card admin-learning-question-card-modern admin-test-editor-question-card">
-                          <div className="admin-option-editor-head">
-                            <strong>{questionForm.question_id ? 'Edit Soal Tryout' : 'Soal Baru Tryout'}</strong>
-                            <button
-                              type="button"
-                              className="btn btn-outline admin-option-delete"
-                              onClick={() => setShowQuestionImageTools((current) => !current)}
-                            >
-                              {questionImagePanelVisible ? 'Tutup Gambar Soal' : 'Tambah Gambar Soal'}
-                            </button>
-                          </div>
-
-                          <div className="form-group">
-                            <label>Pertanyaan</label>
-                            <textarea
-                              name="question_text"
-                              rows="4"
-                              value={questionForm.question_text}
-                              onChange={handleQuestionChange}
-                              placeholder="Tulis soal di sini"
-                            />
-                          </div>
-
-                          <div className="account-form-grid">
-                            <div className="form-group">
-                              <label>Kesulitan</label>
-                              <select
-                                name="difficulty"
-                                value={questionForm.difficulty}
-                                onChange={handleQuestionChange}
-                              >
-                                <option value="easy">Mudah</option>
-                                <option value="medium">Sedang</option>
-                                <option value="hard">Sulit</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="form-group">
-                            <label>Bagian / Subtes</label>
-                            <select
-                              name="section_code"
-                              value={questionForm.section_code}
-                              onChange={handleQuestionChange}
-                              required
-                            >
-                              {packageSections.map((section) => (
-                                <option key={section.code} value={section.code}>
-                                  {section.session_name ? `${section.session_name} • ` : ''}
-                                  {section.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {questionImagePanelVisible && (
-                            <div className="admin-question-image-tools">
-                              <div className="form-group">
-                                <label>URL Gambar Soal</label>
-                                <input
-                                  type="url"
-                                  name="question_image_url"
-                                  value={questionForm.question_image_url}
-                                  onChange={handleQuestionChange}
-                                  placeholder="https://..."
-                                />
-                              </div>
-
-                              <div className="admin-option-inline-actions">
-                                <label className="btn btn-outline admin-option-inline-button admin-file-button">
-                                  {mediaUploading['tryout-question'] ? 'Mengupload...' : 'Upload dari Komputer'}
-                                  <input
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/webp,image/gif"
-                                    onChange={handleQuestionImageUpload}
-                                    hidden
-                                  />
-                                </label>
-                              </div>
-
-                              <div className="form-group">
-                                <label>Posisi Gambar Soal</label>
-                                <div className="admin-layout-toggle-group">
-                                  {QUESTION_IMAGE_LAYOUT_OPTIONS.map((layoutOption) => (
-                                    <button
-                                      key={layoutOption.value}
-                                      type="button"
-                                      className={`admin-layout-toggle ${questionForm.question_image_layout === layoutOption.value ? 'admin-layout-toggle-active' : ''}`}
-                                      onClick={() => setQuestionForm((current) => ({
-                                        ...current,
-                                        question_image_layout: layoutOption.value,
-                                      }))}
-                                    >
-                                      {layoutOption.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="admin-question-image-preview-shell">
-                                <div className={`admin-question-media-preview admin-question-media-preview-${questionForm.question_image_layout || 'top'}`}>
-                                  {questionForm.question_text && (
-                                    <div className="admin-question-media-copy-preview">
-                                      <span>Preview pertanyaan</span>
-                                      <p>{questionForm.question_text}</p>
-                                    </div>
-                                  )}
-                                  <AdminImagePreview
-                                    src={questionForm.question_image_url}
-                                    alt="Preview gambar soal"
-                                    className="admin-question-media-image-preview"
-                                  />
-                                </div>
-                                {questionForm.question_image_url && (
-                                  <button type="button" className="btn btn-outline admin-inline-secondary-action" onClick={clearQuestionImage}>
-                                    Hapus Gambar Soal
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="admin-options-header">
-                            <h3>Opsi Jawaban</h3>
-                            <button type="button" className="btn btn-outline" onClick={addOption} disabled={questionForm.options.length >= 5}>
-                              Tambah Opsi
-                            </button>
-                          </div>
-
-                          <div className="admin-options-editor-list admin-options-editor-list-modern">
-                            {questionForm.options.map((option, index) => {
-                              const isOptionImageEditorVisible = openOptionImageEditors[index] || Boolean(option.image_url);
-
-                              return (
-                                <div key={`${option.letter}-main-${index}`} className="admin-option-editor-card admin-option-editor-card-inline">
-                                  <div className="admin-option-row admin-option-row-rich">
-                                    <button
-                                      type="button"
-                                      className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
-                                      onClick={() => handleCorrectOptionChange(index)}
-                                    >
-                                      {option.is_correct ? 'Benar' : 'Pilih'}
-                                    </button>
-                                    <span className="admin-option-letter">{option.letter}</span>
-                                    <div className="admin-option-input-stack">
-                                      <input
-                                        name={`option_text_main_${option.letter}_${index}`}
-                                        type="text"
-                                        value={option.text}
-                                        onChange={(event) => handleOptionFieldChange(index, 'text', event.target.value)}
-                                        placeholder={`Isi opsi ${option.letter}`}
-                                      />
-                                      {isOptionImageEditorVisible && (
-                                        <div className="admin-option-image-tools">
-                                          <input
-                                            name={`option_image_url_main_${option.letter}_${index}`}
-                                            type="url"
-                                            value={option.image_url}
-                                            onChange={(event) => handleOptionFieldChange(index, 'image_url', event.target.value)}
-                                            placeholder="https://..."
-                                          />
-                                          <AdminImagePreview
-                                            src={option.image_url}
-                                            alt={`Preview opsi ${option.letter}`}
-                                            className="admin-editor-preview-image admin-editor-preview-image-small"
-                                          />
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="admin-option-inline-actions">
-                                      <label className="btn btn-outline admin-option-inline-button admin-file-button">
-                                        {mediaUploading[`tryout-option-${index}`] ? 'Mengupload...' : 'Upload Gambar'}
-                                        <input
-                                          type="file"
-                                          accept="image/png,image/jpeg,image/webp,image/gif"
-                                          onChange={(event) => handleQuestionOptionImageUpload(index, event)}
-                                          hidden
-                                        />
-                                      </label>
-                                      <button
-                                        type="button"
-                                        className="btn btn-outline admin-option-inline-button"
-                                        onClick={() => toggleOptionImageEditor(index)}
-                                      >
-                                        {isOptionImageEditorVisible ? 'Tutup Gambar' : 'Tambah Gambar'}
-                                      </button>
-                                      {option.image_url && (
-                                        <button
-                                          type="button"
-                                          className="btn btn-outline admin-option-inline-button"
-                                          onClick={() => clearOptionImage(index)}
-                                        >
-                                          Hapus Gambar
-                                        </button>
-                                      )}
-                                      <button
-                                        type="button"
-                                        className="btn btn-outline admin-option-delete"
-                                        onClick={() => removeOption(index)}
-                                        disabled={questionForm.options.length <= 2}
-                                      >
-                                        Hapus
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="account-form-actions">
-                          <button type="submit" className="btn btn-primary" disabled={questionSaving}>
-                            {questionSaving ? 'Menyimpan...' : questionForm.question_id ? 'Update Soal' : 'Tambah Soal'}
-                          </button>
-                          {questionForm.question_id && (
-                            <button type="button" className="btn btn-outline" onClick={handleCreateQuestion}>
-                              Ganti Jadi Soal Baru
-                            </button>
-                          )}
-                        </div>
-                      </form>
-                    </section>
-                  )}
                 </div>
               )}
             </div>

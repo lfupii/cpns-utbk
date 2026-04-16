@@ -125,8 +125,9 @@ export default function AdminLearningMaterialEditor() {
   const { packageId, sectionCode } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const editorRef = useRef(null);
+  const editorRefs = useRef({});
   const imageUploadInputRef = useRef(null);
+  const paginationFrameRef = useRef(null);
   const [learningContent, setLearningContent] = useState([]);
   const [materialForm, setMaterialForm] = useState({ title: '', topics: [] });
   const [activeTopicIndex, setActiveTopicIndex] = useState(0);
@@ -143,6 +144,7 @@ export default function AdminLearningMaterialEditor() {
   const selectedImageFigureRef = useRef(null);
   const imageInteractionRef = useRef(null);
   const [imageContextMenu, setImageContextMenu] = useState({ visible: false, x: 0, y: 0, layout: 'center' });
+  const [pendingPaginationStart, setPendingPaginationStart] = useState(null);
 
   const numericPackageId = Number(packageId);
   const requestedTopicParam = searchParams.get('topic') || '0';
@@ -173,6 +175,27 @@ export default function AdminLearningMaterialEditor() {
   );
   const activeTopic = materialForm.topics[activeTopicIndex] || null;
   const activePage = activeTopic?.pages?.[activePageIndex] || null;
+  const getEditorNode = useCallback((pageIndex = activePageIndex) => editorRefs.current[pageIndex] || null, [activePageIndex]);
+  const focusEditorAtEnd = useCallback((pageIndex) => {
+    requestAnimationFrame(() => {
+      const editorNode = editorRefs.current[pageIndex];
+      if (!editorNode) {
+        return;
+      }
+
+      editorNode.focus();
+      const selection = window.getSelection();
+      if (!selection) {
+        return;
+      }
+
+      const range = document.createRange();
+      range.selectNodeContents(editorNode);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+  }, []);
 
   const syncSelectionInUrl = useCallback((topicIndex, pageIndex = 0) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -270,6 +293,101 @@ export default function AdminLearningMaterialEditor() {
     }
   }, [activePageIndex, activeTopic?.pages, requestedPageIndex]);
 
+  useEffect(() => {
+    if (!activeTopic || (activeTopic.pages?.length || 0) > 0) {
+      return;
+    }
+
+    setMaterialForm((current) => ({
+      ...current,
+      topics: current.topics.map((topic, index) => (
+        index === activeTopicIndex
+          ? { ...topic, pages: [createEmptyMaterialPage(1)] }
+          : topic
+      )),
+    }));
+    setActivePageIndex(0);
+    syncSelectionInUrl(activeTopicIndex, 0);
+  }, [activeTopic, activeTopicIndex, syncSelectionInUrl]);
+
+  const isMeaningfulEditorNode = useCallback((node) => {
+    if (!node) {
+      return false;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      return Boolean(node.textContent?.trim());
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return false;
+    }
+
+    if (node.matches('img, table, figure, hr, blockquote')) {
+      return true;
+    }
+
+    if (node.matches('p, div, h1, h2, h3, h4, h5, h6, li, ul, ol')) {
+      return node.textContent.trim() !== '' || node.querySelector('img, table, figure, hr') !== null;
+    }
+
+    return node.textContent.trim() !== '';
+  }, []);
+
+  const normalizeEditorContent = useCallback((editorNode) => {
+    if (!editorNode) {
+      return;
+    }
+
+    [...editorNode.childNodes].forEach((childNode) => {
+      if (childNode.nodeType === Node.TEXT_NODE && childNode.textContent.trim()) {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = childNode.textContent;
+        editorNode.replaceChild(paragraph, childNode);
+      }
+    });
+
+    if (![...editorNode.childNodes].some((childNode) => isMeaningfulEditorNode(childNode))) {
+      editorNode.innerHTML = '<p><br></p>';
+    }
+  }, [isMeaningfulEditorNode]);
+
+  const getMovableEditorNodes = useCallback((editorNode) => (
+    [...editorNode.childNodes].filter((childNode) => isMeaningfulEditorNode(childNode))
+  ), [isMeaningfulEditorNode]);
+
+  const serializeActiveTopicPagesFromDom = useCallback((topicIndex = activeTopicIndex) => {
+    const activeTopicData = materialForm.topics[topicIndex];
+    if (!activeTopicData) {
+      return [];
+    }
+
+    const serializedPages = activeTopicData.pages.map((page, pageIndex) => {
+      const editorNode = editorRefs.current[pageIndex];
+      const rawHtml = editorNode?.innerHTML || page.content_html || '';
+      const contentHtml = sanitizeEditorHtml(rawHtml);
+      return {
+        title: page.title || `Halaman ${pageIndex + 1}`,
+        points: extractPointsFromHtml(contentHtml),
+        closing: '',
+        content_html: contentHtml,
+      };
+    });
+
+    while (serializedPages.length > 1) {
+      const lastPage = serializedPages[serializedPages.length - 1];
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(lastPage.content_html || '', 'text/html');
+      const hasContent = [...doc.body.childNodes].some((childNode) => isMeaningfulEditorNode(childNode));
+      if (hasContent) {
+        break;
+      }
+      serializedPages.pop();
+    }
+
+    return serializedPages;
+  }, [activeTopicIndex, isMeaningfulEditorNode, materialForm.topics]);
+
   const clearSelectedImageFigure = useCallback(() => {
     if (selectedImageFigureRef.current) {
       selectedImageFigureRef.current.classList.remove('is-selected');
@@ -313,7 +431,8 @@ export default function AdminLearningMaterialEditor() {
   const clampNumber = useCallback((value, min, max) => Math.min(max, Math.max(min, value)), []);
 
   const getImageWidthBounds = useCallback((layout) => {
-    const pageWidth = editorRef.current?.clientWidth || 720;
+    const selectedFigureEditor = selectedImageFigureRef.current?.closest('.admin-word-editable');
+    const pageWidth = selectedFigureEditor?.clientWidth || getEditorNode()?.clientWidth || 720;
     const defaultMax = Math.max(220, Math.min(pageWidth - 24, 560));
     if (layout === 'full') {
       return { min: Math.max(220, pageWidth * 0.45), max: Math.max(260, pageWidth - 24) };
@@ -322,7 +441,7 @@ export default function AdminLearningMaterialEditor() {
       return { min: 140, max: Math.max(220, Math.min(pageWidth * 0.48, 360)) };
     }
     return { min: 180, max: defaultMax };
-  }, []);
+  }, [getEditorNode]);
 
   const getImageFigureMetrics = useCallback((figure) => {
     const computed = window.getComputedStyle(figure);
@@ -374,9 +493,8 @@ export default function AdminLearningMaterialEditor() {
   const readTopicsFromEditor = () => materialForm.topics.map((topic, topicIndex) => ({
     ...topic,
     pages: topic.pages.map((page, pageIndex) => {
-      const rawHtml = topicIndex === activeTopicIndex && pageIndex === activePageIndex
-        ? editorRef.current?.innerHTML || page.content_html || ''
-        : page.content_html || '';
+      const editorNode = topicIndex === activeTopicIndex ? editorRefs.current[pageIndex] : null;
+      const rawHtml = editorNode?.innerHTML || page.content_html || '';
       const contentHtml = sanitizeEditorHtml(rawHtml);
       return {
         title: page.title || `Halaman ${pageIndex + 1}`,
@@ -387,8 +505,8 @@ export default function AdminLearningMaterialEditor() {
     }),
   }));
 
-  const persistActivePageContent = useCallback((rawHtml = editorRef.current?.innerHTML || '') => {
-    const contentHtml = sanitizeEditorHtml(rawHtml);
+  const persistActivePageContent = useCallback((rawHtml = null, pageIndex = activePageIndex) => {
+    const contentHtml = sanitizeEditorHtml(rawHtml ?? (getEditorNode(pageIndex)?.innerHTML || ''));
     setMaterialForm((current) => ({
       ...current,
       topics: current.topics.map((topic, currentTopicIndex) => (
@@ -396,7 +514,7 @@ export default function AdminLearningMaterialEditor() {
           ? {
               ...topic,
               pages: topic.pages.map((page, currentPageIndex) => (
-                currentPageIndex === activePageIndex
+                currentPageIndex === pageIndex
                   ? {
                       ...page,
                       content_html: contentHtml,
@@ -408,7 +526,7 @@ export default function AdminLearningMaterialEditor() {
           : topic
       )),
     }));
-  }, [activePageIndex, activeTopicIndex]);
+  }, [activePageIndex, activeTopicIndex, getEditorNode]);
 
   const updateTopicTitle = (topicIndex, title) => {
     setMaterialForm((current) => ({
@@ -459,6 +577,7 @@ export default function AdminLearningMaterialEditor() {
     }));
     setActivePageIndex(pageIndex);
     syncSelectionInUrl(activeTopicIndex, pageIndex);
+    focusEditorAtEnd(pageIndex);
   };
 
   const addTopic = () => {
@@ -471,28 +590,6 @@ export default function AdminLearningMaterialEditor() {
     setActiveTopicIndex(nextTopicIndex);
     setActivePageIndex(0);
     syncSelectionInUrl(nextTopicIndex, 0);
-  };
-
-  const addMaterialPage = () => {
-    if (!activeTopic) {
-      return;
-    }
-
-    const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
-      topicIndex === activeTopicIndex
-        ? {
-            ...topic,
-            pages: [...topic.pages, createEmptyMaterialPage(topic.pages.length + 1)],
-          }
-        : topic
-    ));
-    const nextPageIndex = (nextTopics[activeTopicIndex]?.pages?.length || 1) - 1;
-    setMaterialForm((current) => ({
-      ...current,
-      topics: nextTopics,
-    }));
-    setActivePageIndex(nextPageIndex);
-    syncSelectionInUrl(activeTopicIndex, nextPageIndex);
   };
 
   const removeMaterialPage = (pageIndex) => {
@@ -518,11 +615,180 @@ export default function AdminLearningMaterialEditor() {
     syncSelectionInUrl(activeTopicIndex, nextIndex);
   };
 
+  const isEditorPageEmpty = useCallback((pageIndex) => {
+    const editorNode = editorRefs.current[pageIndex];
+    if (!editorNode) {
+      return false;
+    }
+
+    return getMovableEditorNodes(editorNode).length === 0;
+  }, [getMovableEditorNodes]);
+
+  const handleEditorKeyDown = useCallback((event, pageIndex) => {
+    if (event.key !== 'Backspace' && event.key !== 'Delete') {
+      return;
+    }
+
+    const currentTopic = materialForm.topics[activeTopicIndex];
+    const totalPages = currentTopic?.pages?.length || 0;
+    if (totalPages <= 1) {
+      return;
+    }
+
+    if (!isEditorPageEmpty(pageIndex)) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const nextPageIndex = Math.max(0, pageIndex - 1);
+    const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
+      topicIndex === activeTopicIndex
+        ? {
+            ...topic,
+            pages: topic.pages.filter((_, index) => index !== pageIndex),
+          }
+        : topic
+    ));
+
+    setMaterialForm((current) => ({
+      ...current,
+      topics: nextTopics,
+    }));
+    setActivePageIndex(nextPageIndex);
+    syncSelectionInUrl(activeTopicIndex, nextPageIndex);
+    focusEditorAtEnd(nextPageIndex);
+  }, [activeTopicIndex, focusEditorAtEnd, isEditorPageEmpty, materialForm.topics, readTopicsFromEditor, syncSelectionInUrl]);
+
+  const rebalancePaginatedEditors = useCallback((startIndex = 0) => {
+    const currentTopic = materialForm.topics[activeTopicIndex];
+    if (!currentTopic || currentTopic.pages.length === 0) {
+      return;
+    }
+
+    let createdNewPage = false;
+    let focusNextPageIndex = null;
+
+    for (let pageIndex = Math.max(0, startIndex); pageIndex < currentTopic.pages.length; pageIndex += 1) {
+      const editorNode = editorRefs.current[pageIndex];
+      if (!editorNode) {
+        continue;
+      }
+
+      normalizeEditorContent(editorNode);
+      const nextEditorNode = editorRefs.current[pageIndex + 1];
+
+      while (editorNode.scrollHeight > editorNode.clientHeight + 2) {
+        const movableNodes = getMovableEditorNodes(editorNode);
+        if (movableNodes.length <= 1) {
+          break;
+        }
+
+        if (!nextEditorNode) {
+          createdNewPage = true;
+          setMaterialForm((current) => ({
+            ...current,
+            topics: current.topics.map((topic, index) => (
+              index === activeTopicIndex
+                ? { ...topic, pages: [...topic.pages, createEmptyMaterialPage(topic.pages.length + 1)] }
+                : topic
+            )),
+          }));
+          setPendingPaginationStart(pageIndex);
+          return;
+        }
+
+        const movedNode = movableNodes[movableNodes.length - 1];
+        normalizeEditorContent(nextEditorNode);
+        if (getMovableEditorNodes(nextEditorNode).length === 1 && nextEditorNode.textContent.trim() === '') {
+          nextEditorNode.innerHTML = '';
+        }
+        nextEditorNode.insertBefore(movedNode, nextEditorNode.firstChild);
+        normalizeEditorContent(editorNode);
+        normalizeEditorContent(nextEditorNode);
+        focusNextPageIndex = pageIndex + 1;
+      }
+    }
+
+    for (let pageIndex = Math.max(0, startIndex); pageIndex < currentTopic.pages.length - 1; pageIndex += 1) {
+      const editorNode = editorRefs.current[pageIndex];
+      const nextEditorNode = editorRefs.current[pageIndex + 1];
+      if (!editorNode || !nextEditorNode) {
+        continue;
+      }
+
+      normalizeEditorContent(editorNode);
+      normalizeEditorContent(nextEditorNode);
+
+      while (editorNode.scrollHeight < editorNode.clientHeight - 40) {
+        const nextMovableNodes = getMovableEditorNodes(nextEditorNode);
+        if (nextMovableNodes.length === 0) {
+          break;
+        }
+
+        const movedNode = nextMovableNodes[0];
+        editorNode.appendChild(movedNode);
+        normalizeEditorContent(editorNode);
+
+        if (editorNode.scrollHeight > editorNode.clientHeight + 2) {
+          nextEditorNode.insertBefore(movedNode, nextEditorNode.firstChild);
+          normalizeEditorContent(nextEditorNode);
+          break;
+        }
+
+        normalizeEditorContent(nextEditorNode);
+      }
+    }
+
+    const nextSerializedPages = serializeActiveTopicPagesFromDom(activeTopicIndex);
+    setMaterialForm((current) => ({
+      ...current,
+      topics: current.topics.map((topic, index) => (
+        index === activeTopicIndex
+          ? { ...topic, pages: nextSerializedPages }
+          : topic
+      )),
+    }));
+
+    if (!createdNewPage && focusNextPageIndex !== null) {
+      setActivePageIndex(focusNextPageIndex);
+      syncSelectionInUrl(activeTopicIndex, focusNextPageIndex);
+      focusEditorAtEnd(focusNextPageIndex);
+    }
+  }, [
+    activeTopicIndex,
+    focusEditorAtEnd,
+    getMovableEditorNodes,
+    materialForm.topics,
+    normalizeEditorContent,
+    serializeActiveTopicPagesFromDom,
+    syncSelectionInUrl,
+  ]);
+
+  const schedulePaginationRebalance = useCallback((startIndex = 0) => {
+    if (paginationFrameRef.current) {
+      cancelAnimationFrame(paginationFrameRef.current);
+    }
+
+    paginationFrameRef.current = requestAnimationFrame(() => {
+      rebalancePaginatedEditors(startIndex);
+      paginationFrameRef.current = null;
+    });
+  }, [rebalancePaginatedEditors]);
+
+  const handlePageInput = useCallback((pageIndex) => {
+    setActivePageIndex(pageIndex);
+    syncSelectionInUrl(activeTopicIndex, pageIndex);
+    schedulePaginationRebalance(pageIndex);
+  }, [activeTopicIndex, schedulePaginationRebalance, syncSelectionInUrl]);
+
   const runCommand = (command, value = null) => {
-    if (editorRef.current) {
-      editorRef.current.focus();
+    const editorNode = getEditorNode();
+    if (editorNode) {
+      editorNode.focus();
     }
     document.execCommand(command, false, value);
+    schedulePaginationRebalance(activePageIndex);
   };
 
   const applyFontSize = (size) => {
@@ -569,7 +835,8 @@ export default function AdminLearningMaterialEditor() {
     }
 
     insertHtmlBlock(getImageFigureHtml(uploadedUrl.trim()));
-    persistActivePageContent(editorRef.current?.innerHTML || '');
+    persistActivePageContent(getEditorNode()?.innerHTML || '');
+    schedulePaginationRebalance(activePageIndex);
   };
 
   const insertHtmlBlock = (html) => {
@@ -669,7 +936,7 @@ export default function AdminLearningMaterialEditor() {
 
   const handleEditorClick = useCallback((event) => {
     const imageNode = event.target.closest?.('img');
-    if (imageNode && editorRef.current?.contains(imageNode)) {
+    if (imageNode && imageNode.closest('.admin-word-editable')) {
       const figure = ensureImageFigure(imageNode);
       selectImageFigure(figure);
       closeImageContextMenu();
@@ -684,7 +951,7 @@ export default function AdminLearningMaterialEditor() {
 
   const handleEditorContextMenu = useCallback((event) => {
     const imageNode = event.target.closest?.('img');
-    if (!imageNode || !editorRef.current?.contains(imageNode)) {
+    if (!imageNode || !imageNode.closest('.admin-word-editable')) {
       clearSelectedImageFigure();
       closeImageContextMenu();
       return;
@@ -704,7 +971,7 @@ export default function AdminLearningMaterialEditor() {
     }
 
     const figure = event.target.closest?.('.material-image-frame');
-    if (!figure || !editorRef.current?.contains(figure)) {
+    if (!figure || !figure.closest('.admin-word-editable')) {
       return;
     }
 
@@ -737,12 +1004,13 @@ export default function AdminLearningMaterialEditor() {
   }, [activePageIndex, activeTopicIndex, clearSelectedImageFigure, closeImageContextMenu]);
 
   useEffect(() => {
-    if (!activePage || !editorRef.current) {
+    const editorNode = getEditorNode();
+    if (!activePage || !editorNode) {
       return;
     }
 
     let hasWrappedLegacyImage = false;
-    editorRef.current.querySelectorAll('img').forEach((imageNode) => {
+    editorNode.querySelectorAll('img').forEach((imageNode) => {
       if (!imageNode.closest('.material-image-frame')) {
         ensureImageFigure(imageNode);
         hasWrappedLegacyImage = true;
@@ -752,7 +1020,7 @@ export default function AdminLearningMaterialEditor() {
     if (hasWrappedLegacyImage) {
       persistActivePageContent();
     }
-  }, [activePage, ensureImageFigure, persistActivePageContent]);
+  }, [activePage, ensureImageFigure, getEditorNode, persistActivePageContent]);
 
   useEffect(() => {
     if (!imageContextMenu.visible) {
@@ -866,6 +1134,25 @@ export default function AdminLearningMaterialEditor() {
     setImageFigureLayout,
   ]);
 
+  useEffect(() => {
+    if (pendingPaginationStart === null) {
+      return undefined;
+    }
+
+    const rafId = requestAnimationFrame(() => {
+      rebalancePaginatedEditors(pendingPaginationStart);
+      setPendingPaginationStart(null);
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [pendingPaginationStart, rebalancePaginatedEditors]);
+
+  useEffect(() => () => {
+    if (paginationFrameRef.current) {
+      cancelAnimationFrame(paginationFrameRef.current);
+    }
+  }, []);
+
   const editorPageClassName = [
     'admin-doc-page',
     'admin-word-page',
@@ -880,6 +1167,7 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
+    rebalancePaginatedEditors(0);
     const topics = readTopicsFromEditor();
     setSaving(true);
     setError('');
@@ -929,7 +1217,6 @@ export default function AdminLearningMaterialEditor() {
               <h3>{activeTopic?.title || 'Topik materi baru'}</h3>
             </div>
             <div className="admin-doc-toolbar-actions">
-              <button type="button" className="btn btn-outline" onClick={addMaterialPage}>Tambah Halaman</button>
               <button type="button" className="btn btn-outline" onClick={() => navigate('/admin')}>Tutup Editor</button>
             </div>
           </div>
@@ -1164,49 +1451,63 @@ export default function AdminLearningMaterialEditor() {
                   <div className="admin-doc-page-head">
                     <span>{`Topik ${activeTopicIndex + 1}`}</span>
                   </div>
-                  <p className="text-muted">Topik ini belum punya halaman materi. Klik tombol "Tambah Halaman" untuk mulai mengisi isi materi.</p>
+                  <p className="text-muted">Halaman pertama sedang disiapkan. Setelah itu isi materi akan otomatis lanjut ke halaman berikutnya saat sudah penuh.</p>
                 </section>
               )}
 
-              {activePage && (
+              {activeTopic && (activeTopic.pages || []).map((page, pageIndex) => (
                 <section
-                  key={`material-page-${activePageIndex}`}
-                  className={editorPageClassName}
+                  key={`material-page-${pageIndex}`}
+                  className={pageIndex === activePageIndex ? `${editorPageClassName} admin-doc-page-current` : editorPageClassName}
                   style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
                 >
                   <div className="admin-doc-page-head">
-                    <span>{`Halaman ${activePageIndex + 1}`}</span>
+                    <span>{`Halaman ${pageIndex + 1}`}</span>
                     <button
                       type="button"
                       className="btn btn-outline admin-option-delete"
-                      onClick={() => removeMaterialPage(activePageIndex)}
+                      onClick={() => removeMaterialPage(pageIndex)}
                       disabled={(activeTopic.pages?.length || 0) <= 1}
                     >
                       Hapus
                     </button>
                   </div>
                   <input
-                    name={`material_page_title_${activeTopicIndex}_${activePageIndex}`}
+                    name={`material_page_title_${activeTopicIndex}_${pageIndex}`}
                     className="admin-doc-title-input"
-                    value={activePage.title}
-                    onChange={(event) => updatePageTitle(activeTopicIndex, activePageIndex, event.target.value)}
-                    onFocus={() => setActivePageIndex(activePageIndex)}
+                    value={page.title}
+                    onChange={(event) => updatePageTitle(activeTopicIndex, pageIndex, event.target.value)}
+                    onFocus={() => {
+                      setActivePageIndex(pageIndex);
+                      syncSelectionInUrl(activeTopicIndex, pageIndex);
+                    }}
                     placeholder="Judul halaman materi"
                   />
                   <div
-                    ref={editorRef}
+                    ref={(node) => {
+                      if (node) {
+                        editorRefs.current[pageIndex] = node;
+                      } else {
+                        delete editorRefs.current[pageIndex];
+                      }
+                    }}
                     className="admin-word-editable"
                     contentEditable
                     suppressContentEditableWarning
-                    onFocus={() => setActivePageIndex(activePageIndex)}
+                    onFocus={() => {
+                      setActivePageIndex(pageIndex);
+                      syncSelectionInUrl(activeTopicIndex, pageIndex);
+                    }}
+                    onKeyDown={(event) => handleEditorKeyDown(event, pageIndex)}
+                    onInput={() => handlePageInput(pageIndex)}
                     onPointerDown={handleEditorPointerDown}
                     onClick={handleEditorClick}
                     onContextMenu={handleEditorContextMenu}
-                    onBlur={() => updatePageContent(activeTopicIndex, activePageIndex)}
-                    dangerouslySetInnerHTML={{ __html: activePage.content_html || '<p>Tulis materi di sini.</p>' }}
+                    onBlur={() => updatePageContent(activeTopicIndex, pageIndex)}
+                    dangerouslySetInnerHTML={{ __html: page.content_html || '<p>Tulis materi di sini.</p>' }}
                   />
                 </section>
-              )}
+              ))}
             </div>
           </div>
         </section>

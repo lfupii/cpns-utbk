@@ -4459,6 +4459,47 @@ html[data-theme='dark'] .theme-toggle-thumb {
   line-height: 1.5;
 }
 
+.admin-package-type-list {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-package-type-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 24px rgba(31, 63, 109, 0.05);
+}
+
+.admin-package-type-card strong {
+  color: #16243c;
+}
+
+.admin-package-type-card p {
+  margin-top: 0.25rem;
+  color: #607089;
+}
+
+.admin-package-type-card small {
+  display: inline-block;
+  margin-top: 0.45rem;
+  color: #708198;
+  font-weight: 700;
+}
+
+.admin-package-type-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .admin-learning-overview-stats,
 .admin-learning-overview-actions {
   display: flex;
@@ -5941,6 +5982,72 @@ html[data-theme='dark'] .theme-toggle-thumb {
   color: #15243d;
 }
 
+.admin-question-preview-shell {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 1.15rem;
+  border: 1px solid rgba(209, 223, 239, 0.95);
+  background:
+    radial-gradient(circle at top right, rgba(45, 140, 255, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(244, 249, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+  box-shadow: 0 18px 36px rgba(31, 63, 109, 0.08);
+}
+
+.admin-question-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-question-preview-head h3 {
+  margin-top: 0.2rem;
+  color: #182741;
+}
+
+.admin-question-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.admin-preview-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-question-editor-page {
+  gap: 1rem;
+}
+
+.admin-question-editor-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-question-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
 .admin-import-actions {
   display: flex;
   flex-wrap: wrap;
@@ -6318,6 +6425,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 @media (max-width: 900px) {
+  .admin-question-preview-head,
+  .admin-question-editor-hero {
+    flex-direction: column;
+  }
+
+  .admin-question-preview-actions,
+  .admin-question-editor-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .admin-option-row-rich,
   .admin-question-media-preview-left,
   .admin-question-media-preview-right {
@@ -7999,6 +8117,7 @@ html[data-theme='dark'] .landing-hero-score-pill,
 html[data-theme='dark'] .landing-navbar-panel,
 html[data-theme='dark'] .mobile-nav-toggle,
 html[data-theme='dark'] .landing-user-chip,
+html[data-theme='dark'] .admin-question-preview-shell,
 html[data-theme='dark'] .admin-question-row-wrap,
 html[data-theme='dark'] .admin-question-row-detail,
 html[data-theme='dark'] .admin-option-preview-card,
@@ -8082,8 +8201,14 @@ html[data-theme='dark'] .policy-card h2,
 html[data-theme='dark'] .policy-section h3,
 html[data-theme='dark'] .profile-dropdown-menu-header strong,
 html[data-theme='dark'] .admin-question-row-main strong,
-html[data-theme='dark'] .admin-question-row-detail-main h3 {
+html[data-theme='dark'] .admin-question-row-detail-main h3,
+html[data-theme='dark'] .admin-question-preview-head h3 {
   color: #f3f7fd;
+}
+
+html[data-theme='dark'] .admin-preview-eyebrow {
+  background: rgba(95, 168, 255, 0.16);
+  color: #9fd0ff;
 }
 
 html[data-theme='dark'] .landing-mindmap-step {
@@ -8509,6 +8634,21 @@ html[data-theme='dark'] .learning-topic-button strong {
 }
 
 html[data-theme='dark'] .learning-topic-button small {
+  color: #9fb0c7;
+}
+
+html[data-theme='dark'] .admin-package-type-card {
+  background: rgba(11, 18, 33, 0.82);
+  border-color: rgba(112, 142, 186, 0.24);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+html[data-theme='dark'] .admin-package-type-card strong {
+  color: #f3f7fd;
+}
+
+html[data-theme='dark'] .admin-package-type-card p,
+html[data-theme='dark'] .admin-package-type-card small {
   color: #9fb0c7;
 }
 

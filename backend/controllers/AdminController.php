@@ -125,6 +125,30 @@ class AdminController {
         return (int) ($row['id'] ?? 0);
     }
 
+    private function getCategoryById(int $categoryId): array {
+        $stmt = $this->mysqli->prepare('SELECT * FROM test_categories WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $categoryId);
+        $stmt->execute();
+        $category = $stmt->get_result()->fetch_assoc();
+
+        if (!$category) {
+            sendResponse('error', 'Tipe paket tidak ditemukan', null, 404);
+        }
+
+        return $category;
+    }
+
+    private function normalizeTestMode($value): string {
+        $mode = trim((string) ($value ?? ''));
+        $allowedModes = [
+            TestWorkflow::MODE_STANDARD,
+            TestWorkflow::MODE_CPNS_CAT,
+            TestWorkflow::MODE_UTBK_SECTIONED,
+        ];
+
+        return in_array($mode, $allowedModes, true) ? $mode : TestWorkflow::MODE_STANDARD;
+    }
+
     private function getWorkflowSection(int $packageId, string $sectionCode): array {
         $package = $this->getPackage($packageId);
         $workflow = TestWorkflow::buildPackageWorkflow($package);
@@ -671,11 +695,113 @@ class AdminController {
         sendResponse('success', 'Data paket admin berhasil diambil', $packages);
     }
 
+    public function getPackageTypes() {
+        verifyAdmin();
+
+        $query = "SELECT tc.*,
+                    COUNT(tp.id) AS package_count
+                  FROM test_categories tc
+                  LEFT JOIN test_packages tp ON tp.category_id = tc.id
+                  GROUP BY tc.id
+                  ORDER BY tc.id ASC";
+        $result = $this->mysqli->query($query);
+
+        $types = [];
+        while ($row = $result->fetch_assoc()) {
+          $row['id'] = (int) $row['id'];
+          $row['package_count'] = (int) ($row['package_count'] ?? 0);
+          $types[] = $row;
+        }
+
+        sendResponse('success', 'Tipe paket berhasil diambil', $types);
+    }
+
+    public function createPackageType() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        $name = trim((string) ($data['name'] ?? ''));
+        $description = trim((string) ($data['description'] ?? ''));
+
+        if ($name === '') {
+            sendResponse('error', 'Nama tipe paket wajib diisi', null, 422);
+        }
+
+        $stmt = $this->mysqli->prepare('INSERT INTO test_categories (name, description) VALUES (?, ?)');
+        $stmt->bind_param('ss', $name, $description);
+
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal menambahkan tipe paket', ['details' => $stmt->error], 500);
+        }
+
+        sendResponse('success', 'Tipe paket berhasil ditambahkan', ['category_id' => (int) $stmt->insert_id], 201);
+    }
+
+    public function updatePackageType() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+
+        $categoryId = (int) ($data['category_id'] ?? 0);
+        $name = trim((string) ($data['name'] ?? ''));
+        $description = trim((string) ($data['description'] ?? ''));
+
+        if ($categoryId <= 0 || $name === '') {
+            sendResponse('error', 'Data tipe paket tidak lengkap', null, 422);
+        }
+
+        $this->getCategoryById($categoryId);
+
+        $stmt = $this->mysqli->prepare('UPDATE test_categories SET name = ?, description = ? WHERE id = ?');
+        $stmt->bind_param('ssi', $name, $description, $categoryId);
+
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal memperbarui tipe paket', ['details' => $stmt->error], 500);
+        }
+
+        sendResponse('success', 'Tipe paket berhasil diperbarui');
+    }
+
+    public function deletePackageType() {
+        verifyAdmin();
+
+        $categoryId = (int) ($_GET['id'] ?? 0);
+        if ($categoryId <= 0) {
+            sendResponse('error', 'ID tipe paket harus diisi', null, 400);
+        }
+
+        $category = $this->getCategoryById($categoryId);
+        $countStmt = $this->mysqli->prepare('SELECT COUNT(*) AS total FROM test_packages WHERE category_id = ?');
+        $countStmt->bind_param('i', $categoryId);
+        $countStmt->execute();
+        $countRow = $countStmt->get_result()->fetch_assoc();
+        $packageCount = (int) ($countRow['total'] ?? 0);
+
+        if ($packageCount > 0) {
+            sendResponse('error', 'Tipe paket masih dipakai oleh paket aktif', null, 422);
+        }
+
+        $totalResult = $this->mysqli->query('SELECT COUNT(*) AS total FROM test_categories');
+        $totalTypes = (int) (($totalResult ? $totalResult->fetch_assoc() : [])['total'] ?? 0);
+        if ($totalTypes <= 1) {
+            sendResponse('error', 'Minimal harus ada 1 tipe paket', null, 422);
+        }
+
+        $stmt = $this->mysqli->prepare('DELETE FROM test_categories WHERE id = ?');
+        $stmt->bind_param('i', $categoryId);
+
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal menghapus tipe paket', ['details' => $stmt->error], 500);
+        }
+
+        sendResponse('success', 'Tipe paket "' . $category['name'] . '" berhasil dihapus');
+    }
+
     public function updatePackage() {
         verifyAdmin();
         $data = json_decode(file_get_contents('php://input'), true);
 
         $packageId = (int) ($data['package_id'] ?? 0);
+        $categoryId = (int) ($data['category_id'] ?? 0);
         $name = trim((string) ($data['name'] ?? ''));
         $description = trim((string) ($data['description'] ?? ''));
         $price = (int) ($data['price'] ?? 0);
@@ -683,25 +809,35 @@ class AdminController {
         $maxAttempts = (int) ($data['max_attempts'] ?? 1);
         $timeLimit = (int) ($data['time_limit'] ?? 90);
         $package = $this->getPackage($packageId);
+        $categoryId = $categoryId > 0 ? $categoryId : (int) ($package['category_id'] ?? 0);
+        $testMode = $this->normalizeTestMode($data['test_mode'] ?? ($package['test_mode'] ?? ''));
+        $workflowContext = array_merge($package, [
+            'category_id' => $categoryId,
+            'test_mode' => $testMode,
+        ]);
         $previousWorkflow = TestWorkflow::buildPackageWorkflow($package);
         $nextWorkflow = array_key_exists('workflow_config', $data)
-            ? $this->normalizeWorkflowConfig($package, $data['workflow_config'])
-            : $previousWorkflow;
+            ? $this->normalizeWorkflowConfig($workflowContext, $data['workflow_config'])
+            : (
+                $testMode !== ($previousWorkflow['mode'] ?? '')
+                  ? TestWorkflow::defaultWorkflow($testMode, $timeLimit)
+                  : $previousWorkflow
+            );
         $workflowConfig = json_encode($nextWorkflow, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        if (in_array($previousWorkflow['mode'], [TestWorkflow::MODE_CPNS_CAT, TestWorkflow::MODE_UTBK_SECTIONED], true)) {
+        if (in_array($testMode, [TestWorkflow::MODE_CPNS_CAT, TestWorkflow::MODE_UTBK_SECTIONED], true)) {
             $timeLimit = (int) ($nextWorkflow['total_duration_minutes'] ?? $timeLimit);
         }
 
-        if ($packageId <= 0 || $name === '' || $price <= 0 || $durationDays <= 0 || $maxAttempts <= 0 || $timeLimit <= 0) {
+        if ($packageId <= 0 || $categoryId <= 0 || $name === '' || $price <= 0 || $durationDays <= 0 || $maxAttempts <= 0 || $timeLimit <= 0) {
             sendResponse('error', 'Data paket tidak lengkap atau tidak valid', null, 422);
         }
 
         $query = "UPDATE test_packages
-                  SET name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, workflow_config = ?
+                  SET category_id = ?, name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, test_mode = ?, workflow_config = ?
                   WHERE id = ?";
         $stmt = $this->mysqli->prepare($query);
-        $stmt->bind_param('ssiiiisi', $name, $description, $price, $durationDays, $maxAttempts, $timeLimit, $workflowConfig, $packageId);
+        $stmt->bind_param('issiiiissi', $categoryId, $name, $description, $price, $durationDays, $maxAttempts, $timeLimit, $testMode, $workflowConfig, $packageId);
 
         if (!$stmt->execute()) {
             sendResponse('error', 'Gagal memperbarui paket', null, 500);
@@ -719,7 +855,10 @@ class AdminController {
         $templatePackageId = (int) ($data['template_package_id'] ?? 0);
         $templatePackage = $templatePackageId > 0 ? $this->getPackage($templatePackageId) : null;
 
-        $categoryId = $templatePackage ? (int) $templatePackage['category_id'] : $this->getFallbackCategoryId();
+        $categoryId = (int) ($data['category_id'] ?? 0);
+        if ($categoryId <= 0) {
+            $categoryId = $templatePackage ? (int) $templatePackage['category_id'] : $this->getFallbackCategoryId();
+        }
         if ($categoryId <= 0) {
             sendResponse('error', 'Kategori paket belum tersedia', null, 422);
         }
@@ -735,8 +874,24 @@ class AdminController {
         $durationDays = max(1, (int) ($data['duration_days'] ?? ($templatePackage['duration_days'] ?? 30)));
         $maxAttempts = max(1, (int) ($data['max_attempts'] ?? ($templatePackage['max_attempts'] ?? 1)));
         $timeLimit = max(1, (int) ($data['time_limit'] ?? ($templatePackage['time_limit'] ?? 90)));
-        $testMode = trim((string) ($data['test_mode'] ?? ($templatePackage['test_mode'] ?? '')));
-        $workflowConfig = $data['workflow_config'] ?? ($templatePackage['workflow_config'] ?? null);
+        $testMode = $this->normalizeTestMode($data['test_mode'] ?? ($templatePackage['test_mode'] ?? TestWorkflow::MODE_STANDARD));
+        $workflowContext = [
+            'name' => $name,
+            'category_id' => $categoryId,
+            'test_mode' => $testMode,
+            'time_limit' => $timeLimit,
+        ];
+        $workflowPayload = array_key_exists('workflow_config', $data)
+            ? $this->normalizeWorkflowConfig($workflowContext, $data['workflow_config'])
+            : (
+                $templatePackage && empty($data['test_mode'])
+                    ? TestWorkflow::buildPackageWorkflow($templatePackage)
+                    : TestWorkflow::defaultWorkflow($testMode, $timeLimit)
+            );
+        $workflowConfig = json_encode($workflowPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (in_array($testMode, [TestWorkflow::MODE_CPNS_CAT, TestWorkflow::MODE_UTBK_SECTIONED], true)) {
+            $timeLimit = (int) ($workflowPayload['total_duration_minutes'] ?? $timeLimit);
+        }
 
         $query = 'INSERT INTO test_packages (
                     category_id,
@@ -1253,7 +1408,15 @@ $requestPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 $controller = new AdminController($mysqli);
 
-if (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 'GET') {
+if (strpos($requestPath, '/api/admin/package-types') !== false && $requestMethod === 'GET') {
+    $controller->getPackageTypes();
+} elseif (strpos($requestPath, '/api/admin/package-types') !== false && $requestMethod === 'POST') {
+    $controller->createPackageType();
+} elseif (strpos($requestPath, '/api/admin/package-types') !== false && $requestMethod === 'PUT') {
+    $controller->updatePackageType();
+} elseif (strpos($requestPath, '/api/admin/package-types') !== false && $requestMethod === 'DELETE') {
+    $controller->deletePackageType();
+} elseif (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 'GET') {
     $controller->getPackages();
 } elseif (strpos($requestPath, '/api/admin/packages') !== false && $requestMethod === 'POST') {
     $controller->createPackage();

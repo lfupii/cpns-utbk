@@ -135,7 +135,7 @@ function createEmptyMaterialPage(pageNumber) {
 function createEmptyMaterialTopic(topicNumber, firstPageNumber = 1) {
   return {
     title: `Topik ${topicNumber}`,
-    pages: [createEmptyMaterialPage(firstPageNumber)],
+    pages: firstPageNumber ? [createEmptyMaterialPage(firstPageNumber)] : [],
   };
 }
 
@@ -358,6 +358,7 @@ export default function AdminPanel() {
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
   const [editingSectionActionsCode, setEditingSectionActionsCode] = useState('');
   const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
+  const [activeMaterialTopicIndex, setActiveMaterialTopicIndex] = useState(null);
   const routeSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const requestedAdminView = routeSearchParams.get('view') || '';
   const requestedPackageId = Number(routeSearchParams.get('package') || 0);
@@ -383,6 +384,18 @@ export default function AdminPanel() {
   const activeLearningSection = useMemo(
     () => learningContent.find((section) => section.code === learningSectionCode) || learningContent[0] || null,
     [learningContent, learningSectionCode]
+  );
+  const activeMaterialTopics = useMemo(
+    () => (activeLearningSection ? getMaterialTopics(activeLearningSection.material) : []),
+    [activeLearningSection]
+  );
+  const activeMaterialTopic = useMemo(
+    () => (
+      activeMaterialTopicIndex === null
+        ? null
+        : activeMaterialTopics[activeMaterialTopicIndex] || null
+    ),
+    [activeMaterialTopicIndex, activeMaterialTopics]
   );
   const selectedPackageSummary = useMemo(() => ({
     sectionCount: packageSections.length,
@@ -635,6 +648,35 @@ export default function AdminPanel() {
       setQuestionSectionFilter('');
     }
   }, [questionSectionFilter, sectionStats]);
+
+  useEffect(() => {
+    if (!activeLearningSection) {
+      setActiveMaterialTopicIndex(null);
+      return;
+    }
+
+    const topics = getMaterialTopics(activeLearningSection.material);
+    setActiveMaterialTopicIndex(topics.length > 0 ? 0 : null);
+  }, [activeLearningSection?.code]);
+
+  useEffect(() => {
+    if (!activeLearningSection) {
+      return;
+    }
+
+    const topics = getMaterialTopics(activeLearningSection.material);
+    setActiveMaterialTopicIndex((current) => {
+      if (topics.length === 0) {
+        return null;
+      }
+
+      if (current === null || current >= topics.length) {
+        return 0;
+      }
+
+      return current;
+    });
+  }, [activeLearningSection?.material]);
 
   useEffect(() => {
     if (['dashboard', 'paket', 'materi', 'soal'].includes(requestedAdminView)) {
@@ -1238,7 +1280,7 @@ export default function AdminPanel() {
     setEditingSectionActionsCode('');
   };
 
-  const openLearningView = (sectionCode = null, mode = '', shouldExpand = true) => {
+  const openLearningView = (sectionCode = null, mode = '', shouldExpand = true, topicIndex = null) => {
     if (sectionCode) {
       setLearningSectionCode(sectionCode);
       setQuestionSectionFilter(sectionCode);
@@ -1247,6 +1289,9 @@ export default function AdminPanel() {
           ...current,
           [sectionCode]: true,
         }));
+      }
+      if (typeof topicIndex === 'number' && Number.isFinite(topicIndex)) {
+        setActiveMaterialTopicIndex(Math.max(0, Math.floor(topicIndex)));
       }
     }
     setEditingSectionActionsCode('');
@@ -1283,6 +1328,14 @@ export default function AdminPanel() {
 
     const resolvedTopic = topicIndex === 'new' ? 'new' : Math.max(0, Number(topicIndex) || 0);
     navigate(`/admin/learning-material/${selectedPackageId}/${sectionCode}?topic=${resolvedTopic}`);
+  };
+
+  const openMaterialTopicPreview = (sectionCode, topicIndex = 0) => {
+    if (!sectionCode) {
+      return;
+    }
+
+    openLearningView(sectionCode, '', true, topicIndex);
   };
 
   const updateWorkflowSections = async (nextSections, nextActiveSectionCode, successMessage) => {
@@ -1331,8 +1384,11 @@ export default function AdminPanel() {
   };
 
   const handleAddSection = async (section) => {
-    const nextSection = createSectionClone(section, packageSections);
-    const insertIndex = packageSections.findIndex((item) => item.code === section.code);
+    const sourceExists = packageSections.some((item) => item.code === section.code);
+    const nextSection = sourceExists ? createSectionClone(section, packageSections) : section;
+    const insertIndex = sourceExists
+      ? packageSections.findIndex((item) => item.code === section.code)
+      : packageSections.length - 1;
     const nextSections = [...packageSections];
     nextSections.splice(insertIndex + 1, 0, nextSection);
     await updateWorkflowSections(nextSections, nextSection.code, `Subtest ${nextSection.name} berhasil ditambahkan.`);
@@ -1343,11 +1399,34 @@ export default function AdminPanel() {
   };
 
   const handleCreateSubtest = async () => {
+    const nextName = window.prompt('Nama subtest baru', '');
+    if (nextName === null) {
+      return;
+    }
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName) {
+      setError('Nama subtest wajib diisi.');
+      return;
+    }
+
     const referenceSection = packageSections[packageSections.length - 1] || activeLearningSection || {
       code: 'subtest',
       name: 'Subtest',
     };
-    await handleAddSection(referenceSection);
+    const nextSection = createSectionClone(referenceSection, packageSections);
+    const existingCodes = new Set(packageSections.map((section) => String(section.code || '')));
+    const baseCode = slugifySectionCode(trimmedName) || nextSection.code || 'subtest_baru';
+    let nextCode = baseCode;
+    let suffix = 2;
+    while (existingCodes.has(nextCode)) {
+      nextCode = `${baseCode}_${suffix}`;
+      suffix += 1;
+    }
+
+    nextSection.name = trimmedName;
+    nextSection.code = nextCode;
+    await handleAddSection(nextSection);
   };
 
   const handleEditSection = async (section) => {
@@ -1458,7 +1537,35 @@ export default function AdminPanel() {
   };
 
   const handleAddSectionChildPage = (section) => {
-    openMaterialTopicEditor(section.code, 'new');
+    const nextTitle = window.prompt(`Nama topik baru untuk ${section.name}`, '');
+    if (nextTitle === null) {
+      return;
+    }
+
+    const trimmedTitle = nextTitle.trim();
+    if (!trimmedTitle) {
+      setError('Nama topik wajib diisi.');
+      return;
+    }
+
+    const currentTopics = getMaterialTopics(section.material);
+    const nextTopics = [
+      ...currentTopics,
+      {
+        title: trimmedTitle,
+        pages: [],
+      },
+    ];
+
+    updateSectionMaterialTopics(
+      section,
+      nextTopics,
+      `Topik ${trimmedTitle} berhasil ditambahkan.`
+    ).then(() => {
+      setLearningSectionCode(section.code);
+      setActiveMaterialTopicIndex(nextTopics.length - 1);
+      setAdminView('materi');
+    });
   };
 
   const handleRenameSectionChildPage = async (section, topicIndex) => {
@@ -1706,8 +1813,13 @@ export default function AdminPanel() {
                                 <div key={`${section.code}-topic-${index}`} className="admin-section-sidebar-child-row">
                                   <button
                                     type="button"
-                                    className="admin-section-sidebar-child"
-                                    onClick={() => openMaterialTopicEditor(section.code, index)}
+                                    className={[
+                                      'admin-section-sidebar-child',
+                                      adminView === 'materi' && section.code === activeLearningSection?.code && index === activeMaterialTopicIndex
+                                        ? 'admin-section-sidebar-child-active'
+                                        : '',
+                                    ].filter(Boolean).join(' ')}
+                                    onClick={() => openMaterialTopicPreview(section.code, index)}
                                   >
                                     <span>{index + 1}</span>
                                     <strong>{topic.title || `Topik ${index + 1}`}</strong>
@@ -2026,12 +2138,14 @@ export default function AdminPanel() {
                     </div>
                     {activeLearningSection && (
                       <div className="learning-hero-actions">
-                        <Link
-                          to={`/admin/learning-material/${selectedPackageId}/${activeLearningSection.code}?topic=0`}
-                          className="btn btn-primary"
-                        >
-                          Edit Materi
-                        </Link>
+                        {activeMaterialTopic && (
+                          <Link
+                            to={`/admin/learning-material/${selectedPackageId}/${activeLearningSection.code}?topic=${activeMaterialTopicIndex || 0}`}
+                            className="btn btn-primary"
+                          >
+                            Edit Topik Materi
+                          </Link>
+                        )}
                         <button type="button" className="btn btn-outline" onClick={() => openLearningEditor(activeLearningSection.code, learningEditorMode === 'quiz' ? '' : 'quiz')}>
                           {learningEditorMode === 'quiz' ? 'Tutup Mini Test' : 'Edit Mini Test'}
                         </button>
@@ -2057,22 +2171,52 @@ export default function AdminPanel() {
                       </div>
 
                       <div className="learning-page-list">
-                        <section className="learning-page">
-                          <span>Materi aktif</span>
-                          <h3>{activeLearningSection.material?.title || activeLearningSection.name}</h3>
-                          <p>
-                            {getMaterialTopics(activeLearningSection.material).length > 0
-                              ? `${getMaterialTopics(activeLearningSection.material).length} topik siap dikelola.`
-                              : 'Materi belum memiliki topik. Tambahkan topik materi terlebih dahulu.'}
-                          </p>
-                          {getMaterialTopics(activeLearningSection.material).length > 0 && (
-                            <ul>
-                              {getMaterialTopics(activeLearningSection.material).map((topic, index) => (
-                                <li key={`${activeLearningSection.code}-topic-${index}`}>{topic.title || `Topik ${index + 1}`}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </section>
+                        {activeMaterialTopic ? (
+                          <>
+                            <section className="learning-page">
+                              <span>Topik materi aktif</span>
+                              <h3>{activeMaterialTopic.title || `Topik ${Number(activeMaterialTopicIndex) + 1}`}</h3>
+                              <p>
+                                {(activeMaterialTopic.pages || []).length > 0
+                                  ? `${(activeMaterialTopic.pages || []).length} halaman siap ditinjau.`
+                                  : 'Topik ini masih kosong. Jika ingin mulai mengisi materi, klik Edit Topik Materi.'}
+                              </p>
+                            </section>
+
+                            {(activeMaterialTopic.pages || []).map((page, pageIndex) => (
+                            <section
+                              key={`${activeLearningSection.code}-preview-page-${pageIndex}`}
+                              className="learning-page learning-page-document"
+                            >
+                              <span>{`Halaman ${pageIndex + 1}`}</span>
+                              <h3>{page.title || `Halaman ${pageIndex + 1}`}</h3>
+                                {page.content_html ? (
+                                  <div
+                                    className="learning-rich-content"
+                                    dangerouslySetInnerHTML={{ __html: page.content_html }}
+                                  />
+                                ) : (
+                                  <>
+                                    {(page.points || []).length > 0 && (
+                                      <ul>
+                                        {(page.points || []).map((point, pointIndex) => (
+                                          <li key={`${activeLearningSection.code}-point-${pageIndex}-${pointIndex}`}>{point}</li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                    {page.closing && <p>{page.closing}</p>}
+                                  </>
+                                )}
+                              </section>
+                            ))}
+                          </>
+                        ) : (
+                          <section className="learning-page">
+                            <span>Materi aktif</span>
+                            <h3>{activeLearningSection.material?.title || activeLearningSection.name}</h3>
+                            <p>Subtest ini belum punya topik materi. Tambahkan topik baru dari sidebar kiri.</p>
+                          </section>
+                        )}
                       </div>
 
                       {learningEditorMode === 'quiz' && (

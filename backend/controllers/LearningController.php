@@ -354,7 +354,7 @@ class LearningController {
         ];
     }
 
-    private function hydrateMaterialPages(array $pages): array {
+    private function hydrateMaterialPages(array $pages, bool $allowEmpty = false): array {
         $normalized = [];
         foreach ($pages as $index => $page) {
             if (!is_array($page)) {
@@ -386,7 +386,15 @@ class LearningController {
             ];
         }
 
-        return count($normalized) > 0 ? $normalized : [
+        if (count($normalized) > 0) {
+            return $normalized;
+        }
+
+        if ($allowEmpty) {
+            return [];
+        }
+
+        return [
             $this->buildFallbackMaterialPage('Halaman 1'),
         ];
     }
@@ -406,7 +414,9 @@ class LearningController {
     }
 
     private function hydrateMaterialTopics($payload, array $fallbackPages = []): array {
-        if (is_array($payload) && isset($payload['topics']) && is_array($payload['topics'])) {
+        $hasExplicitTopics = is_array($payload) && array_key_exists('topics', $payload) && is_array($payload['topics']);
+
+        if ($hasExplicitTopics) {
             $topics = $payload['topics'];
         } elseif (is_array($payload) && array_values($payload) === $payload) {
             $topics = $this->buildTopicsFromPages($payload);
@@ -422,11 +432,19 @@ class LearningController {
 
             $normalized[] = [
                 'title' => trim((string) ($topic['title'] ?? '')) ?: 'Topik ' . ($index + 1),
-                'pages' => $this->hydrateMaterialPages(is_array($topic['pages'] ?? null) ? $topic['pages'] : []),
+                'pages' => $this->hydrateMaterialPages(is_array($topic['pages'] ?? null) ? $topic['pages'] : [], true),
             ];
         }
 
-        return count($normalized) > 0 ? $normalized : $this->buildTopicsFromPages($fallbackPages);
+        if (count($normalized) > 0) {
+            return $normalized;
+        }
+
+        if ($hasExplicitTopics) {
+            return [];
+        }
+
+        return $this->buildTopicsFromPages($fallbackPages);
     }
 
     private function decorateMaterialTopics(array $topics): array {

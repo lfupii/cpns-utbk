@@ -707,7 +707,7 @@ export default function Learning() {
                   </section>
 
                   {(activeTopic.pages || []).map((page, index) => (
-                    <section key={`${activeTopic.title || 'topic'}-${index}`} className="learning-page">
+                    <section key={`${activeTopic.title || 'topic'}-${index}`} className="learning-page learning-page-document">
                       <span>Halaman {index + 1}</span>
                       <h3>{page.title}</h3>
                       {page.content_html ? (

@@ -288,6 +288,17 @@ class AdminController {
             );
             $updateQuestions->bind_param('siis', $sectionName, $sectionOrder, $packageId, $code);
             $updateQuestions->execute();
+
+            if (!isset($previousSections[$code])) {
+                $emptyMaterialContent = json_encode([
+                    'topics' => [],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $insertMaterial = $this->mysqli->prepare(
+                    'INSERT IGNORE INTO learning_materials (package_id, section_code, title, content_json) VALUES (?, ?, ?, ?)'
+                );
+                $insertMaterial->bind_param('isss', $packageId, $code, $sectionName, $emptyMaterialContent);
+                $insertMaterial->execute();
+            }
         }
     }
 
@@ -300,7 +311,7 @@ class AdminController {
         ];
     }
 
-    private function hydrateMaterialPages(array $pages): array {
+    private function hydrateMaterialPages(array $pages, bool $allowEmpty = false): array {
         $normalized = [];
         foreach ($pages as $index => $page) {
             if (!is_array($page)) {
@@ -339,9 +350,15 @@ class AdminController {
             ];
         }
 
-        return count($normalized) > 0 ? $normalized : [
-            $this->buildFallbackMaterialPage('Halaman 1'),
-        ];
+        if (count($normalized) > 0) {
+            return $normalized;
+        }
+
+        if ($allowEmpty) {
+            return [];
+        }
+
+        return [$this->buildFallbackMaterialPage('Halaman 1')];
     }
 
     private function buildTopicsFromPages(array $pages): array {
@@ -359,7 +376,9 @@ class AdminController {
     }
 
     private function hydrateMaterialTopics($payload, array $fallbackPages = []): array {
-        if (is_array($payload) && isset($payload['topics']) && is_array($payload['topics'])) {
+        $hasExplicitTopics = is_array($payload) && array_key_exists('topics', $payload) && is_array($payload['topics']);
+
+        if ($hasExplicitTopics) {
             $topics = $payload['topics'];
         } elseif (is_array($payload) && array_values($payload) === $payload) {
             $topics = $this->buildTopicsFromPages($payload);
@@ -374,7 +393,7 @@ class AdminController {
             }
 
             $title = trim((string) ($topic['title'] ?? '')) ?: 'Topik ' . ($index + 1);
-            $pages = $this->hydrateMaterialPages(is_array($topic['pages'] ?? null) ? $topic['pages'] : []);
+            $pages = $this->hydrateMaterialPages(is_array($topic['pages'] ?? null) ? $topic['pages'] : [], true);
 
             $normalized[] = [
                 'title' => $title,
@@ -382,7 +401,15 @@ class AdminController {
             ];
         }
 
-        return count($normalized) > 0 ? $normalized : $this->buildTopicsFromPages($fallbackPages);
+        if (count($normalized) > 0) {
+            return $normalized;
+        }
+
+        if ($hasExplicitTopics) {
+            return [];
+        }
+
+        return $this->buildTopicsFromPages($fallbackPages);
     }
 
     private function flattenMaterialTopics(array $topics): array {
@@ -396,8 +423,11 @@ class AdminController {
         return $pages;
     }
 
-    private function normalizeMaterialPages(array $pages, string $errorContext = ''): array {
+    private function normalizeMaterialPages(array $pages, string $errorContext = '', bool $allowEmpty = false): array {
         if (count($pages) === 0) {
+            if ($allowEmpty) {
+                return [];
+            }
             sendResponse('error', 'Materi minimal memiliki 1 halaman', null, 422);
         }
 
@@ -443,7 +473,7 @@ class AdminController {
 
     private function normalizeMaterialTopics(array $topics): array {
         if (count($topics) === 0) {
-            sendResponse('error', 'Materi minimal memiliki 1 topik', null, 422);
+            return [];
         }
 
         $normalized = [];
@@ -462,7 +492,8 @@ class AdminController {
                 'title' => $title,
                 'pages' => $this->normalizeMaterialPages(
                     is_array($pages) ? $pages : [],
-                    ' di topik ' . $title
+                    ' di topik ' . $title,
+                    true
                 ),
             ];
         }

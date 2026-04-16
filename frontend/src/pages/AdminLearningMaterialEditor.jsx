@@ -16,7 +16,7 @@ const createEmptyMaterialPage = (order = 1) => ({
   title: `Halaman ${order}`,
   points: [''],
   closing: '',
-  content_html: '<p>Tulis materi di sini.</p>',
+  content_html: '<p><br></p>',
 });
 
 const createEmptyMaterialTopic = (order = 1) => ({
@@ -68,7 +68,7 @@ function pageToHtml(page) {
   const closing = String(page.closing || '').trim();
 
   return [
-    pointItems ? `<ul>${pointItems}</ul>` : '<p>Tulis materi di sini.</p>',
+    pointItems ? `<ul>${pointItems}</ul>` : '<p><br></p>',
     closing ? `<p><strong>Rangkuman:</strong> ${escapeHtml(closing)}</p>` : '',
   ].join('');
 }
@@ -203,6 +203,18 @@ export default function AdminLearningMaterialEditor() {
     nextParams.set('page', String(Math.max(0, pageIndex)));
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  const activatePage = useCallback((pageIndex, syncUrl = true) => {
+    if (pageIndex === activePageIndex) {
+      return false;
+    }
+
+    setActivePageIndex(pageIndex);
+    if (syncUrl) {
+      syncSelectionInUrl(activeTopicIndex, pageIndex);
+    }
+    return true;
+  }, [activePageIndex, activeTopicIndex, syncSelectionInUrl]);
 
   const fetchLearningContent = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !sectionCode) {
@@ -575,8 +587,7 @@ export default function AdminLearningMaterialEditor() {
       ...current,
       topics: readTopicsFromEditor(),
     }));
-    setActivePageIndex(pageIndex);
-    syncSelectionInUrl(activeTopicIndex, pageIndex);
+    activatePage(pageIndex);
     focusEditorAtEnd(pageIndex);
   };
 
@@ -611,8 +622,7 @@ export default function AdminLearningMaterialEditor() {
       ...current,
       topics: nextTopics,
     }));
-    setActivePageIndex(nextIndex);
-    syncSelectionInUrl(activeTopicIndex, nextIndex);
+    activatePage(nextIndex);
   };
 
   const isEditorPageEmpty = useCallback((pageIndex) => {
@@ -655,10 +665,9 @@ export default function AdminLearningMaterialEditor() {
       ...current,
       topics: nextTopics,
     }));
-    setActivePageIndex(nextPageIndex);
-    syncSelectionInUrl(activeTopicIndex, nextPageIndex);
+    activatePage(nextPageIndex);
     focusEditorAtEnd(nextPageIndex);
-  }, [activeTopicIndex, focusEditorAtEnd, isEditorPageEmpty, materialForm.topics, readTopicsFromEditor, syncSelectionInUrl]);
+  }, [activatePage, activeTopicIndex, focusEditorAtEnd, isEditorPageEmpty, materialForm.topics, readTopicsFromEditor]);
 
   const rebalancePaginatedEditors = useCallback((startIndex = 0) => {
     const currentTopic = materialForm.topics[activeTopicIndex];
@@ -668,6 +677,7 @@ export default function AdminLearningMaterialEditor() {
 
     let createdNewPage = false;
     let focusNextPageIndex = null;
+    let didReflow = false;
 
     for (let pageIndex = Math.max(0, startIndex); pageIndex < currentTopic.pages.length; pageIndex += 1) {
       const editorNode = editorRefs.current[pageIndex];
@@ -707,6 +717,7 @@ export default function AdminLearningMaterialEditor() {
         normalizeEditorContent(editorNode);
         normalizeEditorContent(nextEditorNode);
         focusNextPageIndex = pageIndex + 1;
+        didReflow = true;
       }
     }
 
@@ -729,6 +740,7 @@ export default function AdminLearningMaterialEditor() {
         const movedNode = nextMovableNodes[0];
         editorNode.appendChild(movedNode);
         normalizeEditorContent(editorNode);
+        didReflow = true;
 
         if (editorNode.scrollHeight > editorNode.clientHeight + 2) {
           nextEditorNode.insertBefore(movedNode, nextEditorNode.firstChild);
@@ -741,28 +753,30 @@ export default function AdminLearningMaterialEditor() {
     }
 
     const nextSerializedPages = serializeActiveTopicPagesFromDom(activeTopicIndex);
-    setMaterialForm((current) => ({
-      ...current,
-      topics: current.topics.map((topic, index) => (
-        index === activeTopicIndex
-          ? { ...topic, pages: nextSerializedPages }
-          : topic
-      )),
-    }));
+    const pageCountChanged = nextSerializedPages.length !== currentTopic.pages.length;
+    if (didReflow || pageCountChanged) {
+      setMaterialForm((current) => ({
+        ...current,
+        topics: current.topics.map((topic, index) => (
+          index === activeTopicIndex
+            ? { ...topic, pages: nextSerializedPages }
+            : topic
+        )),
+      }));
+    }
 
     if (!createdNewPage && focusNextPageIndex !== null) {
-      setActivePageIndex(focusNextPageIndex);
-      syncSelectionInUrl(activeTopicIndex, focusNextPageIndex);
+      activatePage(focusNextPageIndex);
       focusEditorAtEnd(focusNextPageIndex);
     }
   }, [
+    activatePage,
     activeTopicIndex,
     focusEditorAtEnd,
     getMovableEditorNodes,
     materialForm.topics,
     normalizeEditorContent,
     serializeActiveTopicPagesFromDom,
-    syncSelectionInUrl,
   ]);
 
   const schedulePaginationRebalance = useCallback((startIndex = 0) => {
@@ -776,11 +790,33 @@ export default function AdminLearningMaterialEditor() {
     });
   }, [rebalancePaginatedEditors]);
 
+  const pageNeedsPaginationRebalance = useCallback((pageIndex) => {
+    const editorNode = editorRefs.current[pageIndex];
+    if (!editorNode) {
+      return false;
+    }
+
+    const isOverflowing = editorNode.scrollHeight > editorNode.clientHeight + 2;
+    if (isOverflowing) {
+      return true;
+    }
+
+    const nextEditorNode = editorRefs.current[pageIndex + 1];
+    if (!nextEditorNode) {
+      return false;
+    }
+
+    const nextHasContent = getMovableEditorNodes(nextEditorNode).length > 0;
+    const hasSpareRoom = editorNode.scrollHeight < editorNode.clientHeight - 40;
+    return nextHasContent && hasSpareRoom;
+  }, [getMovableEditorNodes]);
+
   const handlePageInput = useCallback((pageIndex) => {
-    setActivePageIndex(pageIndex);
-    syncSelectionInUrl(activeTopicIndex, pageIndex);
-    schedulePaginationRebalance(pageIndex);
-  }, [activeTopicIndex, schedulePaginationRebalance, syncSelectionInUrl]);
+    activatePage(pageIndex);
+    if (pageNeedsPaginationRebalance(pageIndex)) {
+      schedulePaginationRebalance(pageIndex);
+    }
+  }, [activatePage, pageNeedsPaginationRebalance, schedulePaginationRebalance]);
 
   const runCommand = (command, value = null) => {
     const editorNode = getEditorNode();
@@ -1457,7 +1493,7 @@ export default function AdminLearningMaterialEditor() {
 
               {activeTopic && (activeTopic.pages || []).map((page, pageIndex) => (
                 <section
-                  key={`material-page-${pageIndex}`}
+                  key={`material-page-${activeTopicIndex}-${pageIndex}`}
                   className={pageIndex === activePageIndex ? `${editorPageClassName} admin-doc-page-current` : editorPageClassName}
                   style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
                 >
@@ -1477,16 +1513,18 @@ export default function AdminLearningMaterialEditor() {
                     className="admin-doc-title-input"
                     value={page.title}
                     onChange={(event) => updatePageTitle(activeTopicIndex, pageIndex, event.target.value)}
-                    onFocus={() => {
-                      setActivePageIndex(pageIndex);
-                      syncSelectionInUrl(activeTopicIndex, pageIndex);
-                    }}
+                    onFocus={() => activatePage(pageIndex)}
                     placeholder="Judul halaman materi"
                   />
                   <div
                     ref={(node) => {
                       if (node) {
                         editorRefs.current[pageIndex] = node;
+                        const editorKey = `${activeTopicIndex}:${pageIndex}`;
+                        if (node.dataset.editorKey !== editorKey) {
+                          node.innerHTML = page.content_html || '<p><br></p>';
+                          node.dataset.editorKey = editorKey;
+                        }
                       } else {
                         delete editorRefs.current[pageIndex];
                       }
@@ -1494,17 +1532,13 @@ export default function AdminLearningMaterialEditor() {
                     className="admin-word-editable"
                     contentEditable
                     suppressContentEditableWarning
-                    onFocus={() => {
-                      setActivePageIndex(pageIndex);
-                      syncSelectionInUrl(activeTopicIndex, pageIndex);
-                    }}
+                    onFocus={() => activatePage(pageIndex)}
                     onKeyDown={(event) => handleEditorKeyDown(event, pageIndex)}
                     onInput={() => handlePageInput(pageIndex)}
                     onPointerDown={handleEditorPointerDown}
                     onClick={handleEditorClick}
                     onContextMenu={handleEditorContextMenu}
                     onBlur={() => updatePageContent(activeTopicIndex, pageIndex)}
-                    dangerouslySetInnerHTML={{ __html: page.content_html || '<p>Tulis materi di sini.</p>' }}
                   />
                 </section>
               ))}

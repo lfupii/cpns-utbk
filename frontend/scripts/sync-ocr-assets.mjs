@@ -9,14 +9,8 @@ const projectRoot = path.resolve(__dirname, '..');
 const copyPairs = [
   ['node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs', 'public/pdfjs/pdf.worker.min.js'],
   ['node_modules/tesseract.js/dist/worker.min.js', 'public/tesseract/worker/worker.min.js'],
-  ['node_modules/tesseract.js-core/tesseract-core.wasm.js', 'public/tesseract/core/tesseract-core.wasm.js'],
-  ['node_modules/tesseract.js-core/tesseract-core-simd.wasm.js', 'public/tesseract/core/tesseract-core-simd.wasm.js'],
   ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', 'public/tesseract/core/tesseract-core-lstm.wasm.js'],
-  ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', 'public/tesseract/core/tesseract-core-simd-lstm.wasm.js'],
-  ['node_modules/tesseract.js-core/tesseract-core.wasm', 'public/tesseract/core/tesseract-core.wasm'],
-  ['node_modules/tesseract.js-core/tesseract-core-simd.wasm', 'public/tesseract/core/tesseract-core-simd.wasm'],
   ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm', 'public/tesseract/core/tesseract-core-lstm.wasm'],
-  ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm', 'public/tesseract/core/tesseract-core-simd-lstm.wasm'],
 ];
 
 copyPairs.forEach(([sourceRelative, targetRelative]) => {

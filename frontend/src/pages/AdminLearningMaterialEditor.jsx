@@ -734,7 +734,7 @@ export default function AdminLearningMaterialEditor() {
     }),
   }));
 
-  const persistActivePageContent = useCallback((rawHtml = null, pageIndex = activePageIndex) => {
+  function persistActivePageContent(rawHtml = null, pageIndex = activePageIndex) {
     const contentHtml = sanitizeEditorHtml(rawHtml ?? (getEditorNode(pageIndex)?.innerHTML || ''));
     setMaterialForm((current) => ({
       ...current,
@@ -755,7 +755,7 @@ export default function AdminLearningMaterialEditor() {
           : topic
       )),
     }));
-  }, [activePageIndex, activeTopicIndex, getEditorNode]);
+  }
 
   const updateTopicTitle = (topicIndex, title) => {
     setMaterialForm((current) => ({
@@ -1040,7 +1040,7 @@ export default function AdminLearningMaterialEditor() {
     serializeActiveTopicPagesFromDom,
   ]);
 
-  const schedulePaginationRebalance = useCallback((startIndex = 0) => {
+  function schedulePaginationRebalance(startIndex = 0) {
     if (paginationFrameRef.current) {
       cancelAnimationFrame(paginationFrameRef.current);
     }
@@ -1049,7 +1049,7 @@ export default function AdminLearningMaterialEditor() {
       rebalancePaginatedEditors(startIndex);
       paginationFrameRef.current = null;
     });
-  }, [rebalancePaginatedEditors]);
+  }
 
   const pageNeedsPaginationRebalance = useCallback((pageIndex) => {
     const editorNode = editorRefs.current[pageIndex];
@@ -1079,14 +1079,14 @@ export default function AdminLearningMaterialEditor() {
     }
   }, [activatePage, pageNeedsPaginationRebalance, schedulePaginationRebalance]);
 
-  const runCommand = (command, value = null) => {
+  function runCommand(command, value = null) {
     const editorNode = getEditorNode();
     if (editorNode) {
       editorNode.focus();
     }
     document.execCommand(command, false, value);
     schedulePaginationRebalance(activePageIndex);
-  };
+  }
 
   const applyFontSize = (size) => {
     runCommand('fontSize', FONT_SIZE_COMMANDS[size] || '3');

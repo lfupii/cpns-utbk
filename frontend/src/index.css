@@ -2105,19 +2105,21 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .account-shell-nav-container,
 .account-shell-main-container {
-  width: min(100%, 1500px);
+  width: min(calc(100% - 2rem), 1560px);
   max-width: none;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .account-shell-learning .account-shell-nav-container,
 .account-shell-learning .account-shell-main-container,
 .admin-workspace-shell .account-shell-nav-container,
 .admin-workspace-shell .account-shell-main-container {
-  width: min(calc(100% - 1rem), 1520px);
-  margin-left: clamp(0.5rem, 1.2vw, 1rem);
+  width: min(calc(100% - 2rem), 1660px);
+  margin-left: auto;
   margin-right: auto;
-  padding-left: clamp(1rem, 1.6vw, 1.5rem);
-  padding-right: clamp(1rem, 1.6vw, 1.5rem);
+  padding-left: clamp(1rem, 1.6vw, 1.6rem);
+  padding-right: clamp(1rem, 1.6vw, 1.6rem);
 }
 
 .account-shell-learning .landing-navbar {
@@ -2915,8 +2917,8 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .learning-workspace {
   margin-top: 1.35rem;
   display: grid;
-  grid-template-columns: 294px minmax(0, 1fr);
-  gap: 1.2rem;
+  grid-template-columns: 294px minmax(0, 1.12fr);
+  gap: 1.3rem;
   align-items: stretch;
 }
 

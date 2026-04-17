@@ -62,6 +62,13 @@ const createEmptyQuestionForm = (sectionCode = '') => ({
   ],
 });
 
+const createDefaultOptionSet = () => ([
+  createOption(0),
+  createOption(1),
+  createOption(2),
+  createOption(3),
+]);
+
 const QUESTION_IMAGE_LAYOUT_OPTIONS = [
   { value: 'top', label: 'Atas' },
   { value: 'bottom', label: 'Bawah' },
@@ -81,13 +88,34 @@ const createEmptyLearningQuestion = (order = 1) => ({
   question_image_url: '',
   difficulty: 'medium',
   question_order: order,
-  options: [
-    createOption(0),
-    createOption(1),
-    createOption(2),
-    createOption(3),
-  ],
+  options: createDefaultOptionSet(),
 });
+
+function buildOptionImageEditorState(options) {
+  return (options || []).reduce((accumulator, option, index) => {
+    if (option?.image_url) {
+      accumulator[index] = true;
+    }
+    return accumulator;
+  }, {});
+}
+
+function computeMiniTestDurationSeconds(section, questionCount) {
+  const totalQuestions = Math.max(0, Number(questionCount || 0));
+  const durationMinutes = Math.max(0, Number(section?.duration_minutes || 0));
+  const targetQuestionCount = Math.max(0, Number(section?.target_question_count || 0));
+
+  if (durationMinutes > 0 && targetQuestionCount > 0 && totalQuestions > 0) {
+    const estimatedSeconds = Math.round((durationMinutes * 60 * totalQuestions) / targetQuestionCount);
+    return Math.max(180, estimatedSeconds);
+  }
+
+  if (durationMinutes > 0) {
+    return Math.max(180, Math.round(durationMinutes * 60));
+  }
+
+  return Math.max(300, totalQuestions * 90);
+}
 
 function slugifySectionCode(value) {
   return String(value || '')
@@ -357,6 +385,9 @@ export default function AdminPanel() {
     createEmptyLearningQuestion(5),
   ]);
   const [learningQuestionsSaving, setLearningQuestionsSaving] = useState(false);
+  const [activeLearningQuestionIndex, setActiveLearningQuestionIndex] = useState(0);
+  const [showLearningQuestionImageTools, setShowLearningQuestionImageTools] = useState(false);
+  const [openLearningOptionImageEditors, setOpenLearningOptionImageEditors] = useState({});
   const [adminView, setAdminView] = useState('dashboard');
   const [packagesExpanded, setPackagesExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
@@ -401,6 +432,10 @@ export default function AdminPanel() {
     ),
     [activeMaterialTopicIndex, activeMaterialTopics]
   );
+  const activeLearningQuestion = useMemo(
+    () => learningQuestionsForm[activeLearningQuestionIndex] || null,
+    [activeLearningQuestionIndex, learningQuestionsForm]
+  );
   const selectedPackageSummary = useMemo(() => ({
     sectionCount: packageSections.length,
     materialPageCount: learningContent.reduce((total, section) => total + getMaterialTopics(section.material).length, 0),
@@ -421,6 +456,15 @@ export default function AdminPanel() {
 
     return Math.round(((completedMaterialSections + completedQuizSections) / (packageSections.length * 2)) * 100);
   }, [completedMaterialSections, completedQuizSections, packageSections.length]);
+  const syncLearningQuestionPanels = useCallback((question) => {
+    setShowLearningQuestionImageTools(Boolean(question?.question_image_url));
+    setOpenLearningOptionImageEditors(buildOptionImageEditorState(question?.options || []));
+  }, []);
+  const selectLearningQuestion = useCallback((questionIndex) => {
+    const nextQuestion = learningQuestionsForm[questionIndex] || null;
+    setActiveLearningQuestionIndex(questionIndex);
+    syncLearningQuestionPanels(nextQuestion);
+  }, [learningQuestionsForm, syncLearningQuestionPanels]);
 
   const fetchAdminQuestions = useCallback(async (packageId) => {
     const response = await apiClient.get(`/admin/questions?package_id=${packageId}&_=${Date.now()}`);
@@ -490,6 +534,15 @@ export default function AdminPanel() {
   );
 
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
+  const learningQuestionImagePanelVisible = showLearningQuestionImageTools || Boolean(activeLearningQuestion?.question_image_url);
+  const miniTestDurationSeconds = useMemo(
+    () => computeMiniTestDurationSeconds(activeLearningSection, learningQuestionsForm.length),
+    [activeLearningSection, learningQuestionsForm.length]
+  );
+  const miniTestDurationMinutesLabel = useMemo(() => {
+    const totalMinutes = Math.max(1, Math.ceil(miniTestDurationSeconds / 60));
+    return `${totalMinutes} menit`;
+  }, [miniTestDurationSeconds]);
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -617,20 +670,28 @@ export default function AdminPanel() {
           createEmptyLearningQuestion(5),
         ];
 
-    setLearningQuestionsForm(nextLearningQuestions.map((question, index) => ({
+    const normalizedQuestions = nextLearningQuestions.map((question, index) => ({
       id: question.id || null,
       question_text: question.question_text || '',
       question_image_url: question.question_image_url || '',
       difficulty: question.difficulty || 'medium',
       question_order: Number(question.question_order || index + 1),
-      options: (question.options || []).map((option, optionIndex) => ({
+      options: (
+        Array.isArray(question.options) && question.options.length > 0
+          ? question.options
+          : createDefaultOptionSet()
+      ).map((option, optionIndex) => ({
         letter: option.letter || String.fromCharCode(65 + optionIndex),
         text: option.text || '',
         image_url: option.image_url || '',
         is_correct: Boolean(Number(option.is_correct)),
       })),
-    })));
-  }, [activeLearningSection]);
+    }));
+
+    setLearningQuestionsForm(normalizedQuestions);
+    setActiveLearningQuestionIndex(0);
+    syncLearningQuestionPanels(normalizedQuestions[0] || null);
+  }, [activeLearningSection, syncLearningQuestionPanels]);
 
   useEffect(() => {
     setQuestionForm((current) => {
@@ -1125,6 +1186,9 @@ export default function AdminPanel() {
     const uploadedUrl = await uploadAdminMedia(file, 'mini-test-question', `learning-question-${questionIndex}`);
     if (uploadedUrl) {
       updateLearningQuestion(questionIndex, 'question_image_url', uploadedUrl);
+      if (questionIndex === activeLearningQuestionIndex) {
+        setShowLearningQuestionImageTools(true);
+      }
     }
 
     event.target.value = '';
@@ -1139,6 +1203,12 @@ export default function AdminPanel() {
     const uploadedUrl = await uploadAdminMedia(file, 'mini-test-option', `learning-option-${questionIndex}-${optionIndex}`);
     if (uploadedUrl) {
       updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', uploadedUrl);
+      if (questionIndex === activeLearningQuestionIndex) {
+        setOpenLearningOptionImageEditors((current) => ({
+          ...current,
+          [optionIndex]: true,
+        }));
+      }
     }
 
     event.target.value = '';
@@ -1168,6 +1238,30 @@ export default function AdminPanel() {
     )));
   };
 
+  const toggleLearningOptionImageEditor = (optionIndex) => {
+    setOpenLearningOptionImageEditors((current) => ({
+      ...current,
+      [optionIndex]: !current[optionIndex],
+    }));
+  };
+
+  const clearLearningQuestionImage = (questionIndex) => {
+    updateLearningQuestion(questionIndex, 'question_image_url', '');
+    if (questionIndex === activeLearningQuestionIndex) {
+      setShowLearningQuestionImageTools(false);
+    }
+  };
+
+  const clearLearningOptionImage = (questionIndex, optionIndex) => {
+    updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', '');
+    if (questionIndex === activeLearningQuestionIndex) {
+      setOpenLearningOptionImageEditors((current) => ({
+        ...current,
+        [optionIndex]: false,
+      }));
+    }
+  };
+
   const setLearningQuestionCorrectOption = (questionIndex, optionIndex) => {
     setLearningQuestionsForm((current) => current.map((question, index) => (
       index === questionIndex
@@ -1182,14 +1276,82 @@ export default function AdminPanel() {
     )));
   };
 
+  const addLearningQuestionOption = (questionIndex) => {
+    setLearningQuestionsForm((current) => current.map((question, index) => {
+      if (index !== questionIndex || question.options.length >= 5) {
+        return question;
+      }
+
+      return {
+        ...question,
+        options: [...question.options, createOption(question.options.length)],
+      };
+    }));
+  };
+
+  const removeLearningQuestionOption = (questionIndex, optionIndex) => {
+    const targetQuestion = learningQuestionsForm[questionIndex];
+    if (!targetQuestion || targetQuestion.options.length <= 2) {
+      return;
+    }
+
+    setLearningQuestionsForm((current) => current.map((question, index) => {
+      if (index !== questionIndex) {
+        return question;
+      }
+
+      const nextOptions = question.options
+        .filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex)
+        .map((option, currentOptionIndex) => ({
+          ...option,
+          letter: String.fromCharCode(65 + currentOptionIndex),
+        }));
+
+      if (!nextOptions.some((option) => option.is_correct) && nextOptions[0]) {
+        nextOptions[0].is_correct = true;
+      }
+
+      return {
+        ...question,
+        options: nextOptions,
+      };
+    }));
+
+    if (questionIndex === activeLearningQuestionIndex) {
+      setOpenLearningOptionImageEditors((current) => Object.entries(current).reduce((nextState, [key, value]) => {
+        const numericKey = Number(key);
+        if (numericKey === optionIndex) {
+          return nextState;
+        }
+
+        nextState[numericKey > optionIndex ? numericKey - 1 : numericKey] = value;
+        return nextState;
+      }, {}));
+    }
+  };
+
   const addLearningQuestion = () => {
+    const nextQuestionIndex = learningQuestionsForm.length;
     setLearningQuestionsForm((current) => [...current, createEmptyLearningQuestion(current.length + 1)]);
+    setActiveLearningQuestionIndex(nextQuestionIndex);
+    setShowLearningQuestionImageTools(false);
+    setOpenLearningOptionImageEditors({});
   };
 
   const removeLearningQuestion = (questionIndex) => {
-    setLearningQuestionsForm((current) => current.length <= 1
-      ? current
-      : current.filter((_, index) => index !== questionIndex));
+    if (learningQuestionsForm.length <= 1) {
+      return;
+    }
+
+    const nextQuestions = learningQuestionsForm.filter((_, index) => index !== questionIndex);
+    const nextActiveIndex = Math.min(
+      activeLearningQuestionIndex > questionIndex ? activeLearningQuestionIndex - 1 : activeLearningQuestionIndex,
+      nextQuestions.length - 1
+    );
+
+    setLearningQuestionsForm(nextQuestions);
+    setActiveLearningQuestionIndex(nextActiveIndex);
+    syncLearningQuestionPanels(nextQuestions[nextActiveIndex] || null);
   };
 
   const handleLearningQuestionsSave = async () => {
@@ -1486,6 +1648,43 @@ export default function AdminPanel() {
     ));
 
     await updateWorkflowSections(nextSections, section.code, `Subtest ${trimmedName} berhasil diperbarui.`);
+  };
+
+  const handleMiniTestTimingEdit = async (section) => {
+    const nextDuration = window.prompt('Durasi acuan subtest dalam menit untuk mini test', section.duration_minutes ?? '');
+    if (nextDuration === null) {
+      return;
+    }
+
+    const nextTargetCount = window.prompt('Target jumlah soal subtest sebagai acuan timer mini test', section.target_question_count ?? '');
+    if (nextTargetCount === null) {
+      return;
+    }
+
+    const normalizedDuration = String(nextDuration).trim() === '' ? null : Number(nextDuration);
+    const normalizedTargetCount = String(nextTargetCount).trim() === '' ? null : Number(nextTargetCount);
+
+    if (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration < 0)) {
+      setError('Durasi mini test tidak valid.');
+      return;
+    }
+
+    if (normalizedTargetCount !== null && (!Number.isFinite(normalizedTargetCount) || normalizedTargetCount < 0)) {
+      setError('Target jumlah soal mini test tidak valid.');
+      return;
+    }
+
+    const nextSections = packageSections.map((item) => (
+      item.code === section.code
+        ? {
+            ...item,
+            duration_minutes: normalizedDuration,
+            target_question_count: normalizedTargetCount === null ? null : Math.floor(normalizedTargetCount),
+          }
+        : item
+    ));
+
+    await updateWorkflowSections(nextSections, section.code, `Waktu mini test ${section.name} berhasil diperbarui.`);
   };
 
   const handleDeleteSection = async (section) => {
@@ -2163,13 +2362,15 @@ export default function AdminPanel() {
                       <h2>{activeLearningSection?.name || 'Pilih subtest'}</h2>
                       <p>
                         {activeLearningSection
-                          ? `Kelola materi dan mini test untuk ${activeLearningSection.name} tanpa bercampur dengan subtest lain.`
+                          ? learningEditorMode === 'quiz'
+                            ? `Kelola mini test ${activeLearningSection.name} dengan editor yang fokus seperti bank soal tryout.`
+                            : `Kelola materi dan mini test untuk ${activeLearningSection.name} tanpa bercampur dengan subtest lain.`
                           : 'Pilih subtest dari sidebar kiri untuk mulai mengelola materi.'}
                       </p>
                     </div>
                     {activeLearningSection && (
                       <div className="learning-hero-actions">
-                        {activeMaterialTopic && (
+                        {activeMaterialTopic && learningEditorMode !== 'quiz' && (
                           <Link
                             to={`/admin/learning-material/${selectedPackageId}/${activeLearningSection.code}?topic=${activeMaterialTopicIndex || 0}`}
                             className="btn btn-primary"
@@ -2178,7 +2379,7 @@ export default function AdminPanel() {
                           </Link>
                         )}
                         <button type="button" className="btn btn-outline" onClick={() => openLearningEditor(activeLearningSection.code, learningEditorMode === 'quiz' ? '' : 'quiz')}>
-                          {learningEditorMode === 'quiz' ? 'Tutup Mini Test' : 'Edit Mini Test'}
+                          {learningEditorMode === 'quiz' ? 'Kembali ke Materi' : 'Edit Mini Test'}
                         </button>
                       </div>
                     )}
@@ -2193,72 +2394,61 @@ export default function AdminPanel() {
                         </div>
                         <div>
                           <span>Mini test</span>
-                          <strong>{activeLearningSection.questions?.length || 0}</strong>
+                          <strong>{learningEditorMode === 'quiz' ? learningQuestionsForm.length : activeLearningSection.questions?.length || 0}</strong>
                         </div>
                         <div>
                           <span>Kode subtest</span>
                           <strong>{activeLearningSection.code}</strong>
                         </div>
                       </div>
-
-                      <div className="learning-page-list">
-                        {activeMaterialTopic ? (
-                          <>
-                            <section className="learning-page">
-                              <span>Topik materi aktif</span>
-                              <h3>{activeMaterialTopic.title || `Topik ${Number(activeMaterialTopicIndex) + 1}`}</h3>
-                              <p>
-                                {(activeMaterialTopic.pages || []).length > 0
-                                  ? `${(activeMaterialTopic.pages || []).length} halaman siap ditinjau.`
-                                  : 'Topik ini masih kosong. Jika ingin mulai mengisi materi, klik Edit Topik Materi.'}
-                              </p>
-                            </section>
-
-                            {(activeMaterialTopic.pages || []).map((page, pageIndex) => (
-                            <section
-                              key={`${activeLearningSection.code}-preview-page-${pageIndex}`}
-                              className="learning-page learning-page-document"
-                            >
-                              <span>{`Halaman ${pageIndex + 1}`}</span>
-                              <h3>{page.title || `Halaman ${pageIndex + 1}`}</h3>
-                                {page.content_html ? (
-                                  <div
-                                    className="learning-rich-content"
-                                    dangerouslySetInnerHTML={{ __html: page.content_html }}
-                                  />
-                                ) : (
-                                  <>
-                                    {(page.points || []).length > 0 && (
-                                      <ul>
-                                        {(page.points || []).map((point, pointIndex) => (
-                                          <li key={`${activeLearningSection.code}-point-${pageIndex}-${pointIndex}`}>{point}</li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                    {page.closing && <p>{page.closing}</p>}
-                                  </>
-                                )}
-                              </section>
-                            ))}
-                          </>
-                        ) : (
-                          <section className="learning-page">
-                            <span>Materi aktif</span>
-                            <h3>{activeLearningSection.material?.title || activeLearningSection.name}</h3>
-                            <p>Subtest ini belum punya topik materi. Tambahkan topik baru dari sidebar kiri.</p>
-                          </section>
-                        )}
-                      </div>
-
-                      {learningEditorMode === 'quiz' && (
+                      {learningEditorMode === 'quiz' ? (
                         <div className="admin-learning-editor-shell admin-learning-quiz-shell">
-                          <div className="admin-section-header admin-section-header-compact">
-                            <div>
-                              <span className="account-package-tag">{activeLearningSection.name}</span>
-                              <h3>Editor Mini Test</h3>
-                              <p className="text-muted">Disarankan 5 soal singkat untuk milestone subtest.</p>
+                          <section className="admin-mini-test-settings">
+                            <div className="admin-mini-test-settings-copy">
+                              <span className="admin-preview-eyebrow">Setting Waktu Mini Test</span>
+                              <h3>{activeLearningSection.name}</h3>
+                              <p className="text-muted">
+                                Timer mini test mengambil acuan dari durasi subtest dan target jumlah soal yang aktif untuk subtest ini.
+                              </p>
                             </div>
-                            <div className="admin-list-toolbar-actions">
+                            <div className="admin-mini-test-settings-grid">
+                              <div className="admin-mini-test-settings-card">
+                                <span>Durasi Acuan Subtest</span>
+                                <strong>{activeLearningSection.duration_minutes ? `${activeLearningSection.duration_minutes} menit` : 'Belum diatur'}</strong>
+                                <small>Dipakai sebagai dasar hitung timer mini test.</small>
+                              </div>
+                              <div className="admin-mini-test-settings-card">
+                                <span>Target Soal Subtest</span>
+                                <strong>{activeLearningSection.target_question_count || 'Belum diatur'}</strong>
+                                <small>Digunakan agar timer mini test proporsional.</small>
+                              </div>
+                              <div className="admin-mini-test-settings-card">
+                                <span>Estimasi Timer Mini Test</span>
+                                <strong>{miniTestDurationMinutesLabel}</strong>
+                                <small>{`${learningQuestionsForm.length} soal mini test aktif di editor ini.`}</small>
+                              </div>
+                            </div>
+                            <div className="admin-mini-test-settings-actions">
+                              <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={() => handleMiniTestTimingEdit(activeLearningSection)}
+                                disabled={workflowSaving}
+                              >
+                                {workflowSaving ? 'Menyimpan Waktu...' : 'Atur Waktu Mini Test'}
+                              </button>
+                            </div>
+                          </section>
+
+                          <div className="admin-question-editor-hero">
+                            <div>
+                              <span className="admin-preview-eyebrow">{activeLearningSection.name}</span>
+                              <h3>Editor Mini Test</h3>
+                              <p className="text-muted">
+                                Navigasi soal, preview aktif, dan alur edit sekarang mengikuti editor soal tryout agar lebih fokus.
+                              </p>
+                            </div>
+                            <div className="admin-question-editor-actions">
                               <button type="button" className="btn btn-outline" onClick={addLearningQuestion}>
                                 Tambah Soal
                               </button>
@@ -2268,158 +2458,343 @@ export default function AdminPanel() {
                             </div>
                           </div>
 
-                          <div className="admin-learning-question-list">
-                            {learningQuestionsForm.map((question, questionIndex) => (
-                              <div key={`learning-question-inline-${questionIndex}`} className="admin-learning-page-card admin-learning-question-card-modern">
-                                <div className="admin-option-editor-head">
-                                  <strong>Soal {questionIndex + 1}</strong>
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline admin-option-delete"
-                                    onClick={() => removeLearningQuestion(questionIndex)}
-                                    disabled={learningQuestionsForm.length <= 1}
-                                  >
-                                    Hapus
-                                  </button>
+                          <div className="admin-learning-quiz-nav">
+                            {learningQuestionsForm.map((question, questionIndex) => {
+                              const isActiveQuestion = questionIndex === activeLearningQuestionIndex;
+                              return (
+                                <button
+                                  key={`learning-question-nav-${questionIndex}`}
+                                  type="button"
+                                  className={`admin-learning-quiz-nav-button ${isActiveQuestion ? 'admin-learning-quiz-nav-button-active' : ''}`}
+                                  onClick={() => selectLearningQuestion(questionIndex)}
+                                >
+                                  <span>{`Soal ${questionIndex + 1}`}</span>
+                                  <strong>{truncateText(question.question_text || 'Pertanyaan belum diisi', 54)}</strong>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {activeLearningQuestion && (
+                            <>
+                              <section className="admin-question-preview-shell">
+                                <div className="admin-question-preview-head">
+                                  <div>
+                                    <span className="admin-preview-eyebrow">Preview aktif</span>
+                                    <h3>{truncateText(activeLearningQuestion.question_text || `Soal ${activeLearningQuestionIndex + 1}`, 120)}</h3>
+                                    <p className="text-muted">
+                                      {activeLearningSection.name} • {(activeLearningQuestion.options || []).length} opsi
+                                    </p>
+                                  </div>
+                                  <div className="admin-question-preview-actions">
+                                    <span className="admin-question-row-count">{`Urutan ${activeLearningQuestion.question_order}`}</span>
+                                    <span className="admin-question-row-count">{activeLearningQuestion.difficulty}</span>
+                                  </div>
                                 </div>
-                                <div className="form-group">
-                                  <label>Pertanyaan</label>
-                                  <textarea
-                                    name={`learning_question_text_main_${questionIndex}`}
-                                    rows="3"
-                                    value={question.question_text}
-                                    onChange={(event) => updateLearningQuestion(questionIndex, 'question_text', event.target.value)}
-                                  />
-                                </div>
-                                <div className="admin-learning-media-tools">
-                                  <div className="form-group">
-                                    <label>URL Gambar Soal</label>
-                                    <input
-                                      name={`learning_question_image_main_${questionIndex}`}
-                                      type="url"
-                                      value={question.question_image_url || ''}
-                                      onChange={(event) => updateLearningQuestion(questionIndex, 'question_image_url', event.target.value)}
-                                      placeholder="https://..."
+
+                                <div className="admin-question-row-detail">
+                                  <div className="admin-question-row-detail-main">
+                                    <div>
+                                      <h3>{activeLearningQuestion.question_text || 'Soal berbasis gambar'}</h3>
+                                      <p className="text-muted">
+                                        {activeLearningQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
+                                      </p>
+                                    </div>
+                                    <AdminImagePreview
+                                      src={activeLearningQuestion.question_image_url}
+                                      alt={`Preview mini test ${activeLearningQuestionIndex + 1}`}
+                                      className="admin-question-preview-image"
                                     />
                                   </div>
-                                  <div className="admin-option-inline-actions">
-                                    <label className="btn btn-outline admin-option-inline-button admin-file-button">
-                                      {mediaUploading[`learning-question-${questionIndex}`] ? 'Mengupload...' : 'Upload Gambar Soal'}
-                                      <input
-                                        type="file"
-                                        accept="image/png,image/jpeg,image/webp,image/gif"
-                                        onChange={(event) => handleLearningQuestionImageUpload(questionIndex, event)}
-                                        hidden
-                                      />
-                                    </label>
-                                    {question.question_image_url && (
+
+                                  <div className="admin-question-options-preview-grid">
+                                    {(activeLearningQuestion.options || []).map((option, optionIndex) => (
+                                      <div key={`learning-preview-option-${option.letter}-${optionIndex}`} className="admin-option-preview-card">
+                                        <div className="admin-option-preview-head">
+                                          <strong>{option.letter}.</strong>
+                                          {option.is_correct && (
+                                            <span className="admin-correct-badge">Jawaban Benar</span>
+                                          )}
+                                        </div>
+                                        <p>{option.text || 'Opsi berbasis gambar'}</p>
+                                        <AdminImagePreview
+                                          src={option.image_url}
+                                          alt={`Opsi ${option.letter}`}
+                                          className="admin-option-preview-image"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </section>
+
+                              <div className="admin-question-form admin-question-form-modern">
+                                <div className="admin-learning-page-card admin-learning-question-card-modern admin-test-editor-question-card">
+                                  <div className="admin-option-editor-head">
+                                    <strong>{`Form Edit Soal ${activeLearningQuestionIndex + 1}`}</strong>
+                                    <div className="admin-option-inline-actions">
                                       <button
                                         type="button"
                                         className="btn btn-outline admin-option-inline-button"
-                                        onClick={() => updateLearningQuestion(questionIndex, 'question_image_url', '')}
+                                        onClick={() => setShowLearningQuestionImageTools((current) => !current)}
                                       >
-                                        Hapus Gambar
+                                        {learningQuestionImagePanelVisible ? 'Tutup Gambar Soal' : 'Tambah Gambar Soal'}
                                       </button>
-                                    )}
-                                  </div>
-                                  <AdminImagePreview
-                                    src={question.question_image_url}
-                                    alt={`Preview soal mini test ${questionIndex + 1}`}
-                                    className="admin-editor-preview-image"
-                                  />
-                                </div>
-                                <div className="account-form-grid">
-                                  <div className="form-group">
-                                    <label>Kesulitan</label>
-                                    <select
-                                      name={`learning_question_difficulty_main_${questionIndex}`}
-                                      value={question.difficulty}
-                                      onChange={(event) => updateLearningQuestion(questionIndex, 'difficulty', event.target.value)}
-                                    >
-                                      <option value="easy">Mudah</option>
-                                      <option value="medium">Sedang</option>
-                                      <option value="hard">Sulit</option>
-                                    </select>
-                                  </div>
-                                  <div className="form-group">
-                                    <label>Urutan</label>
-                                    <input
-                                      name={`learning_question_order_main_${questionIndex}`}
-                                      type="number"
-                                      min="1"
-                                      value={question.question_order}
-                                      onChange={(event) => updateLearningQuestion(questionIndex, 'question_order', event.target.value)}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="admin-options-editor-list">
-                                  {(question.options || []).map((option, optionIndex) => (
-                                    <div key={`learning-option-inline-${questionIndex}-${optionIndex}`} className="admin-option-row admin-option-row-rich">
                                       <button
                                         type="button"
-                                        className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
-                                        onClick={() => setLearningQuestionCorrectOption(questionIndex, optionIndex)}
+                                        className="btn btn-outline admin-option-delete"
+                                        onClick={() => removeLearningQuestion(activeLearningQuestionIndex)}
+                                        disabled={learningQuestionsForm.length <= 1}
                                       >
-                                        {option.is_correct ? 'Benar' : 'Pilih'}
+                                        Hapus Soal
                                       </button>
-                                      <strong>{option.letter}</strong>
-                                      <div className="admin-option-input-stack">
+                                    </div>
+                                  </div>
+
+                                  <div className="form-group">
+                                    <label>Pertanyaan</label>
+                                    <textarea
+                                      name={`learning_question_text_active_${activeLearningQuestionIndex}`}
+                                      rows="4"
+                                      value={activeLearningQuestion.question_text}
+                                      onChange={(event) => updateLearningQuestion(activeLearningQuestionIndex, 'question_text', event.target.value)}
+                                      placeholder="Tulis soal mini test di sini"
+                                    />
+                                  </div>
+
+                                  <div className="account-form-grid">
+                                    <div className="form-group">
+                                      <label>Kesulitan</label>
+                                      <select
+                                        name={`learning_question_difficulty_active_${activeLearningQuestionIndex}`}
+                                        value={activeLearningQuestion.difficulty}
+                                        onChange={(event) => updateLearningQuestion(activeLearningQuestionIndex, 'difficulty', event.target.value)}
+                                      >
+                                        <option value="easy">Mudah</option>
+                                        <option value="medium">Sedang</option>
+                                        <option value="hard">Sulit</option>
+                                      </select>
+                                    </div>
+                                    <div className="form-group">
+                                      <label>Urutan</label>
+                                      <input
+                                        name={`learning_question_order_active_${activeLearningQuestionIndex}`}
+                                        type="number"
+                                        min="1"
+                                        value={activeLearningQuestion.question_order}
+                                        onChange={(event) => updateLearningQuestion(activeLearningQuestionIndex, 'question_order', event.target.value)}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {learningQuestionImagePanelVisible && (
+                                    <div className="admin-question-image-tools">
+                                      <div className="form-group">
+                                        <label>URL Gambar Soal</label>
                                         <input
-                                          name={`learning_option_text_main_${questionIndex}_${optionIndex}`}
-                                          value={option.text}
-                                          onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'text', event.target.value)}
-                                          placeholder={`Opsi ${option.letter}`}
+                                          name={`learning_question_image_active_${activeLearningQuestionIndex}`}
+                                          type="url"
+                                          value={activeLearningQuestion.question_image_url || ''}
+                                          onChange={(event) => updateLearningQuestion(activeLearningQuestionIndex, 'question_image_url', event.target.value)}
+                                          placeholder="https://..."
                                         />
-                                        <div className="admin-option-image-tools">
-                                          <input
-                                            name={`learning_option_image_main_${questionIndex}_${optionIndex}`}
-                                            type="url"
-                                            value={option.image_url || ''}
-                                            onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', event.target.value)}
-                                            placeholder="https://..."
-                                          />
-                                          <AdminImagePreview
-                                            src={option.image_url}
-                                            alt={`Preview opsi ${option.letter}`}
-                                            className="admin-editor-preview-image admin-editor-preview-image-small"
-                                          />
-                                        </div>
                                       </div>
+
                                       <div className="admin-option-inline-actions">
                                         <label className="btn btn-outline admin-option-inline-button admin-file-button">
-                                          {mediaUploading[`learning-option-${questionIndex}-${optionIndex}`] ? 'Mengupload...' : 'Upload Gambar'}
+                                          {mediaUploading[`learning-question-${activeLearningQuestionIndex}`] ? 'Mengupload...' : 'Upload dari Komputer'}
                                           <input
                                             type="file"
                                             accept="image/png,image/jpeg,image/webp,image/gif"
-                                            onChange={(event) => handleLearningOptionImageUpload(questionIndex, optionIndex, event)}
+                                            onChange={(event) => handleLearningQuestionImageUpload(activeLearningQuestionIndex, event)}
                                             hidden
                                           />
                                         </label>
-                                        {option.image_url && (
+                                      </div>
+
+                                      <div className="admin-question-image-preview-shell">
+                                        <div className="admin-question-media-preview admin-question-media-preview-top">
+                                          {activeLearningQuestion.question_text && (
+                                            <div className="admin-question-media-copy-preview">
+                                              <span>Preview pertanyaan</span>
+                                              <p>{activeLearningQuestion.question_text}</p>
+                                            </div>
+                                          )}
+                                          <AdminImagePreview
+                                            src={activeLearningQuestion.question_image_url}
+                                            alt="Preview gambar mini test"
+                                            className="admin-question-media-image-preview"
+                                          />
+                                        </div>
+                                        {activeLearningQuestion.question_image_url && (
                                           <button
                                             type="button"
-                                            className="btn btn-outline admin-option-inline-button"
-                                            onClick={() => updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', '')}
+                                            className="btn btn-outline admin-inline-secondary-action"
+                                            onClick={() => clearLearningQuestionImage(activeLearningQuestionIndex)}
                                           >
-                                            Hapus Gambar
+                                            Hapus Gambar Soal
                                           </button>
                                         )}
                                       </div>
                                     </div>
-                                  ))}
+                                  )}
+
+                                  <div className="admin-options-header">
+                                    <h3>Opsi Jawaban</h3>
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline"
+                                      onClick={() => addLearningQuestionOption(activeLearningQuestionIndex)}
+                                      disabled={(activeLearningQuestion.options || []).length >= 5}
+                                    >
+                                      Tambah Opsi
+                                    </button>
+                                  </div>
+
+                                  <div className="admin-options-editor-list admin-options-editor-list-modern">
+                                    {(activeLearningQuestion.options || []).map((option, optionIndex) => {
+                                      const isOptionImageEditorVisible = openLearningOptionImageEditors[optionIndex] || Boolean(option.image_url);
+
+                                      return (
+                                        <div key={`learning-option-active-${option.letter}-${optionIndex}`} className="admin-option-editor-card admin-option-editor-card-inline">
+                                          <div className="admin-option-row admin-option-row-rich">
+                                            <button
+                                              type="button"
+                                              className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
+                                              onClick={() => setLearningQuestionCorrectOption(activeLearningQuestionIndex, optionIndex)}
+                                            >
+                                              {option.is_correct ? 'Benar' : 'Pilih'}
+                                            </button>
+                                            <span className="admin-option-letter">{option.letter}</span>
+                                            <div className="admin-option-input-stack">
+                                              <input
+                                                name={`learning_option_text_active_${activeLearningQuestionIndex}_${optionIndex}`}
+                                                type="text"
+                                                value={option.text}
+                                                onChange={(event) => updateLearningQuestionOption(activeLearningQuestionIndex, optionIndex, 'text', event.target.value)}
+                                                placeholder={`Isi opsi ${option.letter}`}
+                                              />
+                                              {isOptionImageEditorVisible && (
+                                                <div className="admin-option-image-tools">
+                                                  <input
+                                                    name={`learning_option_image_active_${activeLearningQuestionIndex}_${optionIndex}`}
+                                                    type="url"
+                                                    value={option.image_url || ''}
+                                                    onChange={(event) => updateLearningQuestionOption(activeLearningQuestionIndex, optionIndex, 'image_url', event.target.value)}
+                                                    placeholder="https://..."
+                                                  />
+                                                  <AdminImagePreview
+                                                    src={option.image_url}
+                                                    alt={`Preview opsi ${option.letter}`}
+                                                    className="admin-editor-preview-image admin-editor-preview-image-small"
+                                                  />
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="admin-option-inline-actions">
+                                              <label className="btn btn-outline admin-option-inline-button admin-file-button">
+                                                {mediaUploading[`learning-option-${activeLearningQuestionIndex}-${optionIndex}`] ? 'Mengupload...' : 'Upload Gambar'}
+                                                <input
+                                                  type="file"
+                                                  accept="image/png,image/jpeg,image/webp,image/gif"
+                                                  onChange={(event) => handleLearningOptionImageUpload(activeLearningQuestionIndex, optionIndex, event)}
+                                                  hidden
+                                                />
+                                              </label>
+                                              <button
+                                                type="button"
+                                                className="btn btn-outline admin-option-inline-button"
+                                                onClick={() => toggleLearningOptionImageEditor(optionIndex)}
+                                              >
+                                                {isOptionImageEditorVisible ? 'Tutup Gambar' : 'Tambah Gambar'}
+                                              </button>
+                                              {option.image_url && (
+                                                <button
+                                                  type="button"
+                                                  className="btn btn-outline admin-option-inline-button"
+                                                  onClick={() => clearLearningOptionImage(activeLearningQuestionIndex, optionIndex)}
+                                                >
+                                                  Hapus Gambar
+                                                </button>
+                                              )}
+                                              <button
+                                                type="button"
+                                                className="btn btn-outline admin-option-delete"
+                                                onClick={() => removeLearningQuestionOption(activeLearningQuestionIndex, optionIndex)}
+                                                disabled={(activeLearningQuestion.options || []).length <= 2}
+                                              >
+                                                Hapus
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div className="account-form-actions">
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={handleLearningQuestionsSave}
+                                    disabled={learningQuestionsSaving}
+                                  >
+                                    {learningQuestionsSaving ? 'Menyimpan Mini Test...' : 'Simpan Mini Test'}
+                                  </button>
                                 </div>
                               </div>
-                            ))}
-                          </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="learning-page-list">
+                          {activeMaterialTopic ? (
+                            <>
+                              <section className="learning-page">
+                                <span>Topik materi aktif</span>
+                                <h3>{activeMaterialTopic.title || `Topik ${Number(activeMaterialTopicIndex) + 1}`}</h3>
+                                <p>
+                                  {(activeMaterialTopic.pages || []).length > 0
+                                    ? `${(activeMaterialTopic.pages || []).length} halaman siap ditinjau.`
+                                    : 'Topik ini masih kosong. Jika ingin mulai mengisi materi, klik Edit Topik Materi.'}
+                                </p>
+                              </section>
 
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={handleLearningQuestionsSave}
-                            disabled={learningQuestionsSaving}
-                          >
-                            {learningQuestionsSaving ? 'Menyimpan Mini Test...' : 'Simpan Mini Test'}
-                          </button>
+                              {(activeMaterialTopic.pages || []).map((page, pageIndex) => (
+                                <section
+                                  key={`${activeLearningSection.code}-preview-page-${pageIndex}`}
+                                  className="learning-page learning-page-document"
+                                >
+                                  <span>{`Halaman ${pageIndex + 1}`}</span>
+                                  <h3>{page.title || `Halaman ${pageIndex + 1}`}</h3>
+                                  {page.content_html ? (
+                                    <div
+                                      className="learning-rich-content"
+                                      dangerouslySetInnerHTML={{ __html: page.content_html }}
+                                    />
+                                  ) : (
+                                    <>
+                                      {(page.points || []).length > 0 && (
+                                        <ul>
+                                          {(page.points || []).map((point, pointIndex) => (
+                                            <li key={`${activeLearningSection.code}-point-${pageIndex}-${pointIndex}`}>{point}</li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                      {page.closing && <p>{page.closing}</p>}
+                                    </>
+                                  )}
+                                </section>
+                              ))}
+                            </>
+                          ) : (
+                            <section className="learning-page">
+                              <span>Materi aktif</span>
+                              <h3>{activeLearningSection.material?.title || activeLearningSection.name}</h3>
+                              <p>Subtest ini belum punya topik materi. Tambahkan topik baru dari sidebar kiri.</p>
+                            </section>
+                          )}
                         </div>
                       )}
                     </>

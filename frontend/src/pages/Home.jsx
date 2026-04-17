@@ -222,7 +222,7 @@ export default function Home() {
       icon: 'bag',
       accent: '#7c4dff',
       align: 'top',
-      x: '8%',
+      x: '14%',
       y: '44%',
       title: 'Pilih paket yang mau dikerjakan',
       description: 'Mulai dari CPNS Intensif atau UTBK Intensif, lalu masuk ke ruang belajar dari akun yang sama.',
@@ -233,7 +233,7 @@ export default function Home() {
       icon: 'book',
       accent: '#8a3ffc',
       align: 'bottom',
-      x: '28%',
+      x: '32%',
       y: '62%',
       title: 'Baca materi per subtest',
       description: 'Setiap section punya topik dan halaman materi yang bisa dibuka berurutan sebelum lanjut latihan.',
@@ -255,7 +255,7 @@ export default function Home() {
       icon: 'timer',
       accent: '#7c4dff',
       align: 'bottom',
-      x: '72%',
+      x: '68%',
       y: '62%',
       title: 'Masuk tryout penuh dengan timer',
       description: 'Kalau sudah siap, lanjut ke simulasi seluruh soal paket dengan durasi yang sudah ditentukan.',
@@ -266,7 +266,7 @@ export default function Home() {
       icon: 'chart',
       accent: '#7c4dff',
       align: 'top',
-      x: '92%',
+      x: '86%',
       y: '44%',
       title: 'Lihat hasil, skor, dan riwayat',
       description: 'Ringkasan hasil, paket aktif, dan histori percobaan tetap kebaca supaya evaluasinya lebih jelas.',
@@ -454,7 +454,6 @@ export default function Home() {
                     </div>
 
                     <div className="landing-mindmap-copy">
-                      <span className="landing-mindmap-step">{item.step}</span>
                       <span className="landing-mindmap-badge">{item.badge}</span>
                       <h3>{item.title}</h3>
                       <p>{item.description}</p>

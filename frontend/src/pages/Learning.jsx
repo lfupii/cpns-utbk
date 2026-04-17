@@ -50,6 +50,16 @@ function getSectionTopics(section) {
   return [];
 }
 
+function formatActiveTopicLabel(section) {
+  const activeTopicCount = getSectionTopics(section).length;
+
+  if (activeTopicCount <= 0) {
+    return 'Belum ada topik aktif';
+  }
+
+  return `${activeTopicCount} topik aktif`;
+}
+
 export default function Learning() {
   const { packageId } = useParams();
   const navigate = useNavigate();
@@ -527,7 +537,7 @@ export default function Learning() {
                           <small>
                             {sectionMaterialDone && sectionSubtestDone
                               ? 'Materi dan mini test selesai'
-                              : `${section.visible_topic_count || getSectionTopics(section).length}/${section.total_topic_count || getSectionTopics(section).length} topik`}
+                              : formatActiveTopicLabel(section)}
                           </small>
                         </span>
                         <span className="admin-section-sidebar-caret" aria-hidden="true">

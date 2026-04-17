@@ -85,6 +85,16 @@ function computeMiniTestDurationSeconds(section, questionCount) {
   return Math.max(300, totalQuestions * 90);
 }
 
+function formatDurationMinutesLabel(seconds) {
+  const normalizedSeconds = Math.max(0, Number(seconds || 0));
+  if (normalizedSeconds <= 0) {
+    return 'Belum diatur';
+  }
+
+  const totalMinutes = Math.max(1, Math.ceil(normalizedSeconds / 60));
+  return `${totalMinutes} menit`;
+}
+
 function findInitialMiniTestQuestionId(questions, answers) {
   const nextQuestions = Array.isArray(questions) ? questions : [];
   const nextAnswers = answers || {};
@@ -216,6 +226,40 @@ export default function Learning() {
     const layout = String(currentSectionQuestion?.question_image_layout || 'top').toLowerCase();
     return ['top', 'bottom', 'left', 'right'].includes(layout) ? layout : 'top';
   }, [currentSectionQuestion]);
+  const activeSectionTopicTitles = useMemo(
+    () => getSectionTopics(activeSection)
+      .map((topic) => String(topic?.title || '').trim())
+      .filter(Boolean),
+    [activeSection]
+  );
+  const activeSectionMiniTestQuestionCount = useMemo(() => {
+    const loadedQuestionCount = Array.isArray(currentSectionTest.questions) ? currentSectionTest.questions.length : 0;
+    if (loadedQuestionCount > 0) {
+      return loadedQuestionCount;
+    }
+
+    return Math.max(0, Number(activeSection?.mini_test_question_count || 0));
+  }, [activeSection?.mini_test_question_count, currentSectionTest.questions]);
+  const activeSectionMiniTestDurationSeconds = useMemo(() => {
+    const activeDuration = Number(currentSectionTest.totalDurationSeconds || 0);
+    if (activeDuration > 0) {
+      return activeDuration;
+    }
+
+    if (activeSectionMiniTestQuestionCount <= 0 && Number(activeSection?.duration_minutes || 0) <= 0) {
+      return 0;
+    }
+
+    return computeMiniTestDurationSeconds(activeSection, activeSectionMiniTestQuestionCount);
+  }, [activeSection, activeSectionMiniTestQuestionCount, currentSectionTest.totalDurationSeconds]);
+  const activeSectionMiniTestDurationLabel = useMemo(
+    () => formatDurationMinutesLabel(activeSectionMiniTestDurationSeconds),
+    [activeSectionMiniTestDurationSeconds]
+  );
+  const latestSectionMiniTestResult = useMemo(
+    () => currentSectionTest.result || activeSection?.progress?.subtest_test_result || null,
+    [activeSection?.progress?.subtest_test_result, currentSectionTest.result]
+  );
   const currentSectionAnsweredCount = useMemo(
     () => currentSectionQuestions.filter((question) => Boolean(currentSectionTest.answers?.[question.id] || currentSectionTest.answers?.[String(question.id)])).length,
     [currentSectionQuestions, currentSectionTest.answers]
@@ -321,10 +365,6 @@ export default function Learning() {
       ...current,
       [sectionCode]: true,
     }));
-
-    if (hasAccess) {
-      loadSectionTest(sectionCode);
-    }
   };
 
   const updateSectionProgress = (sectionCode, progressPatch) => {
@@ -372,7 +412,7 @@ export default function Learning() {
     }
   };
 
-  const loadSectionTest = async (sectionCode) => {
+  const loadSectionTest = async (sectionCode, { restart = false } = {}) => {
     setSectionTests((current) => ({
       ...current,
       [sectionCode]: {
@@ -395,11 +435,13 @@ export default function Learning() {
         ...(current || {}),
         [sectionCode]: (() => {
           const existingState = current[sectionCode] || {};
-          const answers = existingState.answers || {};
-          const durationSeconds = Number(existingState.totalDurationSeconds || 0) > 0
+          const answers = restart ? {} : (existingState.answers || {});
+          const durationSeconds = !restart && Number(existingState.totalDurationSeconds || 0) > 0
             ? Number(existingState.totalDurationSeconds)
             : computeMiniTestDurationSeconds(sectionMeta, questions.length);
-          const remainingSeconds = existingState.result
+          const remainingSeconds = restart
+            ? durationSeconds
+            : existingState.result
             ? Number(existingState.remainingSeconds || durationSeconds)
             : Math.max(0, Number(existingState.remainingSeconds || durationSeconds));
 
@@ -409,11 +451,12 @@ export default function Learning() {
             open: true,
             questions,
             answers,
-            currentQuestionId: questions.some((question) => Number(question.id) === Number(existingState.currentQuestionId))
+            currentQuestionId: !restart && questions.some((question) => Number(question.id) === Number(existingState.currentQuestionId))
               ? Number(existingState.currentQuestionId)
               : findInitialMiniTestQuestionId(questions, answers),
             totalDurationSeconds: durationSeconds,
             remainingSeconds,
+            result: restart ? null : (existingState.result || null),
             autoSubmitting: false,
             error: '',
           };
@@ -430,6 +473,23 @@ export default function Learning() {
         },
       }));
     }
+  };
+
+  const closeSectionTest = (sectionCode) => {
+    if (!sectionCode) {
+      return;
+    }
+
+    setSectionTests((current) => ({
+      ...current,
+      [sectionCode]: {
+        ...(current[sectionCode] || {}),
+        open: false,
+        loading: false,
+        autoSubmitting: false,
+        error: '',
+      },
+    }));
   };
 
   const setSectionAnswer = (sectionCode, questionId, optionId) => {
@@ -1058,6 +1118,25 @@ export default function Learning() {
                         </div>
                       )}
 
+                      {currentSectionTest.result && (
+                        <div className="learning-section-actions">
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            onClick={() => closeSectionTest(activeSection.code)}
+                          >
+                            Kembali ke Menu Mini Test
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => loadSectionTest(activeSection.code, { restart: true })}
+                          >
+                            Ulangi Mini Test
+                          </button>
+                        </div>
+                      )}
+
                       <div className="test-layout-grid">
                         <div className="test-main-column">
                           <div className="card test-question-card">
@@ -1180,7 +1259,9 @@ export default function Learning() {
                                 </div>
 
                                 <div className="test-action-helper">
-                                  {currentSectionAllAnswered
+                                  {currentSectionTest.result
+                                    ? 'Hasil terakhir sudah tersimpan. Kamu bisa kembali ke menu mini test atau ulangi dari awal.'
+                                    : currentSectionAllAnswered
                                     ? 'Semua jawaban siap dikirim.'
                                     : 'Lengkapi semua soal sebelum submit. Jika waktu habis, jawaban yang sudah diisi akan langsung diproses.'}
                                 </div>
@@ -1190,12 +1271,18 @@ export default function Learning() {
                                     type="button"
                                     className="btn btn-primary test-action-button disabled:opacity-50"
                                     disabled={actionLoading === `test-${activeSection.code}` || currentSectionQuestions.length === 0}
-                                    onClick={() => submitSectionTest(activeSection.code)}
+                                    onClick={() => (
+                                      currentSectionTest.result
+                                        ? loadSectionTest(activeSection.code, { restart: true })
+                                        : submitSectionTest(activeSection.code)
+                                    )}
                                   >
                                     {actionLoading === `test-${activeSection.code}`
                                       ? 'Memproses...'
+                                      : currentSectionTest.result
+                                      ? 'Ulangi Mini Test'
                                       : activeSection.progress.subtest_test_completed
-                                      ? 'Ulangi dan Simpan Hasil'
+                                      ? 'Submit Ulang Mini Test'
                                       : 'Submit Mini Test'}
                                   </button>
                                 </div>
@@ -1230,13 +1317,85 @@ export default function Learning() {
 
               {hasAccess && activeSectionView === 'mini-test' && !currentSectionTest.open && (
                 <div className="learning-subtest-box">
-                  <div className="learning-section-title">
-                    <p>Mini test subtest</p>
-                    <h3>{activeSection.name}</h3>
+                  <section className="test-hero">
+                    <div className="test-hero-copy">
+                      <p className="test-hero-kicker">Preview Mini Test</p>
+                      <h1 className="test-hero-title">{activeSection.name}</h1>
+                      <p className="test-hero-description">
+                        Cek dulu ringkasannya. Timer baru berjalan setelah kamu menekan tombol mulai.
+                      </p>
+                      <div className="test-hero-pills" aria-label="Ringkasan preview mini test subtest">
+                        <span>{packageData.name}</span>
+                        <span>{activeSection.session_name || 'Subtest aktif'}</span>
+                        <span>{activeSectionMiniTestQuestionCount} soal</span>
+                        <span>{activeSectionMiniTestDurationLabel}</span>
+                      </div>
+                    </div>
+
+                    <div className="test-hero-stats">
+                      <div className="test-hero-stat-card">
+                        <span>Judul mini test</span>
+                        <strong>{activeSection.name}</strong>
+                        <small>{activeSection.session_name || 'Subtest belajar aktif'}</small>
+                      </div>
+                      <div className="test-hero-stat-card">
+                        <span>Durasi</span>
+                        <strong>{activeSectionMiniTestDurationLabel}</strong>
+                        <small>
+                          {activeSectionMiniTestQuestionCount > 0
+                            ? `${activeSectionMiniTestQuestionCount} soal akan dikerjakan dalam satu sesi.`
+                            : 'Durasi akan dipakai saat soal mini test tersedia.'}
+                        </small>
+                      </div>
+                      <div className="test-hero-stat-card">
+                        <span>Status</span>
+                        <strong>{activeSection.progress.subtest_test_completed ? 'Pernah selesai' : 'Belum dimulai'}</strong>
+                        <small>
+                          {activeSection.progress.subtest_test_completed
+                            ? 'Kamu bisa mulai lagi untuk mengulang mini test ini.'
+                            : 'Belum ada timer yang berjalan sebelum tombol mulai ditekan.'}
+                        </small>
+                      </div>
+                    </div>
+                  </section>
+
+                  <div className="learning-mini-test-preview-topics">
+                    <p className="learning-sidebar-label">Topik mini test</p>
+                    {activeSectionTopicTitles.length > 0 ? (
+                      <div className="learning-mini-test-topic-chips">
+                        {activeSectionTopicTitles.map((topicTitle) => (
+                          <span key={`${activeSection.code}-${topicTitle}`} className="learning-mini-test-topic-chip">
+                            {topicTitle}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted">Topik untuk mini test ini masih disiapkan.</p>
+                    )}
                   </div>
-                  <button type="button" className="btn btn-primary" onClick={() => loadSectionTest(activeSection.code)}>
-                    Buka Mini Test
-                  </button>
+
+                  {activeSectionMiniTestQuestionCount <= 0 && (
+                    <div className="test-feedback test-feedback-error">
+                      Soal mini test untuk subtest ini belum tersedia.
+                    </div>
+                  )}
+
+                  {latestSectionMiniTestResult && (
+                    <div className="test-feedback test-feedback-success">
+                      Hasil terakhir mini test: <strong>{formatScore(latestSectionMiniTestResult)}</strong>
+                    </div>
+                  )}
+
+                  <div className="learning-section-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={activeSectionMiniTestQuestionCount <= 0}
+                      onClick={() => loadSectionTest(activeSection.code, { restart: Boolean(latestSectionMiniTestResult) })}
+                    >
+                      {latestSectionMiniTestResult ? 'Ulangi Mini Test' : 'Mulai Mini Test'}
+                    </button>
+                  </div>
                 </div>
               )}
             </article>

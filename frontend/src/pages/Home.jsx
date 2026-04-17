@@ -7,6 +7,115 @@ import BrandLogo from '../components/BrandLogo';
 import ThemeToggle from '../components/ThemeToggle';
 import { businessProfile } from '../siteContent';
 
+function FeatureIcon({ name }) {
+  switch (name) {
+    case 'bag':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M7 9V7.75C7 5.679 8.679 4 10.75 4h2.5C15.321 4 17 5.679 17 7.75V9"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M6.1 8.75h11.8l-.7 9.13a2 2 0 0 1-1.99 1.85H8.79a2 2 0 0 1-1.99-1.85l-.7-9.13Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="m9.8 14.2 1.5 1.5 3.2-3.4"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case 'book':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M6.5 5.2h8.2a2.8 2.8 0 0 1 2.8 2.8v10.8H9.3a2.8 2.8 0 0 0-2.8 2.8V8a2.8 2.8 0 0 1 2.8-2.8Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M17.5 18.8H9.3a2.8 2.8 0 0 0-2.8 2.8m4.3-11.2h4.3m-4.3 3.4h4.3"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case 'checklist':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M9.8 6.5h7.7M9.8 12h7.7M9.8 17.5h7.7"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+          <path
+            d="m5.6 6.6 1.2 1.2 1.9-2.2M5.6 12.1l1.2 1.2 1.9-2.2M5.6 17.6l1.2 1.2 1.9-2.2"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case 'timer':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M9 4h6m-3 0v2.2m4.9 1.6 1.5-1.5"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <circle cx="12" cy="13.2" r="6.8" stroke="currentColor" strokeWidth="1.8" />
+          <path
+            d="M12 13.2 15 11.4M12 9.8v3.6"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case 'chart':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M5 18.5h14M6.5 16V12m4 4V9m4 7V6"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="m6.5 11.8 4-3 4 1.8 3-3.6"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export default function Home() {
   const { user, logout, isAdmin } = useAuth();
   const [packages, setPackages] = useState([]);
@@ -110,37 +219,57 @@ export default function Home() {
     {
       step: '01',
       badge: 'Mulai',
-      icon: 'P',
-      title: 'Preview yang bikin cepat paham',
-      description: 'Masuk, cek materi awal, lalu rasakan dulu ritme belajar sebelum commit ke sesi penuh.',
+      icon: 'bag',
+      accent: '#7c4dff',
+      align: 'top',
+      x: '8%',
+      y: '44%',
+      title: 'Pilih paket yang mau dikerjakan',
+      description: 'Mulai dari CPNS Intensif atau UTBK Intensif, lalu masuk ke ruang belajar dari akun yang sama.',
     },
     {
       step: '02',
-      badge: 'Fokus',
-      icon: 'A',
-      title: 'Rute belajar adaptif',
-      description: 'Sistem bantu menaruh subtest yang paling perlu perhatian di depan supaya progres terasa lebih jelas.',
+      badge: 'Materi',
+      icon: 'book',
+      accent: '#8a3ffc',
+      align: 'bottom',
+      x: '28%',
+      y: '62%',
+      title: 'Baca materi per subtest',
+      description: 'Setiap section punya topik dan halaman materi yang bisa dibuka berurutan sebelum lanjut latihan.',
     },
     {
       step: '03',
       badge: 'Latihan',
-      icon: 'L',
-      title: 'Latihan plus evaluasi',
-      description: 'Bukan cuma ngerjain soal, tapi langsung kebaca mana materi yang sudah kuat dan mana yang masih goyang.',
+      icon: 'checklist',
+      accent: '#4f7dff',
+      align: 'top',
+      x: '50%',
+      y: '44%',
+      title: 'Kerjakan mini test subtest',
+      description: 'Sesudah materi, ada latihan singkat untuk cek pemahaman dan menandai progres belajarmu.',
     },
     {
       step: '04',
-      badge: 'Stamina',
-      icon: 'S',
-      title: 'Simulasi bertahap',
-      description: 'Mulai dari drill singkat, mini test, sampai tryout penuh untuk bangun tempo dan fokus ujian.',
+      badge: 'Tryout',
+      icon: 'timer',
+      accent: '#7c4dff',
+      align: 'bottom',
+      x: '72%',
+      y: '62%',
+      title: 'Masuk tryout penuh dengan timer',
+      description: 'Kalau sudah siap, lanjut ke simulasi seluruh soal paket dengan durasi yang sudah ditentukan.',
     },
     {
       step: '05',
-      badge: 'Naik',
-      icon: 'N',
-      title: 'Skor naik lebih kebaca',
-      description: 'Semua progres masuk ke satu flow yang rapi, jadi keputusan belajarmu selalu punya arah berikutnya.',
+      badge: 'Hasil',
+      icon: 'chart',
+      accent: '#7c4dff',
+      align: 'top',
+      x: '92%',
+      y: '44%',
+      title: 'Lihat hasil, skor, dan riwayat',
+      description: 'Ringkasan hasil, paket aktif, dan histori percobaan tetap kebaca supaya evaluasinya lebih jelas.',
     },
   ];
 
@@ -300,18 +429,33 @@ export default function Home() {
 
             <div className="landing-mindmap-shell">
               <div className="landing-mindmap-track" aria-label="Flow fitur Ujiin">
+                <svg className="landing-mindmap-line" viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="landingMindmapGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#8a3ffc" />
+                      <stop offset="48%" stopColor="#4f7dff" />
+                      <stop offset="100%" stopColor="#43c7bb" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M18 185 C70 185 88 185 88 185 S198 262 280 262 S418 185 500 185 S638 262 720 262 S858 185 920 185 S976 185 982 185" />
+                </svg>
                 {featureMindmap.map((item) => (
-                  <article key={item.step} className="landing-mindmap-node">
-                    <div className="landing-mindmap-node-top">
-                      <span className="landing-mindmap-step">{item.step}</span>
-                      <span className="landing-mindmap-badge">{item.badge}</span>
-                    </div>
-
+                  <article
+                    key={item.step}
+                    className={`landing-mindmap-node landing-mindmap-node-${item.align}`}
+                    style={{
+                      '--mindmap-accent': item.accent,
+                      '--mindmap-x': item.x,
+                      '--mindmap-y': item.y,
+                    }}
+                  >
                     <div className="landing-mindmap-icon" aria-hidden="true">
-                      <span>{item.icon}</span>
+                      <FeatureIcon name={item.icon} />
                     </div>
 
                     <div className="landing-mindmap-copy">
+                      <span className="landing-mindmap-step">{item.step}</span>
+                      <span className="landing-mindmap-badge">{item.badge}</span>
                       <h3>{item.title}</h3>
                       <p>{item.description}</p>
                     </div>

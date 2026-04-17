@@ -4,6 +4,14 @@ import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
 
+function formatTime(seconds) {
+  const safeSeconds = Math.max(0, Number(seconds || 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const secs = safeSeconds % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
 function formatScore(result) {
   if (!result) {
     return '';
@@ -58,6 +66,30 @@ function formatActiveTopicLabel(section) {
   }
 
   return `${activeTopicCount} topik dan 1 mini test`;
+}
+
+function computeMiniTestDurationSeconds(section, questionCount) {
+  const totalQuestions = Math.max(0, Number(questionCount || 0));
+  const durationMinutes = Math.max(0, Number(section?.duration_minutes || 0));
+  const targetQuestionCount = Math.max(0, Number(section?.target_question_count || 0));
+
+  if (durationMinutes > 0 && targetQuestionCount > 0 && totalQuestions > 0) {
+    const estimatedSeconds = Math.round((durationMinutes * 60 * totalQuestions) / targetQuestionCount);
+    return Math.max(180, estimatedSeconds);
+  }
+
+  if (durationMinutes > 0) {
+    return Math.max(180, Math.round(durationMinutes * 60));
+  }
+
+  return Math.max(300, totalQuestions * 90);
+}
+
+function findInitialMiniTestQuestionId(questions, answers) {
+  const nextQuestions = Array.isArray(questions) ? questions : [];
+  const nextAnswers = answers || {};
+  const firstUnansweredQuestion = nextQuestions.find((question) => !nextAnswers[question.id] && !nextAnswers[String(question.id)]);
+  return Number(firstUnansweredQuestion?.id || nextQuestions[0]?.id || 0) || null;
 }
 
 export default function Learning() {
@@ -167,6 +199,33 @@ export default function Learning() {
   const summary = learning?.summary || {};
   const packageData = learning?.package || null;
   const currentSectionTest = activeSection ? sectionTests[activeSection.code] || {} : {};
+  const currentSectionQuestions = currentSectionTest.questions || [];
+  const currentSectionQuestion = useMemo(() => {
+    if (!currentSectionQuestions.length) {
+      return null;
+    }
+
+    const currentQuestionId = Number(currentSectionTest.currentQuestionId || 0);
+    return currentSectionQuestions.find((question) => Number(question.id) === currentQuestionId) || currentSectionQuestions[0] || null;
+  }, [currentSectionQuestions, currentSectionTest.currentQuestionId]);
+  const currentSectionQuestionIndex = useMemo(
+    () => currentSectionQuestions.findIndex((question) => Number(question.id) === Number(currentSectionQuestion?.id)),
+    [currentSectionQuestion, currentSectionQuestions]
+  );
+  const currentSectionQuestionImageLayout = useMemo(() => {
+    const layout = String(currentSectionQuestion?.question_image_layout || 'top').toLowerCase();
+    return ['top', 'bottom', 'left', 'right'].includes(layout) ? layout : 'top';
+  }, [currentSectionQuestion]);
+  const currentSectionAnsweredCount = useMemo(
+    () => currentSectionQuestions.filter((question) => Boolean(currentSectionTest.answers?.[question.id] || currentSectionTest.answers?.[String(question.id)])).length,
+    [currentSectionQuestions, currentSectionTest.answers]
+  );
+  const currentSectionAllAnswered = useMemo(
+    () => currentSectionQuestions.length > 0 && currentSectionQuestions.every((question) => Boolean(currentSectionTest.answers?.[question.id] || currentSectionTest.answers?.[String(question.id)])),
+    [currentSectionQuestions, currentSectionTest.answers]
+  );
+  const previousSectionQuestionId = currentSectionQuestionIndex > 0 ? currentSectionQuestions[currentSectionQuestionIndex - 1]?.id : null;
+  const nextSectionQuestionId = currentSectionQuestionIndex >= 0 ? currentSectionQuestions[currentSectionQuestionIndex + 1]?.id : null;
   const completedTryout = Number(summary.completed_attempts || 0) > 0;
   const materialDoneCount = sections.filter((section) => section.progress.material_read).length;
   const subtestDoneCount = sections.filter((section) => section.progress.subtest_test_completed).length;
@@ -197,6 +256,10 @@ export default function Learning() {
 
     return currentPackageOption ? [currentPackageOption] : [];
   }, [activePackages, currentPackageOption]);
+  const sectionLookup = useMemo(
+    () => new Map(sections.map((section) => [section.code, section])),
+    [sections]
+  );
   const lastReadSection = useMemo(() => {
     const scoredSections = sections
       .map((section) => {
@@ -327,16 +390,34 @@ export default function Learning() {
         `/learning/section-test?package_id=${numericPackageId}&section_code=${encodeURIComponent(sectionCode)}`
       );
       const questions = response.data.data?.questions || [];
+      const sectionMeta = response.data.data?.section || sectionLookup.get(sectionCode) || null;
       setSectionTests((current) => ({
-        ...current,
-        [sectionCode]: {
-          ...(current[sectionCode] || {}),
-          loading: false,
-          open: true,
-          questions,
-          answers: current[sectionCode]?.answers || {},
-          error: '',
-        },
+        ...(current || {}),
+        [sectionCode]: (() => {
+          const existingState = current[sectionCode] || {};
+          const answers = existingState.answers || {};
+          const durationSeconds = Number(existingState.totalDurationSeconds || 0) > 0
+            ? Number(existingState.totalDurationSeconds)
+            : computeMiniTestDurationSeconds(sectionMeta, questions.length);
+          const remainingSeconds = existingState.result
+            ? Number(existingState.remainingSeconds || durationSeconds)
+            : Math.max(0, Number(existingState.remainingSeconds || durationSeconds));
+
+          return {
+            ...existingState,
+            loading: false,
+            open: true,
+            questions,
+            answers,
+            currentQuestionId: questions.some((question) => Number(question.id) === Number(existingState.currentQuestionId))
+              ? Number(existingState.currentQuestionId)
+              : findInitialMiniTestQuestionId(questions, answers),
+            totalDurationSeconds: durationSeconds,
+            remainingSeconds,
+            autoSubmitting: false,
+            error: '',
+          };
+        })(),
       }));
     } catch (err) {
       setSectionTests((current) => ({
@@ -358,13 +439,41 @@ export default function Learning() {
         ...(current[sectionCode] || {}),
         answers: {
           ...(current[sectionCode]?.answers || {}),
-          [questionId]: optionId,
+          [questionId]: Number(optionId),
         },
+        result: null,
+        error: '',
       },
     }));
   };
 
-  const submitSectionTest = async (sectionCode) => {
+  const goToSectionQuestion = (sectionCode, questionId) => {
+    if (!sectionCode || !questionId) {
+      return;
+    }
+
+    setSectionTests((current) => ({
+      ...current,
+      [sectionCode]: {
+        ...(current[sectionCode] || {}),
+        currentQuestionId: Number(questionId),
+      },
+    }));
+  };
+
+  const handleSectionRelativeNavigation = (sectionCode, direction) => {
+    const testState = sectionTests[sectionCode] || {};
+    const questions = testState.questions || [];
+    const currentIndex = questions.findIndex((question) => Number(question.id) === Number(testState.currentQuestionId));
+    const targetQuestion = questions[currentIndex + direction] || null;
+    if (!targetQuestion) {
+      return;
+    }
+
+    goToSectionQuestion(sectionCode, targetQuestion.id);
+  };
+
+  const submitSectionTest = async (sectionCode, { allowPartial = false } = {}) => {
     const testState = sectionTests[sectionCode] || {};
     const questions = testState.questions || [];
     const answers = questions
@@ -385,7 +494,7 @@ export default function Learning() {
       return;
     }
 
-    if (answers.length < questions.length) {
+    if (!allowPartial && answers.length < questions.length) {
       setSectionTests((current) => ({
         ...current,
         [sectionCode]: {
@@ -412,6 +521,7 @@ export default function Learning() {
         [sectionCode]: {
           ...(current[sectionCode] || {}),
           result,
+          autoSubmitting: false,
           error: '',
         },
       }));
@@ -427,6 +537,7 @@ export default function Learning() {
         ...current,
         [sectionCode]: {
           ...(current[sectionCode] || {}),
+          autoSubmitting: false,
           error: err.response?.data?.message || 'Gagal menyimpan mini test subtest',
         },
       }));
@@ -442,6 +553,76 @@ export default function Learning() {
   const openDashboardView = () => {
     setContentView('dashboard');
   };
+
+  useEffect(() => {
+    if (activeSectionView !== 'mini-test' || !hasAccess || !activeSection?.code) {
+      return undefined;
+    }
+
+    const testState = sectionTests[activeSection.code];
+    if (
+      !testState?.open
+      || testState.loading
+      || testState.result
+      || Number(testState.remainingSeconds || 0) <= 0
+      || (testState.questions || []).length === 0
+    ) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setSectionTests((current) => {
+        const currentState = current[activeSection.code];
+        if (
+          !currentState
+          || currentState.loading
+          || currentState.result
+          || Number(currentState.remainingSeconds || 0) <= 0
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [activeSection.code]: {
+            ...currentState,
+            remainingSeconds: Math.max(0, Number(currentState.remainingSeconds || 0) - 1),
+          },
+        };
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [activeSection?.code, activeSectionView, hasAccess, sectionTests]);
+
+  useEffect(() => {
+    if (activeSectionView !== 'mini-test' || !hasAccess || !activeSection?.code) {
+      return;
+    }
+
+    const testState = sectionTests[activeSection.code];
+    if (
+      !testState?.open
+      || testState.loading
+      || testState.result
+      || testState.autoSubmitting
+      || (testState.questions || []).length === 0
+      || Number(testState.remainingSeconds || 0) > 0
+      || actionLoading === `test-${activeSection.code}`
+    ) {
+      return;
+    }
+
+    setSectionTests((current) => ({
+      ...current,
+      [activeSection.code]: {
+        ...(current[activeSection.code] || {}),
+        autoSubmitting: true,
+      },
+    }));
+
+    submitSectionTest(activeSection.code, { allowPartial: true });
+  }, [actionLoading, activeSection?.code, activeSectionView, hasAccess, sectionTests]);
 
   if (loading) {
     return (
@@ -824,72 +1005,224 @@ export default function Learning() {
 
               {hasAccess && activeSectionView === 'mini-test' && currentSectionTest.open && (
                 <div className="learning-subtest-box">
-                  <div className="learning-section-title">
-                    <p>Mini test subtest</p>
-                    <h3>{activeSection.name}</h3>
-                  </div>
-
                   {currentSectionTest.loading ? (
                     <p>Memuat mini test...</p>
                   ) : currentSectionTest.error ? (
-                    <div className="alert">{currentSectionTest.error}</div>
-                  ) : (currentSectionTest.questions || []).length === 0 ? (
+                    <div className="test-feedback test-feedback-error">{currentSectionTest.error}</div>
+                  ) : currentSectionQuestions.length === 0 ? (
                     <p className="text-muted">Soal mini test untuk subtest ini belum tersedia.</p>
+                  ) : !currentSectionQuestion ? (
+                    <p className="text-muted">Soal mini test belum siap ditampilkan.</p>
                   ) : (
                     <>
-                      <div className="learning-question-list">
-                        {currentSectionTest.questions.map((question, questionIndex) => (
-                          <div key={question.id} className="learning-question">
-                            <h4>{questionIndex + 1}. {question.question_text}</h4>
-                            {question.question_image_url && (
-                              <img
-                                src={question.question_image_url}
-                                alt={`Mini test ${questionIndex + 1}`}
-                                className="test-question-image"
-                                loading="lazy"
-                              />
-                            )}
-                            <div className="learning-option-list">
-                              {(question.options || []).map((option) => (
-                                <label key={option.id} className="learning-option">
-                                  <input
-                                    type="radio"
-                                    name={`section-${activeSection.code}-question-${question.id}`}
-                                    checked={Number(currentSectionTest.answers?.[question.id]) === Number(option.id)}
-                                    onChange={() => setSectionAnswer(activeSection.code, question.id, option.id)}
-                                  />
-                                  <span className="learning-option-copy">
-                                    <span>{option.letter}. {option.text}</span>
-                                    {option.image_url && (
-                                      <img
-                                        src={option.image_url}
-                                        alt={`Opsi ${option.letter}`}
-                                        className="test-option-image"
-                                        loading="lazy"
-                                      />
-                                    )}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
+                      <section className="test-hero">
+                        <div className="test-hero-copy">
+                          <p className="test-hero-kicker">Mini Test Subtest</p>
+                          <h1 className="test-hero-title">{activeSection.name}</h1>
+                          <p className="test-hero-description">
+                            Kerjakan soal satu per satu seperti mode tryout, lalu kirim hasil saat semua jawaban sudah siap.
+                          </p>
+                          <div className="test-hero-pills" aria-label="Ringkasan mini test subtest">
+                            <span>{packageData.name}</span>
+                            <span>{currentSectionQuestions.length} soal</span>
+                            <span>{activeSection.session_name || 'Subtest aktif'}</span>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+
+                        <div className="test-hero-stats">
+                          <div className="test-hero-stat-card">
+                            <span>Terjawab</span>
+                            <strong>{currentSectionAnsweredCount} / {currentSectionQuestions.length}</strong>
+                            <small>Progress mini test subtest aktif</small>
+                          </div>
+                          <div className="test-hero-stat-card">
+                            <span>Sisa waktu</span>
+                            <strong>{formatTime(currentSectionTest.remainingSeconds)}</strong>
+                            <small>{currentSectionTest.result ? 'Timer berhenti setelah hasil tersimpan' : 'Waktu akan berjalan selama mini test dibuka'}</small>
+                          </div>
+                          <div className="test-hero-stat-card">
+                            <span>Status</span>
+                            <strong>{currentSectionTest.result ? 'Selesai' : 'Sedang dikerjakan'}</strong>
+                            <small>
+                              {currentSectionAllAnswered
+                                ? 'Semua soal sudah terisi.'
+                                : `${currentSectionQuestions.length - currentSectionAnsweredCount} soal masih kosong.`}
+                            </small>
+                          </div>
+                        </div>
+                      </section>
 
                       {currentSectionTest.result && (
-                        <div className="learning-test-result">
+                        <div className="test-feedback test-feedback-success">
                           Hasil mini test: <strong>{formatScore(currentSectionTest.result)}</strong>
                         </div>
                       )}
 
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={actionLoading === `test-${activeSection.code}`}
-                        onClick={() => submitSectionTest(activeSection.code)}
-                      >
-                        {activeSection.progress.subtest_test_completed ? 'Ulangi dan Simpan Hasil' : 'Submit Mini Test'}
-                      </button>
+                      <div className="test-layout-grid">
+                        <div className="test-main-column">
+                          <div className="card test-question-card">
+                            <div className="test-question-stage">
+                              <div className="test-inline-navigation">
+                                <div className="test-inline-navigation-head">
+                                  <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
+                                  <p className="test-inline-navigation-note">
+                                    Klik nomor soal untuk berpindah. Semua jawaban tersimpan lokal sampai dikirim.
+                                  </p>
+                                </div>
+                                <div className="test-question-strip test-question-strip-inline" role="tablist" aria-label="Navigasi mini test subtest">
+                                  {currentSectionQuestions.map((question, index) => {
+                                    const answeredValue = currentSectionTest.answers?.[question.id] || currentSectionTest.answers?.[String(question.id)];
+
+                                    return (
+                                      <button
+                                        key={question.id}
+                                        type="button"
+                                        onClick={() => goToSectionQuestion(activeSection.code, question.id)}
+                                        className={[
+                                          'test-nav-chip',
+                                          'test-nav-chip-button',
+                                          Number(question.id) === Number(currentSectionQuestion.id)
+                                            ? 'test-nav-chip-current'
+                                            : answeredValue
+                                            ? 'test-nav-chip-done'
+                                            : 'test-nav-chip-empty',
+                                        ].filter(Boolean).join(' ')}
+                                        aria-label={`Soal ${index + 1}`}
+                                      >
+                                        {index + 1}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div className="test-nav-legend">
+                                  <p><span className="test-nav-legend-dot test-nav-legend-dot-current" />Soal aktif</p>
+                                  <p><span className="test-nav-legend-dot test-nav-legend-dot-done" />Sudah dijawab</p>
+                                  <p><span className="test-nav-legend-dot test-nav-legend-dot-empty" />Belum dijawab</p>
+                                </div>
+                              </div>
+
+                              <div className="test-question-head">
+                                <div className="test-question-heading">
+                                  <span className="test-question-number">Soal {Math.max(1, currentSectionQuestionIndex + 1)}</span>
+                                  <h2 className="test-question-title">Fokuskan jawabanmu di soal ini dulu</h2>
+                                  <p className="test-question-section-label">{activeSection.name}</p>
+                                </div>
+                              </div>
+
+                              {(currentSectionQuestion.question_text || currentSectionQuestion.question_image_url) && (
+                                <div className={`test-question-media test-question-media-${currentSectionQuestionImageLayout}`}>
+                                  {currentSectionQuestion.question_text && (
+                                    <div className="test-question-text-block">
+                                      <p className="test-question-text">{currentSectionQuestion.question_text}</p>
+                                    </div>
+                                  )}
+                                  {currentSectionQuestion.question_image_url && (
+                                    <div className="test-question-image-frame">
+                                      <img
+                                        src={currentSectionQuestion.question_image_url}
+                                        alt={`Mini test soal ${currentSectionQuestionIndex + 1}`}
+                                        className="test-question-image"
+                                        loading="lazy"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="space-y-3 mb-8">
+                                {currentSectionQuestion.options?.map((option) => (
+                                  <label
+                                    key={option.id}
+                                    className={`test-option ${Number(currentSectionTest.answers?.[currentSectionQuestion.id] || currentSectionTest.answers?.[String(currentSectionQuestion.id)] || 0) === Number(option.id) ? 'test-option-active' : ''}`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`section-${activeSection.code}-question-${currentSectionQuestion.id}`}
+                                      checked={Number(currentSectionTest.answers?.[currentSectionQuestion.id] || currentSectionTest.answers?.[String(currentSectionQuestion.id)] || 0) === Number(option.id)}
+                                      onChange={() => setSectionAnswer(activeSection.code, currentSectionQuestion.id, option.id)}
+                                      className="mt-1 w-5 h-5 accent-blue-600"
+                                    />
+                                    <div className="test-option-copy">
+                                      <p className="test-option-letter">{option.letter}.</p>
+                                      {option.text && <p className="test-option-text">{option.text}</p>}
+                                      {option.image_url && (
+                                        <img
+                                          src={option.image_url}
+                                          alt={`Opsi ${option.letter}`}
+                                          className="test-option-image"
+                                          loading="lazy"
+                                        />
+                                      )}
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+
+                              <div className="test-action-row">
+                                <div className="test-action-buttons">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSectionRelativeNavigation(activeSection.code, -1)}
+                                    disabled={!previousSectionQuestionId}
+                                    className="btn btn-outline test-action-button disabled:opacity-50"
+                                  >
+                                    ← Sebelumnya
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSectionRelativeNavigation(activeSection.code, 1)}
+                                    disabled={!nextSectionQuestionId}
+                                    className="btn btn-outline test-action-button disabled:opacity-50"
+                                  >
+                                    Selanjutnya →
+                                  </button>
+                                </div>
+
+                                <div className="test-action-helper">
+                                  {currentSectionAllAnswered
+                                    ? 'Semua jawaban siap dikirim.'
+                                    : 'Lengkapi semua soal sebelum submit. Jika waktu habis, jawaban yang sudah diisi akan langsung diproses.'}
+                                </div>
+
+                                <div className="test-action-buttons test-action-buttons-end">
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary test-action-button disabled:opacity-50"
+                                    disabled={actionLoading === `test-${activeSection.code}` || currentSectionQuestions.length === 0}
+                                    onClick={() => submitSectionTest(activeSection.code)}
+                                  >
+                                    {actionLoading === `test-${activeSection.code}`
+                                      ? 'Memproses...'
+                                      : activeSection.progress.subtest_test_completed
+                                      ? 'Ulangi dan Simpan Hasil'
+                                      : 'Submit Mini Test'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="test-sidebar-column">
+                          <div className="test-sidebar-metrics">
+                            <div className="test-header-stat">
+                              <p className="test-header-stat-label">Terjawab</p>
+                              <p className="test-header-stat-value">{currentSectionAnsweredCount} / {currentSectionQuestions.length}</p>
+                            </div>
+                            <div className="test-header-stat">
+                              <p className="test-header-stat-label">Sisa Waktu</p>
+                              <p className={`test-header-stat-value ${Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'test-header-stat-value-danger' : 'test-header-stat-value-success'}`}>
+                                {formatTime(currentSectionTest.remainingSeconds)}
+                              </p>
+                            </div>
+                            <div className="test-header-stat">
+                              <p className="test-header-stat-label">Soal Aktif</p>
+                              <p className="test-header-stat-value">{Math.max(1, currentSectionQuestionIndex + 1)} / {currentSectionQuestions.length}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   )}
                 </div>

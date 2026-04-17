@@ -708,6 +708,9 @@ class LearningController {
             sendResponse('success', 'Soal test subtest berhasil diambil', [
                 'package_id' => $packageId,
                 'section_code' => $sectionCode,
+                'section' => array_values(array_filter($workflow['sections'], static function (array $section) use ($sectionCode): bool {
+                    return (string) ($section['code'] ?? '') === $sectionCode;
+                }))[0] ?? null,
                 'questions' => $questions,
             ]);
         } catch (RuntimeException $error) {
@@ -748,10 +751,6 @@ class LearningController {
                 }
             }
 
-            if (count($answerMap) === 0) {
-                throw new RuntimeException('Jawaban test subtest belum diisi', 422);
-            }
-
             $query = "SELECT q.id AS question_id, qo.id AS option_id, qo.is_correct
                       FROM learning_section_questions q
                       JOIN learning_section_question_options qo ON qo.question_id = q.id
@@ -761,23 +760,19 @@ class LearningController {
             $stmt->execute();
             $result = $stmt->get_result();
 
-            $validQuestionIds = [];
+            $questionIds = [];
             $correctAnswers = 0;
             while ($row = $result->fetch_assoc()) {
                 $questionId = (int) $row['question_id'];
                 $optionId = (int) $row['option_id'];
-                if (!array_key_exists($questionId, $answerMap)) {
-                    continue;
-                }
+                $questionIds[$questionId] = true;
 
-                $validQuestionIds[$questionId] = true;
-
-                if (($answerMap[$questionId] ?? 0) === $optionId && (int) $row['is_correct'] === 1) {
+                if (array_key_exists($questionId, $answerMap) && ($answerMap[$questionId] ?? 0) === $optionId && (int) $row['is_correct'] === 1) {
                     $correctAnswers++;
                 }
             }
 
-            $totalQuestions = count($validQuestionIds);
+            $totalQuestions = count($questionIds);
             if ($totalQuestions === 0) {
                 throw new RuntimeException('Soal test subtest tidak ditemukan', 404);
             }

@@ -12,23 +12,24 @@ function FeatureIcon({ name }) {
     case 'bag':
       return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="5.4" y="8.2" width="13.2" height="11" rx="2.6" fill="#dbeafe" />
           <path
             d="M7 9V7.75C7 5.679 8.679 4 10.75 4h2.5C15.321 4 17 5.679 17 7.75V9"
-            stroke="currentColor"
+            stroke="#4f46e5"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
           <path
             d="M6.1 8.75h11.8l-.7 9.13a2 2 0 0 1-1.99 1.85H8.79a2 2 0 0 1-1.99-1.85l-.7-9.13Z"
-            stroke="currentColor"
+            stroke="#2563eb"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
           <path
             d="m9.8 14.2 1.5 1.5 3.2-3.4"
-            stroke="currentColor"
+            stroke="#16a34a"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -38,16 +39,19 @@ function FeatureIcon({ name }) {
     case 'book':
       return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6.5 6.1h8.3a2.7 2.7 0 0 1 2.7 2.7v9.9H9.4a2.9 2.9 0 0 0-2.9 2.9V8.9a2.8 2.8 0 0 1 2.8-2.8Z" fill="#dbeafe" />
+          <path d="M10.4 10.1h4.5" stroke="#2563eb" strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M10.4 13.2h4.5" stroke="#60a5fa" strokeWidth="1.7" strokeLinecap="round" />
           <path
             d="M6.5 5.2h8.2a2.8 2.8 0 0 1 2.8 2.8v10.8H9.3a2.8 2.8 0 0 0-2.8 2.8V8a2.8 2.8 0 0 1 2.8-2.8Z"
-            stroke="currentColor"
+            stroke="#1d4ed8"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
           <path
             d="M17.5 18.8H9.3a2.8 2.8 0 0 0-2.8 2.8m4.3-11.2h4.3m-4.3 3.4h4.3"
-            stroke="currentColor"
+            stroke="#334155"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -57,15 +61,16 @@ function FeatureIcon({ name }) {
     case 'checklist':
       return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4.2" y="4.6" width="15.6" height="14.8" rx="3" fill="#eff6ff" />
           <path
             d="M9.8 6.5h7.7M9.8 12h7.7M9.8 17.5h7.7"
-            stroke="currentColor"
+            stroke="#475569"
             strokeWidth="1.8"
             strokeLinecap="round"
           />
           <path
             d="m5.6 6.6 1.2 1.2 1.9-2.2M5.6 12.1l1.2 1.2 1.9-2.2M5.6 17.6l1.2 1.2 1.9-2.2"
-            stroke="currentColor"
+            stroke="#2563eb"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -75,40 +80,47 @@ function FeatureIcon({ name }) {
     case 'timer':
       return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="13.2" r="6.2" fill="#dbeafe" />
           <path
             d="M9 4h6m-3 0v2.2m4.9 1.6 1.5-1.5"
-            stroke="currentColor"
+            stroke="#475569"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <circle cx="12" cy="13.2" r="6.8" stroke="currentColor" strokeWidth="1.8" />
+          <circle cx="12" cy="13.2" r="6.8" stroke="#2563eb" strokeWidth="1.8" />
           <path
             d="M12 13.2 15 11.4M12 9.8v3.6"
-            stroke="currentColor"
+            stroke="#7c3aed"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+          <circle cx="12" cy="13.2" r="1.2" fill="#0f172a" />
         </svg>
       );
     case 'chart':
       return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 18.5h2.5v-4.1H6v4.1Zm4.7 0h2.6v-6.7h-2.6v6.7Zm4.8 0h2.5V8.2h-2.5v10.3Z" fill="#93c5fd" />
           <path
             d="M5 18.5h14M6.5 16V12m4 4V9m4 7V6"
-            stroke="currentColor"
+            stroke="#334155"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
           <path
             d="m6.5 11.8 4-3 4 1.8 3-3.6"
-            stroke="currentColor"
+            stroke="#2563eb"
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+          <circle cx="6.5" cy="11.8" r="1" fill="#7c3aed" />
+          <circle cx="10.5" cy="8.8" r="1" fill="#2563eb" />
+          <circle cx="14.5" cy="10.6" r="1" fill="#14b8a6" />
+          <circle cx="17.5" cy="7" r="1" fill="#f59e0b" />
         </svg>
       );
     default:
@@ -222,8 +234,6 @@ export default function Home() {
       icon: 'bag',
       accent: '#7c4dff',
       align: 'top',
-      x: '14%',
-      y: '44%',
       title: 'Pilih paket yang mau dikerjakan',
       description: 'Mulai dari CPNS Intensif atau UTBK Intensif, lalu masuk ke ruang belajar dari akun yang sama.',
     },
@@ -233,8 +243,6 @@ export default function Home() {
       icon: 'book',
       accent: '#8a3ffc',
       align: 'bottom',
-      x: '32%',
-      y: '62%',
       title: 'Baca materi per subtest',
       description: 'Setiap section punya topik dan halaman materi yang bisa dibuka berurutan sebelum lanjut latihan.',
     },
@@ -244,8 +252,6 @@ export default function Home() {
       icon: 'checklist',
       accent: '#4f7dff',
       align: 'top',
-      x: '50%',
-      y: '44%',
       title: 'Kerjakan mini test subtest',
       description: 'Sesudah materi, ada latihan singkat untuk cek pemahaman dan menandai progres belajarmu.',
     },
@@ -255,8 +261,6 @@ export default function Home() {
       icon: 'timer',
       accent: '#7c4dff',
       align: 'bottom',
-      x: '68%',
-      y: '62%',
       title: 'Masuk tryout penuh dengan timer',
       description: 'Kalau sudah siap, lanjut ke simulasi seluruh soal paket dengan durasi yang sudah ditentukan.',
     },
@@ -266,8 +270,6 @@ export default function Home() {
       icon: 'chart',
       accent: '#7c4dff',
       align: 'top',
-      x: '86%',
-      y: '44%',
       title: 'Lihat hasil, skor, dan riwayat',
       description: 'Ringkasan hasil, paket aktif, dan histori percobaan tetap kebaca supaya evaluasinya lebih jelas.',
     },
@@ -437,7 +439,7 @@ export default function Home() {
                       <stop offset="100%" stopColor="#43c7bb" />
                     </linearGradient>
                   </defs>
-                  <path d="M18 185 C70 185 88 185 88 185 S198 262 280 262 S418 185 500 185 S638 262 720 262 S858 185 920 185 S976 185 982 185" />
+                  <path d="M36 188 C88 188 96 188 100 188 S228 262 300 262 S428 188 500 188 S628 262 700 262 S828 188 900 188 S964 188 980 188" />
                 </svg>
                 {featureMindmap.map((item) => (
                   <article
@@ -445,18 +447,16 @@ export default function Home() {
                     className={`landing-mindmap-node landing-mindmap-node-${item.align}`}
                     style={{
                       '--mindmap-accent': item.accent,
-                      '--mindmap-x': item.x,
-                      '--mindmap-y': item.y,
                     }}
                   >
-                    <div className="landing-mindmap-icon" aria-hidden="true">
-                      <FeatureIcon name={item.icon} />
-                    </div>
-
                     <div className="landing-mindmap-copy">
                       <span className="landing-mindmap-badge">{item.badge}</span>
                       <h3>{item.title}</h3>
                       <p>{item.description}</p>
+                    </div>
+
+                    <div className="landing-mindmap-icon" aria-hidden="true">
+                      <FeatureIcon name={item.icon} />
                     </div>
                   </article>
                 ))}

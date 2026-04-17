@@ -1484,7 +1484,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .landing-mindmap-shell {
   position: relative;
   overflow: hidden;
-  padding: 2.4rem 1.4rem;
+  padding: 2rem 2rem 2.2rem;
   border-radius: 2rem;
   border: 1px solid rgba(214, 226, 240, 0.95);
   background:
@@ -1497,7 +1497,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .landing-mindmap-track {
   position: relative;
   z-index: 1;
-  min-height: 40rem;
+  min-height: 31rem;
 }
 
 .landing-mindmap-line {
@@ -1511,7 +1511,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .landing-mindmap-line path {
   fill: none;
   stroke: url(#landingMindmapGradient);
-  stroke-width: 10;
+  stroke-width: 9;
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 12px 20px rgba(79, 125, 255, 0.2));
@@ -1522,7 +1522,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   left: var(--mindmap-x);
   top: var(--mindmap-y);
   transform: translate(-50%, -50%);
-  width: min(18vw, 13rem);
+  width: min(15vw, 10.75rem);
   display: grid;
   justify-items: center;
   animation: softRise 0.72s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -1536,42 +1536,34 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .landing-mindmap-node:nth-of-type(5) { animation-delay: 0.2s; }
 
 .landing-mindmap-node-top .landing-mindmap-copy {
-  bottom: calc(100% + 1rem);
+  bottom: calc(100% + 0.9rem);
 }
 
 .landing-mindmap-node-bottom .landing-mindmap-copy {
-  top: calc(100% + 1rem);
-}
-
-.landing-mindmap-step {
-  color: rgba(34, 51, 79, 0.3);
-  font-size: clamp(2.9rem, 4vw, 4rem);
-  line-height: 0.88;
-  letter-spacing: -0.05em;
-  font-weight: 300;
+  top: calc(100% + 0.9rem);
 }
 
 .landing-mindmap-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2rem;
-  padding: 0 0.88rem;
+  min-height: 1.75rem;
+  padding: 0 0.72rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(191, 210, 237, 0.96);
   color: #5f7498;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   backdrop-filter: blur(10px);
 }
 
 .landing-mindmap-icon {
   position: relative;
-  width: 7.4rem;
-  height: 7.4rem;
+  width: 5.8rem;
+  height: 5.8rem;
   display: grid;
   place-items: center;
   border-radius: 999px;
@@ -1605,8 +1597,8 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .landing-mindmap-icon svg {
   position: relative;
   z-index: 1;
-  width: 2.8rem;
-  height: 2.8rem;
+  width: 2.2rem;
+  height: 2.2rem;
   color: #274165;
 }
 
@@ -1615,20 +1607,38 @@ html[data-theme='dark'] .theme-toggle-thumb {
   left: 50%;
   transform: translateX(-50%);
   display: grid;
-  gap: 0.42rem;
-  width: min(20vw, 14rem);
+  gap: 0.36rem;
+  width: min(17vw, 11.4rem);
   text-align: center;
+}
+
+.landing-mindmap-node:nth-of-type(1) .landing-mindmap-copy {
+  left: -0.15rem;
+  transform: none;
+  text-align: left;
+}
+
+.landing-mindmap-node:nth-of-type(5) .landing-mindmap-copy {
+  left: auto;
+  right: -0.15rem;
+  transform: none;
+  text-align: right;
 }
 
 .landing-mindmap-node:hover .landing-mindmap-copy {
   transform: translateX(-50%) translateY(-0.15rem);
 }
 
+.landing-mindmap-node:nth-of-type(1):hover .landing-mindmap-copy,
+.landing-mindmap-node:nth-of-type(5):hover .landing-mindmap-copy {
+  transform: translateY(-0.15rem);
+}
+
 .landing-mindmap-copy h3 {
-  margin: 0.1rem 0 0;
+  margin: 0;
   color: #1f2f47;
-  font-size: 1.24rem;
-  line-height: 1.12;
+  font-size: 1.03rem;
+  line-height: 1.08;
   letter-spacing: -0.04em;
   font-weight: 800;
 }
@@ -1636,8 +1646,8 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .landing-mindmap-copy p {
   margin: 0;
   color: #61728d;
-  font-size: 0.94rem;
-  line-height: 1.58;
+  font-size: 0.82rem;
+  line-height: 1.44;
   font-weight: 600;
 }
 
@@ -4088,6 +4098,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
   align-items: stretch;
 }
 
+.admin-section-sidebar-child-row-mini-test {
+  order: 999;
+  margin-top: 0.1rem;
+}
+
 .admin-section-sidebar-child {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
@@ -4103,6 +4118,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
   color: #30425e;
   text-align: left;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.admin-section-sidebar-child-mini-test {
+  order: 999;
 }
 
 .admin-section-sidebar-child:hover {

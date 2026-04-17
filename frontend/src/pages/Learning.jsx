@@ -54,10 +54,10 @@ function formatActiveTopicLabel(section) {
   const activeTopicCount = getSectionTopics(section).length;
 
   if (activeTopicCount <= 0) {
-    return 'Belum ada topik aktif';
+    return '0 topik dan 1 mini test';
   }
 
-  return `${activeTopicCount} topik aktif`;
+  return `${activeTopicCount} topik dan 1 mini test`;
 }
 
 export default function Learning() {
@@ -74,6 +74,7 @@ export default function Learning() {
   const [packagesExpanded, setPackagesExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
   const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
+  const [activeSectionView, setActiveSectionView] = useState('material');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
@@ -222,6 +223,7 @@ export default function Learning() {
 
   const jumpToSectionMaterial = (sectionCode, topicIndex = 0) => {
     setContentView('materi');
+    setActiveSectionView('material');
     setActiveSectionCode(sectionCode);
     setActiveTopicIndex(topicIndex);
     setMaterialsExpanded(true);
@@ -233,6 +235,7 @@ export default function Learning() {
 
   const toggleMaterialSection = (sectionCode) => {
     setContentView('materi');
+    setActiveSectionView('material');
     setActiveSectionCode(sectionCode);
     setActiveTopicIndex(0);
     setMaterialsExpanded(true);
@@ -240,6 +243,25 @@ export default function Learning() {
       ...current,
       [sectionCode]: !current[sectionCode],
     }));
+  };
+
+  const openSectionTestView = (sectionCode) => {
+    if (!sectionCode) {
+      return;
+    }
+
+    setContentView('materi');
+    setActiveSectionView('mini-test');
+    setActiveSectionCode(sectionCode);
+    setMaterialsExpanded(true);
+    setExpandedMaterialSections((current) => ({
+      ...current,
+      [sectionCode]: true,
+    }));
+
+    if (hasAccess) {
+      loadSectionTest(sectionCode);
+    }
   };
 
   const updateSectionProgress = (sectionCode, progressPatch) => {
@@ -522,42 +544,47 @@ export default function Learning() {
             {materialsExpanded && (
               <div className="learning-sidebar-list">
                 {sections.map((section) => {
-                  const sectionMaterialDone = Boolean(section.progress.material_read);
-                  const sectionSubtestDone = Boolean(section.progress.subtest_test_completed);
+                  const topics = getSectionTopics(section);
+                  const isTopicActive = contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code;
+                  const isMiniTestActive = contentView === 'materi' && activeSectionView === 'mini-test' && section.code === activeSection?.code;
 
                   return (
                     <div key={section.code} className="admin-section-sidebar-entry">
                       <button
                         type="button"
-                        className={contentView === 'materi' && section.code === activeSection?.code ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
+                        className={isTopicActive || isMiniTestActive ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
                         onClick={() => toggleMaterialSection(section.code)}
                       >
                         <span className="admin-section-sidebar-item-copy">
                           <strong>{section.name}</strong>
-                          <small>
-                            {sectionMaterialDone && sectionSubtestDone
-                              ? 'Materi dan mini test selesai'
-                              : formatActiveTopicLabel(section)}
-                          </small>
+                          <small>{formatActiveTopicLabel(section)}</small>
                         </span>
                         <span className="admin-section-sidebar-caret" aria-hidden="true">
                           {expandedMaterialSections[section.code] ? '▾' : '▸'}
                         </span>
                       </button>
 
-                      {expandedMaterialSections[section.code] && getSectionTopics(section).length > 0 && (
+                      {expandedMaterialSections[section.code] && (
                         <div className="admin-section-sidebar-children">
-                          {getSectionTopics(section).map((topic, topicIndex) => (
+                          {topics.map((topic, topicIndex) => (
                             <button
                               key={`${section.code}-topic-${topicIndex}`}
                               type="button"
-                              className={contentView === 'materi' && section.code === activeSection?.code && topicIndex === activeTopicIndex ? 'admin-section-sidebar-child admin-section-sidebar-child-active' : 'admin-section-sidebar-child'}
+                              className={contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code && topicIndex === activeTopicIndex ? 'admin-section-sidebar-child admin-section-sidebar-child-active' : 'admin-section-sidebar-child'}
                               onClick={() => jumpToSectionMaterial(section.code, topicIndex)}
                             >
                               <span>{topicIndex + 1}</span>
                               <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
                             </button>
                           ))}
+                          <button
+                            type="button"
+                            className={isMiniTestActive ? 'admin-section-sidebar-child admin-section-sidebar-child-mini-test admin-section-sidebar-child-active' : 'admin-section-sidebar-child admin-section-sidebar-child-mini-test'}
+                            onClick={() => openSectionTestView(section.code)}
+                          >
+                            <span>MT</span>
+                            <strong>Mini Test Subtest</strong>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -678,17 +705,23 @@ export default function Learning() {
                   </span>
                   <h2>{activeSection.name}</h2>
                   <p>
-                    {hasAccess
+                    {activeSectionView === 'mini-test'
+                      ? 'Kerjakan mini test subtest ini setelah membaca topik-topik yang tersedia.'
+                      : hasAccess
                       ? 'Materi penuh terbuka. Ikuti urutan topik lalu halaman seperti alur belajar di admin.'
                       : `Preview ${activeSection.visible_page_count} dari ${activeSection.total_page_count} halaman materi.`}
                   </p>
                 </div>
-                {activeSection.progress.material_read && (
-                  <span className="account-status-pill account-status-fresh">Materi selesai</span>
+                {(activeSectionView === 'mini-test'
+                  ? activeSection.progress.subtest_test_completed
+                  : activeSection.progress.material_read) && (
+                  <span className="account-status-pill account-status-fresh">
+                    {activeSectionView === 'mini-test' ? 'Mini test selesai' : 'Materi selesai'}
+                  </span>
                 )}
               </div>
 
-              {activeSectionTopics.length > 0 && (
+              {activeSectionView === 'material' && activeSectionTopics.length > 0 && (
                 <div className="learning-topic-list">
                   {activeSectionTopics.map((topic, topicIndex) => (
                     <button
@@ -704,7 +737,7 @@ export default function Learning() {
                 </div>
               )}
 
-              {activeTopic ? (
+              {activeSectionView === 'material' && activeTopic ? (
                 <div className="learning-page-list">
                   <section className="learning-page learning-page-topic-intro">
                     <span>{`Topik ${activeTopicIndex + 1}`}</span>
@@ -738,7 +771,7 @@ export default function Learning() {
                     </section>
                   ))}
                 </div>
-              ) : (
+              ) : activeSectionView === 'material' ? (
                 <div className="learning-page-list">
                   <section className="learning-page">
                     <span>Materi</span>
@@ -746,9 +779,9 @@ export default function Learning() {
                     <p>Topik materi untuk subtest ini masih disiapkan.</p>
                   </section>
                 </div>
-              )}
+              ) : null}
 
-              {!hasAccess && activeSection.locked_page_count > 0 && (
+              {activeSectionView === 'material' && !hasAccess && activeSection.locked_page_count > 0 && (
                 <div className="learning-locked-pages">
                   <strong>{activeSection.locked_page_count} halaman lanjutan terkunci.</strong>
                   <p>
@@ -762,7 +795,7 @@ export default function Learning() {
                 </div>
               )}
 
-              {hasAccess && (
+              {hasAccess && activeSectionView === 'material' && (
                 <div className="learning-section-actions">
                   <button
                     type="button"
@@ -772,17 +805,24 @@ export default function Learning() {
                   >
                     {activeSection.progress.material_read ? 'Materi Sudah Selesai' : 'Tandai Materi Selesai'}
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    onClick={() => loadSectionTest(activeSection.code)}
-                  >
-                    {currentSectionTest.open ? 'Muat Ulang Mini Test' : 'Buka Mini Test Subtest'}
-                  </button>
                 </div>
               )}
 
-              {hasAccess && currentSectionTest.open && (
+              {activeSectionView === 'mini-test' && !hasAccess && (
+                <div className="learning-locked-pages">
+                  <strong>Mini test subtest terkunci.</strong>
+                  <p>
+                    {viewerIsAuthenticated
+                      ? 'Aktifkan paket untuk membuka mini test subtest dan menyimpan milestone belajar.'
+                      : 'Login untuk melihat akses penuh dan membuka mini test subtest.'}
+                  </p>
+                  <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
+                    {viewerIsAuthenticated ? 'Beli Paket' : 'Login untuk Lanjut'}
+                  </Link>
+                </div>
+              )}
+
+              {hasAccess && activeSectionView === 'mini-test' && currentSectionTest.open && (
                 <div className="learning-subtest-box">
                   <div className="learning-section-title">
                     <p>Mini test subtest</p>
@@ -852,6 +892,18 @@ export default function Learning() {
                       </button>
                     </>
                   )}
+                </div>
+              )}
+
+              {hasAccess && activeSectionView === 'mini-test' && !currentSectionTest.open && (
+                <div className="learning-subtest-box">
+                  <div className="learning-section-title">
+                    <p>Mini test subtest</p>
+                    <h3>{activeSection.name}</h3>
+                  </div>
+                  <button type="button" className="btn btn-primary" onClick={() => loadSectionTest(activeSection.code)}>
+                    Buka Mini Test
+                  </button>
                 </div>
               )}
             </article>

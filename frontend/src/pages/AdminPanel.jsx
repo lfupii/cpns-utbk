@@ -154,6 +154,10 @@ function getMaterialTopics(material) {
   return [];
 }
 
+function formatSubtestSidebarLabel(topicCount) {
+  return `${topicCount} topik dan 1 mini test`;
+}
+
 function csvEscape(value) {
   const normalized = String(value ?? '');
   if (normalized.includes(',') || normalized.includes('"') || normalized.includes('\n')) {
@@ -1732,18 +1736,20 @@ export default function AdminPanel() {
                   <div className="learning-sidebar-list">
                     {learningContent.map((section) => {
                       const topics = getMaterialTopics(section.material);
+                      const isSectionActive = section.code === activeLearningSection?.code;
+                      const isMiniTestActive = isSectionActive && learningEditorMode === 'quiz';
 
                       return (
                         <div key={section.code} className="admin-section-sidebar-entry">
                           <div className="admin-section-sidebar-row">
                             <button
                               type="button"
-                              className={adminView === 'materi' && section.code === activeLearningSection?.code ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
+                              className={adminView === 'materi' && isSectionActive ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
                               onClick={() => toggleMaterialSection(section.code)}
                             >
                               <span className="admin-section-sidebar-item-copy">
                                 <strong>{section.name}</strong>
-                                <small>{topics.length || 0} topik</small>
+                                <small>{formatSubtestSidebarLabel(topics.length || 0)}</small>
                               </span>
                               <span className="admin-section-sidebar-caret" aria-hidden="true">
                                 {expandedMaterialSections[section.code] ? '▾' : '▸'}
@@ -1805,9 +1811,9 @@ export default function AdminPanel() {
                               </>
                             )}
                           </div>
-                        </div>
+                          </div>
 
-                          {expandedMaterialSections[section.code] && topics.length > 0 && (
+                          {expandedMaterialSections[section.code] && (
                             <div className="admin-section-sidebar-children">
                               {topics.map((topic, index) => (
                                 <div key={`${section.code}-topic-${index}`} className="admin-section-sidebar-child-row">
@@ -1846,6 +1852,31 @@ export default function AdminPanel() {
                                   </div>
                                 </div>
                               ))}
+                              <div className="admin-section-sidebar-child-row admin-section-sidebar-child-row-mini-test">
+                                <button
+                                  type="button"
+                                  className={[
+                                    'admin-section-sidebar-child',
+                                    'admin-section-sidebar-child-mini-test',
+                                    isMiniTestActive ? 'admin-section-sidebar-child-active' : '',
+                                  ].filter(Boolean).join(' ')}
+                                  onClick={() => openLearningEditor(section.code, 'quiz')}
+                                >
+                                  <span>MT</span>
+                                  <strong>Mini Test Subtest</strong>
+                                </button>
+                                <div className="admin-section-sidebar-child-actions">
+                                  <button
+                                    type="button"
+                                    className="admin-section-action-btn admin-section-action-btn-inline"
+                                    aria-label={`Edit mini test ${section.name}`}
+                                    onClick={() => openLearningEditor(section.code, 'quiz')}
+                                    disabled={workflowSaving}
+                                  >
+                                    ✎
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>

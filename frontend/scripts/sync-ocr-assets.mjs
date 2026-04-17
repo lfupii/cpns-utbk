@@ -7,6 +7,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
 const copyPairs = [
+  ['node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs', 'public/pdfjs/pdf.worker.min.js'],
   ['node_modules/tesseract.js/dist/worker.min.js', 'public/tesseract/worker/worker.min.js'],
   ['node_modules/tesseract.js-core/tesseract-core.wasm.js', 'public/tesseract/core/tesseract-core.wasm.js'],
   ['node_modules/tesseract.js-core/tesseract-core-simd.wasm.js', 'public/tesseract/core/tesseract-core-simd.wasm.js'],
@@ -42,4 +43,4 @@ if (missingLanguageFiles.length > 0) {
   );
 }
 
-console.log('OCR assets synced to public/tesseract.');
+console.log('PDF and OCR assets synced to public/.');

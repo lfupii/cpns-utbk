@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
-import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 const APP_BASE_PATH = import.meta.env.BASE_URL || '/';
+const PDF_WORKER_PATH = `${APP_BASE_PATH.replace(/\/$/, '')}/pdfjs/pdf.worker.min.js`;
 const OCR_ASSET_ROOT = `${APP_BASE_PATH.replace(/\/$/, '')}/tesseract`;
 const OCR_WORKER_PATH = `${OCR_ASSET_ROOT}/worker/worker.min.js`;
 const OCR_CORE_PATH = `${OCR_ASSET_ROOT}/core`;
@@ -1079,7 +1079,7 @@ export default function AdminLearningMaterialEditor() {
 
   const getPdfJsLib = useCallback(async () => {
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_PATH;
     return pdfjsLib;
   }, []);
 

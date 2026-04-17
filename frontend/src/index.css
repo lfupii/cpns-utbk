@@ -4231,6 +4231,41 @@ html[data-theme='dark'] .theme-toggle-thumb {
   margin: 0;
 }
 
+.admin-learning-pdf-file-preview {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(191, 219, 254, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.admin-learning-pdf-file-preview span {
+  color: #607089;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-learning-pdf-file-preview strong {
+  color: #17233a;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.admin-learning-pdf-file-preview small {
+  color: #52647e;
+  font-size: 0.82rem;
+}
+
+.admin-learning-pdf-range-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
 .admin-learning-pdf-import-mode {
   display: inline-flex;
   flex-wrap: wrap;
@@ -8421,6 +8456,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
   .admin-learning-pdf-import-panel {
     padding: 0.95rem;
   }
+
+  .admin-learning-pdf-range-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -9467,6 +9506,20 @@ html[data-theme='dark'] .admin-learning-pdf-import-panel {
 }
 
 html[data-theme='dark'] .admin-learning-pdf-import-copy strong {
+  color: #f3f7fd;
+}
+
+html[data-theme='dark'] .admin-learning-pdf-file-preview {
+  border-color: rgba(112, 142, 186, 0.28);
+  background: rgba(11, 18, 33, 0.82);
+}
+
+html[data-theme='dark'] .admin-learning-pdf-file-preview span,
+html[data-theme='dark'] .admin-learning-pdf-file-preview small {
+  color: #9fb0c7;
+}
+
+html[data-theme='dark'] .admin-learning-pdf-file-preview strong {
   color: #f3f7fd;
 }
 

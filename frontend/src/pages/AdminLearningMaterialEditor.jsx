@@ -141,6 +141,38 @@ function renumberMaterialPages(pages = []) {
   }));
 }
 
+function formatFileSize(bytes = 0) {
+  const safeBytes = Number(bytes || 0);
+  if (!Number.isFinite(safeBytes) || safeBytes <= 0) {
+    return '0 KB';
+  }
+
+  if (safeBytes < 1024) {
+    return `${safeBytes} B`;
+  }
+
+  const units = ['KB', 'MB', 'GB'];
+  let value = safeBytes / 1024;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function buildDefaultPdfImportOptions() {
+  return {
+    visible: false,
+    mode: 'replace',
+    startPage: '1',
+    pdfPageFrom: '1',
+    pdfPageTo: '',
+  };
+}
+
 function extractPdfTextFromItems(items = []) {
   let buffer = '';
   let previousY = null;
@@ -217,11 +249,9 @@ export default function AdminLearningMaterialEditor() {
   const [imageUploading, setImageUploading] = useState(false);
   const [pdfImporting, setPdfImporting] = useState(false);
   const [pdfImportProgress, setPdfImportProgress] = useState('');
-  const [pdfImportOptions, setPdfImportOptions] = useState({
-    visible: false,
-    mode: 'replace',
-    startPage: '1',
-  });
+  const [pdfImportOptions, setPdfImportOptions] = useState(buildDefaultPdfImportOptions);
+  const [selectedPdfImportFile, setSelectedPdfImportFile] = useState(null);
+  const [selectedPdfImportPageCount, setSelectedPdfImportPageCount] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeRibbonTab, setActiveRibbonTab] = useState('home');
@@ -411,11 +441,9 @@ export default function AdminLearningMaterialEditor() {
   }, [activeTopic, activeTopicIndex, syncSelectionInUrl]);
 
   useEffect(() => {
-    setPdfImportOptions({
-      visible: false,
-      mode: 'replace',
-      startPage: '1',
-    });
+    setPdfImportOptions(buildDefaultPdfImportOptions());
+    setSelectedPdfImportFile(null);
+    setSelectedPdfImportPageCount(0);
   }, [activeTopicIndex]);
 
   const isMeaningfulEditorNode = useCallback((node) => {
@@ -945,6 +973,8 @@ export default function AdminLearningMaterialEditor() {
       ...current,
       visible: false,
     }));
+    setSelectedPdfImportFile(null);
+    setSelectedPdfImportPageCount(0);
   };
 
   const openPdfImport = () => {
@@ -1118,11 +1148,8 @@ export default function AdminLearningMaterialEditor() {
     if (!file || !activeTopic) {
       return;
     }
-    const importMode = pdfImportOptions.mode === 'append' ? 'append' : 'replace';
-    const startPage = Math.max(1, Math.floor(Number(pdfImportOptions.startPage || 1)) || 1);
 
-    setPdfImporting(true);
-    setPdfImportProgress('Membaca file PDF...');
+    setPdfImportProgress('Membaca ringkasan file PDF...');
     setError('');
     setSuccess('');
 
@@ -1133,6 +1160,50 @@ export default function AdminLearningMaterialEditor() {
         useWorkerFetch: false,
         isEvalSupported: false,
       }).promise;
+      const totalPages = Math.max(1, Number(pdfDocument.numPages) || 1);
+
+      setSelectedPdfImportFile(file);
+      setSelectedPdfImportPageCount(totalPages);
+      setPdfImportOptions((current) => ({
+        ...current,
+        pdfPageFrom: '1',
+        pdfPageTo: String(totalPages),
+      }));
+    } catch (importError) {
+      setSelectedPdfImportFile(null);
+      setSelectedPdfImportPageCount(0);
+      setError(importError?.message || 'Gagal membaca file PDF yang dipilih.');
+    } finally {
+      setPdfImportProgress('');
+    }
+  }, [activeTopic, getPdfJsLib]);
+
+  const applySelectedPdfImport = useCallback(async () => {
+    if (!selectedPdfImportFile || !activeTopic) {
+      setError('Pilih file PDF terlebih dahulu sebelum menerapkan ke topik.');
+      return;
+    }
+
+    const importMode = pdfImportOptions.mode === 'append' ? 'append' : 'replace';
+    const startPage = Math.max(1, Math.floor(Number(pdfImportOptions.startPage || 1)) || 1);
+    const requestedPdfPageFrom = Math.max(1, Math.floor(Number(pdfImportOptions.pdfPageFrom || 1)) || 1);
+
+    setPdfImporting(true);
+    setPdfImportProgress('Membaca file PDF...');
+    setError('');
+    setSuccess('');
+
+    try {
+      const pdfjsLib = await getPdfJsLib();
+      const pdfDocument = await pdfjsLib.getDocument({
+        data: await selectedPdfImportFile.arrayBuffer(),
+        useWorkerFetch: false,
+        isEvalSupported: false,
+      }).promise;
+      const maxPdfPage = Math.max(1, Number(pdfDocument.numPages) || 1);
+      const pdfPageFrom = Math.min(requestedPdfPageFrom, maxPdfPage);
+      const rawPdfPageTo = Math.max(1, Math.floor(Number(pdfImportOptions.pdfPageTo || maxPdfPage)) || maxPdfPage);
+      const pdfPageTo = Math.max(pdfPageFrom, Math.min(rawPdfPageTo, maxPdfPage));
       const imageOps = new Set([
         pdfjsLib.OPS.paintImageXObject,
         pdfjsLib.OPS.paintInlineImageXObject,
@@ -1140,8 +1211,8 @@ export default function AdminLearningMaterialEditor() {
       ]);
       const importedPages = [];
 
-      for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
-        setPdfImportProgress(`Memproses halaman ${pageNumber} dari ${pdfDocument.numPages}...`);
+      for (let pageNumber = pdfPageFrom; pageNumber <= pdfPageTo; pageNumber += 1) {
+        setPdfImportProgress(`Memproses halaman ${pageNumber} dari ${maxPdfPage}...`);
         const page = await pdfDocument.getPage(pageNumber);
         const textContent = await page.getTextContent();
         let extractedText = extractPdfTextFromItems(textContent.items || []);
@@ -1156,7 +1227,7 @@ export default function AdminLearningMaterialEditor() {
 
         let usedOcr = false;
         if (canvas && extractedText.replace(/\s+/g, '').length < 80) {
-          setPdfImportProgress(`Menjalankan OCR halaman ${pageNumber} dari ${pdfDocument.numPages}...`);
+          setPdfImportProgress(`Menjalankan OCR halaman ${pageNumber} dari ${maxPdfPage}...`);
           try {
             const worker = await getPdfOcrWorker();
             const ocrResult = await worker.recognize(canvas);
@@ -1172,11 +1243,11 @@ export default function AdminLearningMaterialEditor() {
 
         let snapshotUrl = '';
         if (canvas && (hasEmbeddedImages || usedOcr)) {
-          setPdfImportProgress(`Mengupload visual halaman ${pageNumber} dari ${pdfDocument.numPages}...`);
+          setPdfImportProgress(`Mengupload visual halaman ${pageNumber} dari ${maxPdfPage}...`);
           const pageBlob = await canvasToBlob(canvas);
           const pageImageFile = new File(
             [pageBlob],
-            `${file.name.replace(/\.pdf$/i, '')}-page-${pageNumber}.png`,
+            `${selectedPdfImportFile.name.replace(/\.pdf$/i, '')}-page-${pageNumber}.png`,
             { type: 'image/png' }
           );
           snapshotUrl = await uploadAdminMedia(pageImageFile, { trackImageUpload: false }) || '';
@@ -1188,7 +1259,7 @@ export default function AdminLearningMaterialEditor() {
         });
 
         importedPages.push({
-          title: `Halaman ${pageNumber}`,
+          title: `Halaman ${importedPages.length + 1}`,
           points: extractPointsFromHtml(contentHtml),
           closing: '',
           content_html: contentHtml,
@@ -1206,8 +1277,8 @@ export default function AdminLearningMaterialEditor() {
       closePdfImportOptions();
       setSuccess(
         importMode === 'append'
-          ? `PDF berhasil ditambahkan mulai halaman ${startPage} pada topik "${activeTopic.title || `Topik ${activeTopicIndex + 1}`}". Klik "Simpan Materi" untuk menyimpan permanen.`
-          : `PDF berhasil mengganti isi topik "${activeTopic.title || `Topik ${activeTopicIndex + 1}`}". Klik "Simpan Materi" untuk menyimpan permanen.`
+          ? `PDF halaman ${pdfPageFrom}-${pdfPageTo} berhasil ditambahkan mulai halaman ${startPage} pada topik "${activeTopic.title || `Topik ${activeTopicIndex + 1}`}". Klik "Simpan Materi" untuk menyimpan permanen.`
+          : `PDF halaman ${pdfPageFrom}-${pdfPageTo} berhasil mengganti isi topik "${activeTopic.title || `Topik ${activeTopicIndex + 1}`}". Klik "Simpan Materi" untuk menyimpan permanen.`
       );
     } catch (importError) {
       setError(importError?.message || 'Gagal mengimpor PDF ke materi.');
@@ -1215,7 +1286,7 @@ export default function AdminLearningMaterialEditor() {
       setPdfImporting(false);
       setPdfImportProgress('');
     }
-  }, [activeTopic, activeTopicIndex, applyImportedTopicPages, canvasToBlob, closePdfImportOptions, getPdfJsLib, getPdfOcrWorker, pdfImportOptions.mode, pdfImportOptions.startPage, renderPdfPageToCanvas, uploadAdminMedia]);
+  }, [activeTopic, activeTopicIndex, applyImportedTopicPages, canvasToBlob, closePdfImportOptions, getPdfJsLib, getPdfOcrWorker, pdfImportOptions.mode, pdfImportOptions.pdfPageFrom, pdfImportOptions.pdfPageTo, pdfImportOptions.startPage, renderPdfPageToCanvas, selectedPdfImportFile, uploadAdminMedia]);
 
   const insertLink = () => {
     const url = window.prompt('Masukkan URL link');
@@ -1878,9 +1949,57 @@ export default function AdminLearningMaterialEditor() {
                         </div>
                       )}
 
+                      <div className="admin-learning-pdf-range-grid">
+                        <div className="form-group">
+                          <label>Ambil Halaman PDF Dari</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pdfImportOptions.pdfPageFrom}
+                            onChange={(event) => setPdfImportOptions((current) => ({
+                              ...current,
+                              pdfPageFrom: event.target.value,
+                            }))}
+                            placeholder="Contoh: 1"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Sampai Halaman PDF</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pdfImportOptions.pdfPageTo}
+                            onChange={(event) => setPdfImportOptions((current) => ({
+                              ...current,
+                              pdfPageTo: event.target.value,
+                            }))}
+                            placeholder={selectedPdfImportPageCount > 0 ? `Maks ${selectedPdfImportPageCount}` : 'Contoh: 5'}
+                          />
+                        </div>
+                      </div>
+
+                      {selectedPdfImportFile && (
+                        <div className="admin-learning-pdf-file-preview">
+                          <span>File PDF Terpilih</span>
+                          <strong>{selectedPdfImportFile.name}</strong>
+                          <small>Ukuran file: {formatFileSize(selectedPdfImportFile.size)}</small>
+                          {selectedPdfImportPageCount > 0 && (
+                            <small>Total halaman PDF: {selectedPdfImportPageCount}</small>
+                          )}
+                        </div>
+                      )}
+
                       <div className="admin-doc-toolbar-actions">
-                        <button type="button" className="btn btn-primary" onClick={openPdfImport} disabled={pdfImporting}>
-                          {pdfImporting ? 'Memproses PDF...' : 'Pilih PDF & Import'}
+                        <button type="button" className="btn btn-outline" onClick={openPdfImport} disabled={pdfImporting}>
+                          {selectedPdfImportFile ? 'Ganti File PDF' : 'Pilih File PDF'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={applySelectedPdfImport}
+                          disabled={pdfImporting || !selectedPdfImportFile}
+                        >
+                          {pdfImporting ? 'Memproses PDF...' : 'Terapkan ke Topik'}
                         </button>
                         <button type="button" className="btn btn-outline" onClick={closePdfImportOptions} disabled={pdfImporting}>
                           Batal

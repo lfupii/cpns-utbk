@@ -298,7 +298,26 @@ class LearningController {
         ];
     }
 
+    private function getSectionQuestionCounts(int $packageId): array {
+        $query = "SELECT section_code, COUNT(*) AS total
+                  FROM learning_section_questions
+                  WHERE package_id = ?
+                  GROUP BY section_code";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $counts = [];
+        while ($row = $result->fetch_assoc()) {
+            $counts[(string) ($row['section_code'] ?? '')] = (int) ($row['total'] ?? 0);
+        }
+
+        return $counts;
+    }
+
     private function buildLearningSections(array $package, array $workflow, array $progress, bool $hasAccess): array {
+        $sectionQuestionCounts = $this->getSectionQuestionCounts((int) ($package['id'] ?? 0));
         $sections = [];
         foreach ($workflow['sections'] as $section) {
             $sectionCode = (string) $section['code'];
@@ -320,6 +339,7 @@ class LearningController {
                 'order' => $section['order'],
                 'duration_minutes' => $section['duration_minutes'] ?? null,
                 'target_question_count' => $section['target_question_count'] ?? null,
+                'mini_test_question_count' => (int) ($sectionQuestionCounts[$sectionCode] ?? 0),
                 'preview_page_count' => $previewPageCount,
                 'total_topic_count' => count($allTopics),
                 'visible_topic_count' => count($visibleTopics),

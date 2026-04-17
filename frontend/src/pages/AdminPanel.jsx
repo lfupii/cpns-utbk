@@ -2404,12 +2404,24 @@ export default function AdminPanel() {
                       {learningEditorMode === 'quiz' ? (
                         <div className="admin-learning-editor-shell admin-learning-quiz-shell">
                           <section className="admin-mini-test-settings">
-                            <div className="admin-mini-test-settings-copy">
-                              <span className="admin-preview-eyebrow">Setting Waktu Mini Test</span>
-                              <h3>{activeLearningSection.name}</h3>
-                              <p className="text-muted">
-                                Timer mini test mengambil acuan dari durasi subtest dan target jumlah soal yang aktif untuk subtest ini.
-                              </p>
+                            <div className="admin-mini-test-settings-head">
+                              <div className="admin-mini-test-settings-copy">
+                                <span className="admin-preview-eyebrow">Setting Waktu Mini Test</span>
+                                <h3>{activeLearningSection.name}</h3>
+                                <p className="text-muted">
+                                  Timer mini test mengambil acuan dari durasi subtest dan target jumlah soal yang aktif untuk subtest ini.
+                                </p>
+                              </div>
+                              <div className="admin-mini-test-settings-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline"
+                                  onClick={() => handleMiniTestTimingEdit(activeLearningSection)}
+                                  disabled={workflowSaving}
+                                >
+                                  {workflowSaving ? 'Menyimpan Waktu...' : 'Atur Waktu Mini Test'}
+                                </button>
+                              </div>
                             </div>
                             <div className="admin-mini-test-settings-grid">
                               <div className="admin-mini-test-settings-card">
@@ -2427,16 +2439,6 @@ export default function AdminPanel() {
                                 <strong>{miniTestDurationMinutesLabel}</strong>
                                 <small>{`${learningQuestionsForm.length} soal mini test aktif di editor ini.`}</small>
                               </div>
-                            </div>
-                            <div className="admin-mini-test-settings-actions">
-                              <button
-                                type="button"
-                                className="btn btn-outline"
-                                onClick={() => handleMiniTestTimingEdit(activeLearningSection)}
-                                disabled={workflowSaving}
-                              >
-                                {workflowSaving ? 'Menyimpan Waktu...' : 'Atur Waktu Mini Test'}
-                              </button>
                             </div>
                           </section>
 

@@ -137,18 +137,30 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          lftp -e "
-          set cmd:fail-exit true
-          set net:max-retries 6
-          set net:reconnect-interval-base 5
-          set net:reconnect-interval-max 30
-          set net:timeout 40
-          set ftp:passive-mode true
-          set ftp:prefer-epsv false
-          open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
-          mirror -R --verbose=2 --parallel=1 frontend/dist .
-          bye
-          "
+          for attempt in 1 2 3; do
+            echo "Frontend deploy attempt ${attempt}/3"
+            if lftp -e "
+            set cmd:fail-exit true
+            set net:max-retries 8
+            set net:reconnect-interval-base 5
+            set net:reconnect-interval-max 30
+            set net:timeout 60
+            set ftp:passive-mode true
+            set ftp:prefer-epsv false
+            open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
+            mirror -R --continue --verbose=2 --parallel=1 frontend/dist .
+            bye
+            "; then
+              break
+            fi
+
+            if [ "${attempt}" -eq 3 ]; then
+              echo "Frontend deploy failed after 3 attempts"
+              exit 1
+            fi
+
+            sleep 15
+          done
 
       - name: Deploy backend to public_html/api
         env:
@@ -157,15 +169,27 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          lftp -e "
-          set cmd:fail-exit true
-          set net:max-retries 6
-          set net:reconnect-interval-base 5
-          set net:reconnect-interval-max 30
-          set net:timeout 40
-          set ftp:passive-mode true
-          set ftp:prefer-epsv false
-          open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
-          mirror -R --verbose=2 --parallel=1 .deploy/backend api
-          bye
-          "
+          for attempt in 1 2 3; do
+            echo "Backend deploy attempt ${attempt}/3"
+            if lftp -e "
+            set cmd:fail-exit true
+            set net:max-retries 8
+            set net:reconnect-interval-base 5
+            set net:reconnect-interval-max 30
+            set net:timeout 60
+            set ftp:passive-mode true
+            set ftp:prefer-epsv false
+            open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
+            mirror -R --continue --verbose=2 --parallel=1 .deploy/backend api
+            bye
+            "; then
+              break
+            fi
+
+            if [ "${attempt}" -eq 3 ]; then
+              echo "Backend deploy failed after 3 attempts"
+              exit 1
+            fi
+
+            sleep 15
+          done

@@ -7,7 +7,7 @@ const APP_BASE_PATH = import.meta.env.BASE_URL || '/';
 const PDF_WORKER_PATH = `${APP_BASE_PATH.replace(/\/$/, '')}/pdfjs/pdf.worker.min.js`;
 const OCR_ASSET_ROOT = `${APP_BASE_PATH.replace(/\/$/, '')}/tesseract`;
 const OCR_WORKER_PATH = `${OCR_ASSET_ROOT}/worker/worker.min.js`;
-const OCR_CORE_PATH = `${OCR_ASSET_ROOT}/core`;
+const OCR_CORE_PATH = `${OCR_ASSET_ROOT}/core/tesseract-core-lstm.wasm.js`;
 const OCR_LANG_PATH = `${OCR_ASSET_ROOT}/lang-data`;
 const OCR_LANGUAGE = 'eng';
 

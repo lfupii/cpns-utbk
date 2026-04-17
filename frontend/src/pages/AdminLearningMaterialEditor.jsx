@@ -10,6 +10,13 @@ const OCR_WORKER_PATH = `${OCR_ASSET_ROOT}/worker/worker.min.js`;
 const OCR_CORE_PATH = `${OCR_ASSET_ROOT}/core/tesseract-core-lstm.wasm.js`;
 const OCR_LANG_PATH = `${OCR_ASSET_ROOT}/lang-data`;
 const OCR_LANGUAGE = 'eng';
+const PARAGRAPH_INDENT_STEP = 36;
+const FIRST_LINE_INDENT_LIMIT = 72;
+const PARAGRAPH_INDENT_LIMIT = 240;
+const WORD_RULER_MARKS = {
+  portrait: ['0', '2', '4', '6', '8', '10', '12', '14', '16', '18'],
+  landscape: ['0', '3', '6', '9', '12', '15', '18', '21', '24', '27'],
+};
 
 const FONT_SIZE_COMMANDS = {
   '12': '2',
@@ -231,11 +238,30 @@ function buildImportedPdfPageHtml(text, imageUrl = '', { pageNumber = 1, usedOcr
   return sanitizeEditorHtml(`${textHtml}${imageHtml}`);
 }
 
+function getClosestEditableBlock(node, root) {
+  if (!node || !root) {
+    return null;
+  }
+
+  const elementNode = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  if (!(elementNode instanceof Element) || !root.contains(elementNode)) {
+    return null;
+  }
+
+  return elementNode.closest('p, div, li, blockquote, h1, h2, h3, h4, h5, h6, td, th');
+}
+
+function parseIndentValue(value) {
+  const parsed = parseFloat(String(value || '').replace('px', '').trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export default function AdminLearningMaterialEditor() {
   const { packageId, sectionCode } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const editorRefs = useRef({});
+  const rulerScaleRefs = useRef({});
   const imageUploadInputRef = useRef(null);
   const pdfImportInputRef = useRef(null);
   const pdfOcrWorkerRef = useRef(null);
@@ -262,6 +288,12 @@ export default function AdminLearningMaterialEditor() {
   const selectedImageFigureRef = useRef(null);
   const imageInteractionRef = useRef(null);
   const [imageContextMenu, setImageContextMenu] = useState({ visible: false, x: 0, y: 0, layout: 'center' });
+  const [activeParagraphMetrics, setActiveParagraphMetrics] = useState({
+    pageIndex: 0,
+    leftIndent: 0,
+    firstLineIndent: 0,
+  });
+  const paragraphRulerDragRef = useRef(null);
   const [pendingPaginationStart, setPendingPaginationStart] = useState(null);
 
   const numericPackageId = Number(packageId);
@@ -626,6 +658,67 @@ export default function AdminLearningMaterialEditor() {
     normalizeImageFigureSize(figure);
   }, [normalizeImageFigureSize]);
 
+  const getParagraphIndentMetrics = useCallback((blockNode) => ({
+    leftIndent: Math.max(0, parseIndentValue(blockNode?.style?.marginLeft)),
+    firstLineIndent: parseIndentValue(blockNode?.style?.textIndent),
+  }), []);
+
+  const updateActiveParagraphMetrics = useCallback((pageIndex = activePageIndex) => {
+    const editorNode = getEditorNode(pageIndex);
+    if (!editorNode) {
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorNode.contains(selection.anchorNode)) {
+      return;
+    }
+
+    const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
+    if (!blockNode) {
+      return;
+    }
+
+    const metrics = getParagraphIndentMetrics(blockNode);
+    setActiveParagraphMetrics({
+      pageIndex,
+      leftIndent: metrics.leftIndent,
+      firstLineIndent: metrics.firstLineIndent,
+    });
+  }, [activePageIndex, getEditorNode, getParagraphIndentMetrics]);
+
+  const applyParagraphMetrics = useCallback((pageIndex, { leftIndent, firstLineIndent }) => {
+    const editorNode = getEditorNode(pageIndex);
+    if (!editorNode) {
+      return false;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return false;
+    }
+
+    const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
+    if (!blockNode || blockNode.tagName === 'LI') {
+      return false;
+    }
+
+    const safeLeftIndent = Math.max(0, Math.min(PARAGRAPH_INDENT_LIMIT, Math.round(leftIndent)));
+    const safeFirstLineIndent = Math.max(-FIRST_LINE_INDENT_LIMIT, Math.min(FIRST_LINE_INDENT_LIMIT, Math.round(firstLineIndent)));
+
+    blockNode.style.marginLeft = safeLeftIndent > 0 ? `${safeLeftIndent}px` : '';
+    blockNode.style.textIndent = safeFirstLineIndent !== 0 ? `${safeFirstLineIndent}px` : '';
+
+    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    setActiveParagraphMetrics({
+      pageIndex,
+      leftIndent: safeLeftIndent,
+      firstLineIndent: safeFirstLineIndent,
+    });
+    schedulePaginationRebalance(pageIndex);
+    return true;
+  }, [getEditorNode, persistActivePageContent, schedulePaginationRebalance]);
+
   const readTopicsFromEditor = () => materialForm.topics.map((topic, topicIndex) => ({
     ...topic,
     pages: topic.pages.map((page, pageIndex) => {
@@ -758,7 +851,51 @@ export default function AdminLearningMaterialEditor() {
     return getMovableEditorNodes(editorNode).length === 0;
   }, [getMovableEditorNodes]);
 
+  const applyParagraphIndent = useCallback((pageIndex, direction = 1) => {
+    const editorNode = getEditorNode(pageIndex);
+    if (!editorNode) {
+      return false;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return false;
+    }
+
+    const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
+    if (!blockNode) {
+      return false;
+    }
+
+    if (blockNode.tagName === 'LI') {
+      document.execCommand(direction > 0 ? 'indent' : 'outdent', false, null);
+    } else {
+      const currentMarginLeft = parseIndentValue(blockNode.style.marginLeft);
+      const nextMarginLeft = Math.max(0, currentMarginLeft + (direction * PARAGRAPH_INDENT_STEP));
+      blockNode.style.marginLeft = nextMarginLeft > 0 ? `${nextMarginLeft}px` : '';
+    }
+
+    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    updateActiveParagraphMetrics(pageIndex);
+    schedulePaginationRebalance(pageIndex);
+    return true;
+  }, [getEditorNode, persistActivePageContent, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+
+  const adjustParagraphIndent = useCallback((direction = 1, pageIndex = activePageIndex) => {
+    activatePage(pageIndex);
+    const applied = applyParagraphIndent(pageIndex, direction);
+    if (!applied) {
+      runCommand(direction > 0 ? 'indent' : 'outdent');
+    }
+  }, [activatePage, activePageIndex, applyParagraphIndent]);
+
   const handleEditorKeyDown = useCallback((event, pageIndex) => {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      adjustParagraphIndent(event.shiftKey ? -1 : 1, pageIndex);
+      return;
+    }
+
     if (event.key !== 'Backspace' && event.key !== 'Delete') {
       return;
     }
@@ -791,7 +928,7 @@ export default function AdminLearningMaterialEditor() {
     }));
     activatePage(nextPageIndex);
     focusEditorAtEnd(nextPageIndex);
-  }, [activatePage, activeTopicIndex, focusEditorAtEnd, isEditorPageEmpty, materialForm.topics, readTopicsFromEditor]);
+  }, [activatePage, activeTopicIndex, adjustParagraphIndent, focusEditorAtEnd, isEditorPageEmpty, materialForm.topics, readTopicsFromEditor]);
 
   const rebalancePaginatedEditors = useCallback((startIndex = 0) => {
     const currentTopic = materialForm.topics[activeTopicIndex];
@@ -1392,7 +1529,8 @@ export default function AdminLearningMaterialEditor() {
 
     clearSelectedImageFigure();
     closeImageContextMenu();
-  }, [clearSelectedImageFigure, closeImageContextMenu, ensureImageFigure, normalizeImageFigureSize, persistActivePageContent, selectImageFigure]);
+    requestAnimationFrame(() => updateActiveParagraphMetrics());
+  }, [clearSelectedImageFigure, closeImageContextMenu, ensureImageFigure, normalizeImageFigureSize, persistActivePageContent, selectImageFigure, updateActiveParagraphMetrics]);
 
   const handleEditorContextMenu = useCallback((event) => {
     const imageNode = event.target.closest?.('img');
@@ -1443,10 +1581,71 @@ export default function AdminLearningMaterialEditor() {
     figure.classList.add(mode === 'resize' ? 'is-resizing' : 'is-dragging');
   }, [closeImageContextMenu, getImageFigureMetrics, normalizeImageFigureSize, selectImageFigure]);
 
+  const handleEditorKeyUp = useCallback((pageIndex) => {
+    updateActiveParagraphMetrics(pageIndex);
+  }, [updateActiveParagraphMetrics]);
+
   useEffect(() => {
     clearSelectedImageFigure();
     closeImageContextMenu();
   }, [activePageIndex, activeTopicIndex, clearSelectedImageFigure, closeImageContextMenu]);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const editorNode = getEditorNode();
+      const selection = window.getSelection();
+      if (!editorNode || !selection || selection.rangeCount === 0 || !editorNode.contains(selection.anchorNode)) {
+        return;
+      }
+      updateActiveParagraphMetrics(activePageIndex);
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [activePageIndex, getEditorNode, updateActiveParagraphMetrics]);
+
+  useEffect(() => {
+    const handlePointerMove = (event) => {
+      const dragState = paragraphRulerDragRef.current;
+      if (!dragState) {
+        return;
+      }
+
+      const rulerNode = rulerScaleRefs.current[dragState.pageIndex];
+      if (!rulerNode) {
+        return;
+      }
+
+      const rect = rulerNode.getBoundingClientRect();
+      const relativeX = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
+      const nextAbsoluteIndent = Math.round((relativeX / Math.max(rect.width, 1)) * PARAGRAPH_INDENT_LIMIT);
+
+      if (dragState.marker === 'left') {
+        applyParagraphMetrics(dragState.pageIndex, {
+          leftIndent: nextAbsoluteIndent,
+          firstLineIndent: dragState.startFirstLineIndent,
+        });
+        return;
+      }
+
+      applyParagraphMetrics(dragState.pageIndex, {
+        leftIndent: dragState.startLeftIndent,
+        firstLineIndent: nextAbsoluteIndent - dragState.startLeftIndent,
+      });
+    };
+
+    const handlePointerUp = () => {
+      paragraphRulerDragRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [applyParagraphMetrics]);
 
   useEffect(() => {
     const editorNode = getEditorNode();
@@ -1613,6 +1812,10 @@ export default function AdminLearningMaterialEditor() {
     pageOrientation === 'landscape' ? 'admin-doc-page-landscape' : 'admin-doc-page-portrait',
     editorView === 'compact' ? 'admin-doc-page-compact' : '',
   ].filter(Boolean).join(' ');
+  const currentPageSurfaceLabel = pageOrientation === 'landscape' ? 'A4 Landscape' : 'A4 Portrait';
+  const currentRulerMarks = WORD_RULER_MARKS[pageOrientation] || WORD_RULER_MARKS.portrait;
+  const activeRulerLeftPercent = `${Math.max(0, Math.min(100, (activeParagraphMetrics.leftIndent / PARAGRAPH_INDENT_LIMIT) * 100))}%`;
+  const activeRulerFirstLinePercent = `${Math.max(0, Math.min(100, ((activeParagraphMetrics.leftIndent + activeParagraphMetrics.firstLineIndent) / PARAGRAPH_INDENT_LIMIT) * 100))}%`;
 
   const handleSave = async () => {
     if (!activeSection) {
@@ -1664,7 +1867,7 @@ export default function AdminLearningMaterialEditor() {
         </div>
       ) : activeSection ? (
         <section className="account-card admin-material-editor-shell admin-learning-editor-shell-page">
-          <div className="admin-doc-toolbar admin-doc-toolbar-sticky admin-learning-editor-hero">
+          <div className="admin-doc-toolbar admin-learning-editor-hero">
             <div>
               <span className="account-package-tag">{activeSection.name}</span>
               <h3>{activeTopic?.title || 'Topik materi baru'}</h3>
@@ -1674,182 +1877,184 @@ export default function AdminLearningMaterialEditor() {
             </div>
           </div>
 
-          <div className="admin-ribbon-tabs">
-            {[
-              ['home', 'Home'],
-              ['insert', 'Insert'],
-              ['layout', 'Layout'],
-              ['view', 'View'],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={activeRibbonTab === value ? 'admin-ribbon-tab admin-ribbon-tab-active' : 'admin-ribbon-tab'}
-                onClick={() => setActiveRibbonTab(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <div className="admin-learning-editor-nav-sticky">
+            <div className="admin-ribbon-tabs">
+              {[
+                ['home', 'Home'],
+                ['insert', 'Insert'],
+                ['layout', 'Layout'],
+                ['view', 'View'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={activeRibbonTab === value ? 'admin-ribbon-tab admin-ribbon-tab-active' : 'admin-ribbon-tab'}
+                  onClick={() => setActiveRibbonTab(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-          <div
-            className="admin-word-ribbon admin-ribbon-panel"
-            aria-label="Toolbar format materi"
-            onMouseDown={(event) => {
-              if (event.target.closest?.('button')) {
-                event.preventDefault();
-              }
-            }}
-          >
-            {activeRibbonTab === 'home' && (
-              <>
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Teks</span>
-                  <div className="admin-ribbon-control-row">
-                    <select name="editor_block_type" onChange={(event) => runCommand('formatBlock', event.target.value)} defaultValue="p">
-                      <option value="p">Paragraf</option>
-                      <option value="h2">Heading 1</option>
-                      <option value="h3">Heading 2</option>
-                    </select>
-                    <select name="editor_font_size" onChange={(event) => applyFontSize(event.target.value)} defaultValue="16">
-                      <option value="12">12</option>
-                      <option value="14">14</option>
-                      <option value="16">16</option>
-                      <option value="20">20</option>
-                      <option value="28">28</option>
-                      <option value="36">36</option>
-                    </select>
-                    <label className="admin-color-control">
-                      Warna
-                      <input name="editor_text_color" type="color" defaultValue="#16243c" onChange={(event) => runCommand('foreColor', event.target.value)} />
-                    </label>
+            <div
+              className="admin-word-ribbon admin-ribbon-panel"
+              aria-label="Toolbar format materi"
+              onMouseDown={(event) => {
+                if (event.target.closest?.('button')) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              {activeRibbonTab === 'home' && (
+                <>
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Teks</span>
+                    <div className="admin-ribbon-control-row">
+                      <select name="editor_block_type" onChange={(event) => runCommand('formatBlock', event.target.value)} defaultValue="p">
+                        <option value="p">Paragraf</option>
+                        <option value="h2">Heading 1</option>
+                        <option value="h3">Heading 2</option>
+                      </select>
+                      <select name="editor_font_size" onChange={(event) => applyFontSize(event.target.value)} defaultValue="16">
+                        <option value="12">12</option>
+                        <option value="14">14</option>
+                        <option value="16">16</option>
+                        <option value="20">20</option>
+                        <option value="28">28</option>
+                        <option value="36">36</option>
+                      </select>
+                      <label className="admin-color-control">
+                        Warna
+                        <input name="editor_text_color" type="color" defaultValue="#16243c" onChange={(event) => runCommand('foreColor', event.target.value)} />
+                      </label>
+                    </div>
                   </div>
-                </div>
 
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Format</span>
-                  <div className="admin-ribbon-control-row">
-                    <button type="button" onClick={() => runCommand('bold')}>B</button>
-                    <button type="button" onClick={() => runCommand('italic')}><em>I</em></button>
-                    <button type="button" onClick={() => runCommand('underline')}><u>U</u></button>
-                    <button type="button" onClick={() => runCommand('strikeThrough')}>S</button>
-                    <button type="button" onClick={() => runCommand('removeFormat')}>Reset</button>
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Format</span>
+                    <div className="admin-ribbon-control-row">
+                      <button type="button" onClick={() => runCommand('bold')}>B</button>
+                      <button type="button" onClick={() => runCommand('italic')}><em>I</em></button>
+                      <button type="button" onClick={() => runCommand('underline')}><u>U</u></button>
+                      <button type="button" onClick={() => runCommand('strikeThrough')}>S</button>
+                      <button type="button" onClick={() => runCommand('removeFormat')}>Reset</button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Paragraf</span>
-                  <div className="admin-ribbon-control-row">
-                    <button type="button" onClick={() => runCommand('insertUnorderedList')}>Bullet</button>
-                    <button type="button" onClick={() => runCommand('insertOrderedList')}>Nomor</button>
-                    <button type="button" onClick={() => runCommand('outdent')}>Outdent</button>
-                    <button type="button" onClick={() => runCommand('indent')}>Indent</button>
-                    <button type="button" onClick={() => runCommand('justifyLeft')}>Kiri</button>
-                    <button type="button" onClick={() => runCommand('justifyCenter')}>Tengah</button>
-                    <button type="button" onClick={() => runCommand('justifyRight')}>Kanan</button>
-                    <button type="button" onClick={() => runCommand('justifyFull')}>Justify</button>
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Paragraf</span>
+                    <div className="admin-ribbon-control-row">
+                      <button type="button" onClick={() => runCommand('insertUnorderedList')}>Bullet</button>
+                      <button type="button" onClick={() => runCommand('insertOrderedList')}>Nomor</button>
+                      <button type="button" onClick={() => adjustParagraphIndent(-1)}>Outdent</button>
+                      <button type="button" onClick={() => adjustParagraphIndent(1)}>Indent</button>
+                      <button type="button" onClick={() => runCommand('justifyLeft')}>Kiri</button>
+                      <button type="button" onClick={() => runCommand('justifyCenter')}>Tengah</button>
+                      <button type="button" onClick={() => runCommand('justifyRight')}>Kanan</button>
+                      <button type="button" onClick={() => runCommand('justifyFull')}>Justify</button>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
-            {activeRibbonTab === 'insert' && (
-              <>
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Media</span>
-                  <div className="admin-ribbon-control-row">
-                    <button type="button" onClick={insertImage} disabled={imageUploading}>
-                      {imageUploading ? 'Mengupload...' : 'Gambar'}
-                    </button>
-                    <button type="button" onClick={insertLink}>Link</button>
-                    <button type="button" onClick={insertTable}>Tabel</button>
-                  </div>
-                </div>
-
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Blok</span>
-                  <div className="admin-ribbon-control-row">
-                    <button type="button" onClick={insertQuoteBlock}>Quote</button>
-                    <button type="button" onClick={insertInfoBox}>Info Box</button>
-                    <button type="button" onClick={insertDivider}>Divider</button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeRibbonTab === 'layout' && (
-              <>
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Ukuran Halaman</span>
-                  <div className="admin-ribbon-control-row">
-                    <button type="button" className="admin-ribbon-button-active">A4</button>
-                    <button
-                      type="button"
-                      className={pageOrientation === 'portrait' ? 'admin-ribbon-button-active' : ''}
-                      onClick={() => setPageOrientation('portrait')}
-                    >
-                      Portrait
-                    </button>
-                    <button
-                      type="button"
-                      className={pageOrientation === 'landscape' ? 'admin-ribbon-button-active' : ''}
-                      onClick={() => setPageOrientation('landscape')}
-                    >
-                      Landscape
-                    </button>
-                  </div>
-                </div>
-
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Spasi</span>
-                  <div className="admin-ribbon-control-row">
-                    <button type="button" onClick={() => setLineHeight('1.4')}>Rapat</button>
-                    <button type="button" onClick={() => setLineHeight('1.7')}>Normal</button>
-                    <button type="button" onClick={() => setLineHeight('2')}>Longgar</button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeRibbonTab === 'view' && (
-              <>
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Tampilan</span>
-                  <div className="admin-ribbon-control-row">
-                    <button
-                      type="button"
-                      className={editorView === 'page' ? 'admin-ribbon-button-active' : ''}
-                      onClick={() => setEditorView('page')}
-                    >
-                      Page View
-                    </button>
-                    <button
-                      type="button"
-                      className={editorView === 'compact' ? 'admin-ribbon-button-active' : ''}
-                      onClick={() => setEditorView('compact')}
-                    >
-                      Compact
-                    </button>
-                  </div>
-                </div>
-
-                <div className="admin-ribbon-group">
-                  <span className="admin-ribbon-group-label">Zoom</span>
-                  <div className="admin-ribbon-control-row">
-                    {['90', '100', '110'].map((zoom) => (
-                      <button
-                        key={zoom}
-                        type="button"
-                        className={pageZoom === zoom ? 'admin-ribbon-button-active' : ''}
-                        onClick={() => setPageZoom(zoom)}
-                      >
-                        {zoom}%
+              {activeRibbonTab === 'insert' && (
+                <>
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Media</span>
+                    <div className="admin-ribbon-control-row">
+                      <button type="button" onClick={insertImage} disabled={imageUploading}>
+                        {imageUploading ? 'Mengupload...' : 'Gambar'}
                       </button>
-                    ))}
+                      <button type="button" onClick={insertLink}>Link</button>
+                      <button type="button" onClick={insertTable}>Tabel</button>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Blok</span>
+                    <div className="admin-ribbon-control-row">
+                      <button type="button" onClick={insertQuoteBlock}>Quote</button>
+                      <button type="button" onClick={insertInfoBox}>Info Box</button>
+                      <button type="button" onClick={insertDivider}>Divider</button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeRibbonTab === 'layout' && (
+                <>
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Ukuran Halaman</span>
+                    <div className="admin-ribbon-control-row">
+                      <button type="button" className="admin-ribbon-button-active">A4</button>
+                      <button
+                        type="button"
+                        className={pageOrientation === 'portrait' ? 'admin-ribbon-button-active' : ''}
+                        onClick={() => setPageOrientation('portrait')}
+                      >
+                        Portrait
+                      </button>
+                      <button
+                        type="button"
+                        className={pageOrientation === 'landscape' ? 'admin-ribbon-button-active' : ''}
+                        onClick={() => setPageOrientation('landscape')}
+                      >
+                        Landscape
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Spasi</span>
+                    <div className="admin-ribbon-control-row">
+                      <button type="button" onClick={() => setLineHeight('1.4')}>Rapat</button>
+                      <button type="button" onClick={() => setLineHeight('1.7')}>Normal</button>
+                      <button type="button" onClick={() => setLineHeight('2')}>Longgar</button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activeRibbonTab === 'view' && (
+                <>
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Tampilan</span>
+                    <div className="admin-ribbon-control-row">
+                      <button
+                        type="button"
+                        className={editorView === 'page' ? 'admin-ribbon-button-active' : ''}
+                        onClick={() => setEditorView('page')}
+                      >
+                        Page View
+                      </button>
+                      <button
+                        type="button"
+                        className={editorView === 'compact' ? 'admin-ribbon-button-active' : ''}
+                        onClick={() => setEditorView('compact')}
+                      >
+                        Compact
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="admin-ribbon-group">
+                    <span className="admin-ribbon-group-label">Zoom</span>
+                    <div className="admin-ribbon-control-row">
+                      {['90', '100', '110'].map((zoom) => (
+                        <button
+                          key={zoom}
+                          type="button"
+                          className={pageZoom === zoom ? 'admin-ribbon-button-active' : ''}
+                          onClick={() => setPageZoom(zoom)}
+                        >
+                          {zoom}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="admin-doc-editor admin-material-doc-editor admin-learning-editor-workspace">
@@ -2029,10 +2234,30 @@ export default function AdminLearningMaterialEditor() {
                   className={editorPageClassName}
                   style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
                 >
+                  <div className="admin-word-ruler" aria-hidden="true">
+                    <div
+                      className="admin-word-ruler-scale"
+                      ref={(node) => {
+                        if (node) {
+                          rulerScaleRefs.current.empty = node;
+                        } else {
+                          delete rulerScaleRefs.current.empty;
+                        }
+                      }}
+                    >
+                      {currentRulerMarks.map((mark) => (
+                        <span key={`ruler-empty-${mark}`}>{mark}</span>
+                      ))}
+                    </div>
+                  </div>
                   <div className="admin-doc-page-head">
                     <span>{`Topik ${activeTopicIndex + 1}`}</span>
                   </div>
                   <p className="text-muted">Halaman pertama sedang disiapkan. Setelah itu isi materi akan otomatis lanjut ke halaman berikutnya saat sudah penuh.</p>
+                  <div className="admin-word-page-footer">
+                    <span>{currentPageSurfaceLabel}</span>
+                    <strong>Halaman 1</strong>
+                  </div>
                 </section>
               )}
 
@@ -2042,6 +2267,58 @@ export default function AdminLearningMaterialEditor() {
                   className={pageIndex === activePageIndex ? `${editorPageClassName} admin-doc-page-current` : editorPageClassName}
                   style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
                 >
+                  <div className="admin-word-ruler" aria-hidden="true">
+                    <div
+                      className="admin-word-ruler-scale"
+                      ref={(node) => {
+                        if (node) {
+                          rulerScaleRefs.current[pageIndex] = node;
+                        } else {
+                          delete rulerScaleRefs.current[pageIndex];
+                        }
+                      }}
+                    >
+                      {currentRulerMarks.map((mark) => (
+                        <span key={`ruler-${pageIndex}-${mark}`}>{mark}</span>
+                      ))}
+                      {pageIndex === activeParagraphMetrics.pageIndex && (
+                        <div className="admin-word-ruler-markers">
+                          <button
+                            type="button"
+                            className="admin-word-ruler-marker admin-word-ruler-marker-left"
+                            style={{ left: activeRulerLeftPercent }}
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              activatePage(pageIndex);
+                              paragraphRulerDragRef.current = {
+                                marker: 'left',
+                                pageIndex,
+                                startLeftIndent: activeParagraphMetrics.leftIndent,
+                                startFirstLineIndent: activeParagraphMetrics.firstLineIndent,
+                              };
+                            }}
+                            aria-label="Geser indent kiri paragraf"
+                          />
+                          <button
+                            type="button"
+                            className="admin-word-ruler-marker admin-word-ruler-marker-first-line"
+                            style={{ left: activeRulerFirstLinePercent }}
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              activatePage(pageIndex);
+                              paragraphRulerDragRef.current = {
+                                marker: 'first-line',
+                                pageIndex,
+                                startLeftIndent: activeParagraphMetrics.leftIndent,
+                                startFirstLineIndent: activeParagraphMetrics.firstLineIndent,
+                              };
+                            }}
+                            aria-label="Geser indent baris pertama paragraf"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div className="admin-doc-page-head">
                     <span>{`Halaman ${pageIndex + 1}`}</span>
                     <button
@@ -2077,14 +2354,22 @@ export default function AdminLearningMaterialEditor() {
                     className="admin-word-editable"
                     contentEditable
                     suppressContentEditableWarning
-                    onFocus={() => activatePage(pageIndex)}
+                    onFocus={() => {
+                      activatePage(pageIndex);
+                      requestAnimationFrame(() => updateActiveParagraphMetrics(pageIndex));
+                    }}
                     onKeyDown={(event) => handleEditorKeyDown(event, pageIndex)}
+                    onKeyUp={() => handleEditorKeyUp(pageIndex)}
                     onInput={() => handlePageInput(pageIndex)}
                     onPointerDown={handleEditorPointerDown}
                     onClick={handleEditorClick}
                     onContextMenu={handleEditorContextMenu}
                     onBlur={() => updatePageContent(activeTopicIndex, pageIndex)}
                   />
+                  <div className="admin-word-page-footer">
+                    <span>{currentPageSurfaceLabel}</span>
+                    <strong>{`Halaman ${pageIndex + 1}`}</strong>
+                  </div>
                 </section>
               ))}
             </div>

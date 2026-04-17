@@ -11,7 +11,7 @@ export default function AccountShell({ title, subtitle, children, shellClassName
   return (
     <div className={`account-shell ${shellClassName}`.trim()}>
       <nav className="landing-navbar">
-        <div className="container landing-navbar-inner">
+        <div className="container landing-navbar-inner account-shell-nav-container">
           <BrandLogo />
 
           <div className="landing-nav-actions landing-nav-actions-authenticated">
@@ -27,7 +27,7 @@ export default function AccountShell({ title, subtitle, children, shellClassName
         </div>
       </nav>
 
-      <main className="container account-main">
+      <main className="container account-main account-shell-main-container">
         <div className="account-page-header">
           <h1>{title}</h1>
           {subtitle && <p>{subtitle}</p>}

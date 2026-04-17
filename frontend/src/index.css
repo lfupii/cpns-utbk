@@ -8470,12 +8470,18 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
   .landing-mindmap-track {
     grid-template-columns: 1fr;
+    align-items: start;
+    gap: 0.95rem;
   }
 
   .landing-mindmap-node {
+    height: auto;
+    min-height: 0;
     grid-template-columns: 78px minmax(0, 1fr);
-    align-items: center;
-    gap: 0.85rem 1rem;
+    align-items: start;
+    align-content: start;
+    gap: 0.75rem 0.95rem;
+    padding: 1rem 0.95rem;
   }
 
   .landing-mindmap-icon {
@@ -8644,6 +8650,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
     font-size: 2rem;
   }
 
+  .landing-mindmap-shell {
+    padding: 1.1rem 0.85rem 0.9rem;
+    border-radius: 1.35rem;
+  }
+
   .landing-mindmap-badge {
     font-size: 0.64rem;
   }
@@ -8651,30 +8662,40 @@ html[data-theme='dark'] .theme-toggle-thumb {
   .landing-mindmap-node {
     grid-template-columns: 1fr;
     justify-items: center;
+    align-items: start;
+    align-content: start;
+    height: auto;
+    min-height: 0;
+    gap: 0.7rem;
+    padding: 1rem 0.9rem 0.95rem;
     text-align: center;
   }
 
   .landing-mindmap-copy,
   .landing-mindmap-node-top .landing-mindmap-copy,
   .landing-mindmap-node-bottom .landing-mindmap-copy {
+    order: 0;
     text-align: center;
   }
 
   .landing-mindmap-icon {
-    width: 76px;
-    height: 76px;
+    order: -1;
+    width: 72px;
+    height: 72px;
   }
 
   .landing-mindmap-copy {
-    gap: 0.3rem;
+    gap: 0.28rem;
   }
 
   .landing-mindmap-copy h3 {
     font-size: 0.96rem;
+    line-height: 1.14;
   }
 
   .landing-mindmap-copy p {
     font-size: 0.84rem;
+    line-height: 1.52;
   }
 
   .account-page-header h1 {

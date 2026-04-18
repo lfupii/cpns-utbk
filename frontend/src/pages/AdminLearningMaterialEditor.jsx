@@ -295,6 +295,7 @@ export default function AdminLearningMaterialEditor() {
   });
   const paragraphRulerDragRef = useRef(null);
   const [pendingPaginationStart, setPendingPaginationStart] = useState(null);
+  const pendingEnterPageFocusRef = useRef(null);
 
   const numericPackageId = Number(packageId);
   const requestedTopicParam = searchParams.get('topic') || '0';
@@ -342,6 +343,32 @@ export default function AdminLearningMaterialEditor() {
       const range = document.createRange();
       range.selectNodeContents(editorNode);
       range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+  }, []);
+
+  const focusEditorAtStart = useCallback((pageIndex) => {
+    requestAnimationFrame(() => {
+      const editorNode = editorRefs.current[pageIndex];
+      if (!editorNode) {
+        return;
+      }
+
+      editorNode.focus();
+      const selection = window.getSelection();
+      if (!selection) {
+        return;
+      }
+
+      const range = document.createRange();
+      const firstChild = editorNode.firstChild;
+      if (firstChild) {
+        range.selectNodeContents(firstChild);
+      } else {
+        range.selectNodeContents(editorNode);
+      }
+      range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
     });
@@ -500,6 +527,64 @@ export default function AdminLearningMaterialEditor() {
     }
 
     return node.textContent.trim() !== '';
+  }, []);
+
+  const isEmptyEditorBreakNode = useCallback((node) => {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+      return false;
+    }
+
+    if (!node.matches('p, div, li, blockquote, h1, h2, h3, h4, h5, h6')) {
+      return false;
+    }
+
+    return node.textContent.trim() === '' && node.querySelector('img, table, figure, hr') === null;
+  }, []);
+
+  const getTrailingEditorBreakNode = useCallback((editorNode) => {
+    if (!editorNode) {
+      return null;
+    }
+
+    const childNodes = [...editorNode.childNodes];
+    for (let index = childNodes.length - 1; index >= 0; index -= 1) {
+      const currentNode = childNodes[index];
+      if (currentNode.nodeType === Node.TEXT_NODE && !currentNode.textContent.trim()) {
+        continue;
+      }
+
+      return isEmptyEditorBreakNode(currentNode) ? currentNode : null;
+    }
+
+    return null;
+  }, [isEmptyEditorBreakNode]);
+
+  const isCaretNearPageBottom = useCallback((pageIndex, threshold = 28) => {
+    const editorNode = editorRefs.current[pageIndex];
+    if (!editorNode) {
+      return false;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorNode.contains(selection.anchorNode)) {
+      return false;
+    }
+
+    const range = selection.getRangeAt(0).cloneRange();
+    range.collapse(true);
+
+    let caretRect = range.getClientRects()[0] || range.getBoundingClientRect();
+    if ((!caretRect || (caretRect.width === 0 && caretRect.height === 0)) && selection.anchorNode) {
+      const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
+      caretRect = blockNode?.getBoundingClientRect?.() || null;
+    }
+
+    if (!caretRect) {
+      return false;
+    }
+
+    const editorRect = editorNode.getBoundingClientRect();
+    return caretRect.bottom >= editorRect.bottom - threshold;
   }, []);
 
   const normalizeEditorContent = useCallback((editorNode) => {
@@ -889,10 +974,101 @@ export default function AdminLearningMaterialEditor() {
     }
   }, [activatePage, activePageIndex, applyParagraphIndent]);
 
+  const pageNeedsPaginationRebalance = useCallback((pageIndex) => {
+    const editorNode = editorRefs.current[pageIndex];
+    if (!editorNode) {
+      return false;
+    }
+
+    const isOverflowing = editorNode.scrollHeight > editorNode.clientHeight + 2;
+    if (isOverflowing) {
+      return true;
+    }
+
+    const nextEditorNode = editorRefs.current[pageIndex + 1];
+    if (!nextEditorNode) {
+      return false;
+    }
+
+    const nextHasContent = getMovableEditorNodes(nextEditorNode).length > 0;
+    const hasSpareRoom = editorNode.scrollHeight < editorNode.clientHeight - 40;
+    return nextHasContent && hasSpareRoom;
+  }, [getMovableEditorNodes]);
+
   const handleEditorKeyDown = useCallback((event, pageIndex) => {
     if (event.key === 'Tab') {
       event.preventDefault();
       adjustParagraphIndent(event.shiftKey ? -1 : 1, pageIndex);
+      return;
+    }
+
+    if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (isCaretNearPageBottom(pageIndex, 36)) {
+        requestAnimationFrame(() => {
+          const editorNode = editorRefs.current[pageIndex];
+          if (!editorNode) {
+            return;
+          }
+
+          const trailingBreakNode = getTrailingEditorBreakNode(editorNode);
+          if (!trailingBreakNode) {
+            if (pageNeedsPaginationRebalance(pageIndex)) {
+              schedulePaginationRebalance(pageIndex);
+            }
+            return;
+          }
+
+          const nextPageIndex = pageIndex + 1;
+          const nextEditorNode = editorRefs.current[nextPageIndex];
+          const movedBreakHtml = sanitizeEditorHtml(trailingBreakNode.outerHTML || '<p><br></p>');
+          trailingBreakNode.remove();
+          normalizeEditorContent(editorNode);
+
+          if (nextEditorNode) {
+            if (getMovableEditorNodes(nextEditorNode).length === 1 && nextEditorNode.textContent.trim() === '') {
+              nextEditorNode.innerHTML = '';
+            }
+            nextEditorNode.insertAdjacentHTML('afterbegin', movedBreakHtml);
+            normalizeEditorContent(nextEditorNode);
+            persistActivePageContent(editorNode.innerHTML, pageIndex);
+            persistActivePageContent(nextEditorNode.innerHTML, nextPageIndex);
+            activatePage(nextPageIndex);
+            focusEditorAtStart(nextPageIndex);
+
+            if (pageNeedsPaginationRebalance(pageIndex) || pageNeedsPaginationRebalance(nextPageIndex)) {
+              schedulePaginationRebalance(pageIndex);
+            }
+            return;
+          }
+
+          const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => {
+            if (topicIndex !== activeTopicIndex) {
+              return topic;
+            }
+
+            return {
+              ...topic,
+              pages: renumberMaterialPages([
+                ...topic.pages,
+                {
+                  ...createEmptyMaterialPage(topic.pages.length + 1),
+                  content_html: movedBreakHtml,
+                  points: extractPointsFromHtml(movedBreakHtml),
+                },
+              ]),
+            };
+          });
+
+          pendingEnterPageFocusRef.current = nextPageIndex;
+          setMaterialForm((current) => ({
+            ...current,
+            topics: nextTopics,
+          }));
+          setActivePageIndex(nextPageIndex);
+          syncSelectionInUrl(activeTopicIndex, nextPageIndex);
+          setPendingPaginationStart(pageIndex);
+        });
+      }
       return;
     }
 
@@ -928,7 +1104,24 @@ export default function AdminLearningMaterialEditor() {
     }));
     activatePage(nextPageIndex);
     focusEditorAtEnd(nextPageIndex);
-  }, [activatePage, activeTopicIndex, adjustParagraphIndent, focusEditorAtEnd, isEditorPageEmpty, materialForm.topics, readTopicsFromEditor]);
+  }, [
+    activatePage,
+    activeTopicIndex,
+    adjustParagraphIndent,
+    focusEditorAtEnd,
+    focusEditorAtStart,
+    getMovableEditorNodes,
+    getTrailingEditorBreakNode,
+    isCaretNearPageBottom,
+    isEditorPageEmpty,
+    materialForm.topics,
+    normalizeEditorContent,
+    pageNeedsPaginationRebalance,
+    persistActivePageContent,
+    readTopicsFromEditor,
+    schedulePaginationRebalance,
+    syncSelectionInUrl,
+  ]);
 
   const rebalancePaginatedEditors = useCallback((startIndex = 0) => {
     const currentTopic = materialForm.topics[activeTopicIndex];
@@ -1050,27 +1243,6 @@ export default function AdminLearningMaterialEditor() {
       paginationFrameRef.current = null;
     });
   }
-
-  const pageNeedsPaginationRebalance = useCallback((pageIndex) => {
-    const editorNode = editorRefs.current[pageIndex];
-    if (!editorNode) {
-      return false;
-    }
-
-    const isOverflowing = editorNode.scrollHeight > editorNode.clientHeight + 2;
-    if (isOverflowing) {
-      return true;
-    }
-
-    const nextEditorNode = editorRefs.current[pageIndex + 1];
-    if (!nextEditorNode) {
-      return false;
-    }
-
-    const nextHasContent = getMovableEditorNodes(nextEditorNode).length > 0;
-    const hasSpareRoom = editorNode.scrollHeight < editorNode.clientHeight - 40;
-    return nextHasContent && hasSpareRoom;
-  }, [getMovableEditorNodes]);
 
   const handlePageInput = useCallback((pageIndex) => {
     activatePage(pageIndex);
@@ -1790,6 +1962,20 @@ export default function AdminLearningMaterialEditor() {
 
     return () => cancelAnimationFrame(rafId);
   }, [pendingPaginationStart, rebalancePaginatedEditors]);
+
+  useEffect(() => {
+    const pendingFocusPageIndex = pendingEnterPageFocusRef.current;
+    if (pendingFocusPageIndex === null) {
+      return;
+    }
+
+    if (!editorRefs.current[pendingFocusPageIndex]) {
+      return;
+    }
+
+    focusEditorAtStart(pendingFocusPageIndex);
+    pendingEnterPageFocusRef.current = null;
+  }, [focusEditorAtStart, materialForm.topics]);
 
   useEffect(() => () => {
     if (paginationFrameRef.current) {

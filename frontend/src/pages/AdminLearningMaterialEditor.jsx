@@ -136,6 +136,30 @@ function getMaterialTopics(material) {
   return [];
 }
 
+function normalizeMaterialStatus(value) {
+  return value === 'draft' ? 'draft' : 'published';
+}
+
+function getMaterialStatusLabel(status) {
+  return normalizeMaterialStatus(status) === 'draft' ? 'Draft Admin' : 'Published';
+}
+
+function formatPublishedAt(value) {
+  if (!value) {
+    return 'Belum pernah dipublish';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Tanggal publish belum tersedia';
+  }
+
+  return new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(parsed);
+}
+
 function shouldAutoRenameMaterialPage(title) {
   const normalizedTitle = String(title || '').trim();
   return normalizedTitle === '' || /^Halaman\s+\d+$/i.test(normalizedTitle);
@@ -268,10 +292,17 @@ export default function AdminLearningMaterialEditor() {
   const paginationFrameRef = useRef(null);
   const [learningContent, setLearningContent] = useState([]);
   const [materialForm, setMaterialForm] = useState({ title: '', topics: [] });
+  const [materialMeta, setMaterialMeta] = useState({
+    status: 'published',
+    sourceUrl: '',
+    reviewNotes: '',
+    publishedAt: null,
+  });
   const [activeTopicIndex, setActiveTopicIndex] = useState(0);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState('');
   const [imageUploading, setImageUploading] = useState(false);
   const [pdfImporting, setPdfImporting] = useState(false);
   const [pdfImportProgress, setPdfImportProgress] = useState('');
@@ -324,6 +355,23 @@ export default function AdminLearningMaterialEditor() {
     () => learningContent.find((section) => section.code === sectionCode) || null,
     [learningContent, sectionCode]
   );
+  const activeMaterialStatus = normalizeMaterialStatus(materialMeta.status);
+  const previewDraftLabel = useMemo(() => {
+    const sectionLabel = String(activeSection?.name || '').trim();
+    return sectionLabel ? `Preview Draft ${sectionLabel}` : 'Preview Draft';
+  }, [activeSection?.name]);
+  const previewDraftUrl = useMemo(() => {
+    if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !activeSection?.code) {
+      return '';
+    }
+
+    const params = new URLSearchParams({
+      preview: 'draft',
+      section: activeSection.code,
+      topic: String(activeTopicIndex),
+    });
+    return `/learning/${numericPackageId}?${params.toString()}`;
+  }, [activeSection?.code, activeTopicIndex, numericPackageId]);
   const activeTopic = materialForm.topics[activeTopicIndex] || null;
   const activePage = activeTopic?.pages?.[activePageIndex] || null;
   const getEditorNode = useCallback((pageIndex = activePageIndex) => editorRefs.current[pageIndex] || null, [activePageIndex]);
@@ -404,6 +452,12 @@ export default function AdminLearningMaterialEditor() {
         title: section.material?.title || section.name || '',
         topics: normalizedTopics,
       });
+      setMaterialMeta({
+        status: normalizeMaterialStatus(section.material?.status),
+        sourceUrl: section.material?.source_url || '',
+        reviewNotes: section.material?.review_notes || '',
+        publishedAt: section.material?.published_at || null,
+      });
       const resolvedTopicIndex = normalizedTopics.length === 0
         ? 0
         : (shouldCreateTopic
@@ -428,6 +482,20 @@ export default function AdminLearningMaterialEditor() {
   useEffect(() => {
     fetchLearningContent();
   }, [fetchLearningContent]);
+
+  const syncLearningMaterialState = useCallback((nextMaterial) => {
+    setLearningContent((current) => current.map((section) => (
+      section.code === sectionCode
+        ? {
+            ...section,
+            material: {
+              ...(section.material || {}),
+              ...nextMaterial,
+            },
+          }
+        : section
+    )));
+  }, [sectionCode]);
 
   useEffect(() => {
     if (materialForm.topics.length === 0) {
@@ -2090,7 +2158,7 @@ export default function AdminLearningMaterialEditor() {
   const activeRulerLeftPercent = `${Math.max(0, Math.min(100, (activeParagraphMetrics.leftIndent / PARAGRAPH_INDENT_LIMIT) * 100))}%`;
   const activeRulerFirstLinePercent = `${Math.max(0, Math.min(100, ((activeParagraphMetrics.leftIndent + activeParagraphMetrics.firstLineIndent) / PARAGRAPH_INDENT_LIMIT) * 100))}%`;
 
-  const handleSave = async () => {
+  const handleSave = async (nextStatus) => {
     if (!activeSection) {
       return;
     }
@@ -2098,22 +2166,43 @@ export default function AdminLearningMaterialEditor() {
     rebalancePaginatedEditors(0);
     const topics = readTopicsFromEditor();
     setSaving(true);
+    setSavingAction(nextStatus);
     setError('');
     setSuccess('');
 
     try {
-      await apiClient.put('/admin/learning-material', {
+      const response = await apiClient.put('/admin/learning-material', {
         package_id: numericPackageId,
         section_code: activeSection.code,
         title: materialForm.title,
         topics,
+        status: nextStatus,
+        source_url: materialMeta.sourceUrl,
+        review_notes: materialMeta.reviewNotes,
       });
+      const savedMaterial = response.data.data?.material || null;
       setMaterialForm((current) => ({ ...current, topics }));
-      setSuccess('Materi berhasil disimpan.');
+      if (savedMaterial) {
+        setMaterialMeta({
+          status: normalizeMaterialStatus(savedMaterial.status),
+          sourceUrl: savedMaterial.source_url || '',
+          reviewNotes: savedMaterial.review_notes || '',
+          publishedAt: savedMaterial.published_at || null,
+        });
+        syncLearningMaterialState(savedMaterial);
+      } else {
+        setMaterialMeta((current) => ({
+          ...current,
+          status: normalizeMaterialStatus(nextStatus),
+          publishedAt: nextStatus === 'published' ? current.publishedAt || new Date().toISOString() : null,
+        }));
+      }
+      setSuccess(response.data?.message || (nextStatus === 'published' ? 'Materi berhasil dipublish.' : 'Draft berhasil disimpan.'));
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyimpan materi');
     } finally {
       setSaving(false);
+      setSavingAction('');
     }
   };
 
@@ -2125,9 +2214,24 @@ export default function AdminLearningMaterialEditor() {
     >
       <div className="admin-material-editor-topbar admin-learning-editor-topbar">
         <Link to="/admin" className="btn btn-outline">Kembali ke Admin</Link>
-        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving || loading || pdfImporting}>
-          {saving ? 'Menyimpan...' : 'Simpan Materi'}
-        </button>
+        <div className="admin-material-editor-actions">
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => handleSave('draft')}
+            disabled={saving || loading || pdfImporting}
+          >
+            {saving && savingAction === 'draft' ? 'Menyimpan Draft...' : 'Simpan Draft'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => handleSave('published')}
+            disabled={saving || loading || pdfImporting}
+          >
+            {saving && savingAction === 'published' ? 'Mempublish...' : 'Publish'}
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert">{error}</div>}
@@ -2144,8 +2248,30 @@ export default function AdminLearningMaterialEditor() {
             <div>
               <span className="account-package-tag">{activeSection.name}</span>
               <h3>{activeTopic?.title || 'Topik materi baru'}</h3>
+              <div className="admin-learning-editor-status-line">
+                <span className={`admin-material-status-badge admin-material-status-badge-${activeMaterialStatus}`}>
+                  {getMaterialStatusLabel(activeMaterialStatus)}
+                </span>
+                <p>
+                  {activeMaterialStatus === 'draft'
+                    ? 'Draft hanya terlihat di area admin sampai Anda menekan Publish.'
+                    : `Materi aktif untuk peserta. Publish terakhir ${formatPublishedAt(materialMeta.publishedAt)}.`}
+                </p>
+              </div>
             </div>
             <div className="admin-doc-toolbar-actions">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  if (previewDraftUrl) {
+                    window.open(previewDraftUrl, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+                disabled={!previewDraftUrl}
+              >
+                {previewDraftLabel}
+              </button>
               <button type="button" className="btn btn-outline" onClick={() => navigate('/admin')}>Tutup Editor</button>
             </div>
           </div>
@@ -2353,6 +2479,27 @@ export default function AdminLearningMaterialEditor() {
                   value={materialForm.title}
                   onChange={(event) => setMaterialForm((current) => ({ ...current, title: event.target.value }))}
                 />
+                <div className="admin-learning-material-meta-grid">
+                  <div className="admin-learning-material-meta-card">
+                    <label>Sumber Referensi</label>
+                    <input
+                      name="material_source_url"
+                      value={materialMeta.sourceUrl}
+                      onChange={(event) => setMaterialMeta((current) => ({ ...current, sourceUrl: event.target.value }))}
+                      placeholder="https://contoh.com/sumber-materi"
+                    />
+                  </div>
+                  <div className="admin-learning-material-meta-card">
+                    <label>Catatan Review Admin</label>
+                    <textarea
+                      name="material_review_notes"
+                      rows="4"
+                      value={materialMeta.reviewNotes}
+                      onChange={(event) => setMaterialMeta((current) => ({ ...current, reviewNotes: event.target.value }))}
+                      placeholder="Contoh: cek lagi istilah hukum, tambahkan contoh kasus singkat, atau catat sumber revisi."
+                    />
+                  </div>
+                </div>
               </div>
 
               {activeTopic && (

@@ -182,6 +182,14 @@ function getMaterialTopics(material) {
   return [];
 }
 
+function normalizeMaterialStatus(value) {
+  return value === 'draft' ? 'draft' : 'published';
+}
+
+function getMaterialStatusLabel(status) {
+  return normalizeMaterialStatus(status) === 'draft' ? 'Draft' : 'Published';
+}
+
 function formatSubtestSidebarLabel(topicCount) {
   return `${topicCount} topik dan 1 mini test`;
 }
@@ -2002,6 +2010,7 @@ export default function AdminPanel() {
                       const topics = getMaterialTopics(section.material);
                       const isSectionActive = section.code === activeLearningSection?.code;
                       const isMiniTestActive = isSectionActive && learningEditorMode === 'quiz';
+                      const materialStatus = normalizeMaterialStatus(section.material?.status);
 
                       return (
                         <div key={section.code} className="admin-section-sidebar-entry">
@@ -2014,6 +2023,9 @@ export default function AdminPanel() {
                               <span className="admin-section-sidebar-item-copy">
                                 <strong>{section.name}</strong>
                                 <small>{formatSubtestSidebarLabel(topics.length || 0)}</small>
+                                <span className={`admin-material-status-badge admin-material-status-badge-${materialStatus}`}>
+                                  {getMaterialStatusLabel(materialStatus)}
+                                </span>
                               </span>
                               <span className="admin-section-sidebar-caret" aria-hidden="true">
                                 {expandedMaterialSections[section.code] ? '▾' : '▸'}
@@ -2989,6 +3001,7 @@ export default function AdminPanel() {
                     const pageCount = section.material?.pages?.length || 0;
                     const questionCount = section.questions?.length || 0;
                     const isActive = section.code === activeLearningSection.code;
+                    const materialStatus = normalizeMaterialStatus(section.material?.status);
 
                     return (
                       <article
@@ -2997,6 +3010,9 @@ export default function AdminPanel() {
                       >
                         <span className="account-package-tag">{section.session_name || 'Subtest'}</span>
                         <h3>{section.name}</h3>
+                        <span className={`admin-material-status-badge admin-material-status-badge-${materialStatus}`}>
+                          {getMaterialStatusLabel(materialStatus)}
+                        </span>
                         <p>{section.material?.title || 'Materi belum diberi judul'}</p>
                         <div className="admin-learning-overview-stats">
                           <span>{pageCount} topik materi</span>

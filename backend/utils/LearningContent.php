@@ -16,26 +16,26 @@ class LearningContent {
 
         if ($code === 'twk') {
             return [
-                self::page('Peta TWK', [
-                    'TWK mengukur penguasaan Pancasila, UUD 1945, NKRI, Bhinneka Tunggal Ika, nasionalisme, dan integritas.',
-                    'Soal sering berbentuk studi kasus, jadi pahami nilai dan prinsipnya sebelum menghafal detail pasal.',
-                    'Kata kunci seperti sesuai, tidak sesuai, pengecualian, dan implementasi perlu dibaca pelan.',
-                ], 'Target awal TWK adalah memahami hubungan nilai dasar negara dengan tindakan warga negara.'),
-                self::page('Pancasila dan Konstitusi', [
-                    'Pancasila menjadi dasar nilai untuk menilai sikap adil, musyawarah, persatuan, dan kepentingan publik.',
-                    'UUD 1945 perlu dipahami sebagai kerangka hak warga negara, kewajiban warga, dan lembaga negara.',
-                    'Pisahkan nilai ideal, aturan normatif, dan contoh penerapan dalam kehidupan sehari-hari.',
-                ], 'Jika ragu, pilih jawaban yang konstitusional, inklusif, dan menjaga kepentingan bangsa.'),
-                self::page('NKRI dan Kebinekaan', [
-                    'NKRI menekankan persatuan wilayah, kedaulatan, dan kepentingan nasional.',
-                    'Bhinneka Tunggal Ika menguji toleransi, anti-diskriminasi, dan kerja sama lintas latar belakang.',
-                    'Hindari opsi yang ekstrem, memecah belah, atau mengabaikan prosedur hukum.',
-                ], 'Jawaban TWK yang kuat biasanya menggabungkan persatuan, hukum, dan etika publik.'),
-                self::page('Strategi Mengerjakan TWK', [
-                    'Baca pertanyaan sebelum studi kasus agar tahu nilai yang diminta.',
-                    'Coret opsi yang mendahulukan kepentingan pribadi, reaktif, atau melanggar aturan.',
-                    'Latih contoh kasus untuk setiap sila agar konsep tidak berhenti sebagai hafalan.',
-                ], 'Selesaikan sesi ini dengan mini test TWK untuk mengunci milestone belajar.'),
+                self::page('Pancasila', [
+                    'Pancasila dipahami sebagai dasar nilai bangsa dan sumber arah bersikap dalam kehidupan bermasyarakat, berbangsa, dan bernegara.',
+                    'Setiap sila perlu dibaca dari makna intinya, lalu dihubungkan dengan contoh perilaku seperti musyawarah, keadilan, toleransi, dan tanggung jawab.',
+                    'Dalam soal TWK, opsi yang kuat biasanya mencerminkan keseimbangan antara kemanusiaan, persatuan, dan kepentingan umum.',
+                ], 'Pegangan utama topik ini adalah memahami isi tiap sila dan penerapannya dalam kasus sehari-hari.'),
+                self::page('Undang-Undang Dasar 1945', [
+                    'UUD 1945 menjadi landasan konstitusional yang mengatur hak dan kewajiban warga negara, bentuk negara, serta susunan lembaga negara.',
+                    'Fokus belajar sebaiknya diarahkan pada pembukaan, pokok-pokok pasal, dan hubungan antara kewenangan lembaga dengan prinsip negara hukum.',
+                    'Saat mengerjakan soal, bedakan antara nilai dasar, aturan konstitusi, dan praktik penyelenggaraan negara.',
+                ], 'Topik ini akan lebih mudah dikuasai jika pasal penting dibaca bersama konteks fungsi dan tujuannya.'),
+                self::page('Bhinneka Tunggal Ika', [
+                    'Bhinneka Tunggal Ika menekankan persatuan dalam keberagaman, sehingga toleransi dan penghormatan terhadap perbedaan menjadi inti pembahasan.',
+                    'Soal biasanya menguji sikap terhadap perbedaan suku, agama, budaya, bahasa, dan pandangan, terutama dalam kerja sama sosial.',
+                    'Jawaban yang baik menghindari diskriminasi, menjaga persatuan, dan tetap menghormati identitas tiap kelompok.',
+                ], 'Inti topik ini adalah melihat keberagaman sebagai kekuatan yang dijaga dengan sikap inklusif.'),
+                self::page('NKRI', [
+                    'NKRI menegaskan Indonesia sebagai negara kesatuan yang menjaga kedaulatan wilayah, persatuan nasional, dan kepentingan bangsa.',
+                    'Pembahasan sering terkait ancaman disintegrasi, bela negara, wawasan nusantara, dan peran warga dalam menjaga keutuhan negara.',
+                    'Pada soal TWK, pilihan yang tepat biasanya berpihak pada hukum, ketahanan nasional, dan semangat menjaga kesatuan Indonesia.',
+                ], 'Saat membaca soal NKRI, arahkan pilihan pada kepentingan nasional, persatuan, dan stabilitas negara.'),
             ];
         }
 

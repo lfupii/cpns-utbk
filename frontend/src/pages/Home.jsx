@@ -227,6 +227,7 @@ export default function Home() {
       ],
     },
   ];
+  const packageDiscountPercent = 50;
   const featureMindmap = [
     {
       step: '01',
@@ -500,6 +501,14 @@ export default function Home() {
                 <div className="landing-package-footer landing-package-footer-curated">
                   <div>
                     <span className="landing-package-price-label">Mulai dari</span>
+                    <div className="landing-package-price-meta">
+                      <span className="landing-package-discount-pill">
+                        Diskon {packageDiscountPercent}%
+                      </span>
+                      <span className="landing-package-price-original">
+                        Rp{(pkg.price * 2).toLocaleString('id-ID')}
+                      </span>
+                    </div>
                     <span className="landing-package-price">
                       Rp{pkg.price.toLocaleString('id-ID')}
                     </span>

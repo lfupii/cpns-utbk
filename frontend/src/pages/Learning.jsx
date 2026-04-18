@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
@@ -105,8 +105,14 @@ function findInitialMiniTestQuestionId(questions, answers) {
 export default function Learning() {
   const { packageId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const numericPackageId = Number(packageId);
+  const previewMode = String(searchParams.get('preview') || '').trim().toLowerCase();
+  const previewSectionCode = String(searchParams.get('section') || '').trim();
+  const previewTopicParam = Number(searchParams.get('topic') || 0);
+  const previewTopicIndex = Number.isFinite(previewTopicParam) ? Math.max(0, Math.floor(previewTopicParam)) : 0;
+  const isDraftPreview = previewMode === 'draft' && previewSectionCode !== '';
   const [learning, setLearning] = useState(null);
   const [activeSectionCode, setActiveSectionCode] = useState('');
   const [sectionTests, setSectionTests] = useState({});
@@ -132,17 +138,35 @@ export default function Learning() {
     }
 
     try {
-      const response = await apiClient.get(`/learning/package?package_id=${numericPackageId}`);
+      const query = new URLSearchParams({
+        package_id: String(numericPackageId),
+      });
+      if (isDraftPreview) {
+        query.set('preview', 'draft');
+        query.set('section_code', previewSectionCode);
+      }
+      const response = await apiClient.get(`/learning/package?${query.toString()}`);
       const payload = response.data.data;
       setLearning(payload);
-      setActiveSectionCode((current) => current || payload.sections?.[0]?.code || '');
-      setActiveTopicIndex(0);
+      const requestedSectionCode = isDraftPreview && payload.sections?.some((section) => section.code === previewSectionCode)
+        ? previewSectionCode
+        : payload.sections?.[0]?.code || '';
+      setActiveSectionCode(requestedSectionCode);
+      setActiveTopicIndex(isDraftPreview ? previewTopicIndex : 0);
+      if (isDraftPreview && requestedSectionCode) {
+        setContentView('materi');
+        setActiveSectionView('material');
+        setMaterialsExpanded(true);
+        setExpandedMaterialSections({
+          [requestedSectionCode]: true,
+        });
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal memuat ruang belajar');
     } finally {
       setLoading(false);
     }
-  }, [numericPackageId]);
+  }, [isDraftPreview, numericPackageId, previewSectionCode, previewTopicIndex]);
 
   useEffect(() => {
     fetchLearning();
@@ -208,6 +232,8 @@ export default function Learning() {
   }, [activeSectionTopics, activeTopicIndex]);
   const hasAccess = Boolean(learning?.has_access);
   const viewerIsAuthenticated = Boolean(learning?.is_authenticated ?? isAuthenticated);
+  const previewInfo = learning?.preview || {};
+  const isActiveDraftPreview = previewInfo.mode === 'draft' && previewInfo.section_code;
   const summary = learning?.summary || {};
   const packageData = learning?.package || null;
   const currentSectionTest = activeSection ? sectionTests[activeSection.code] || {} : {};
@@ -1062,6 +1088,15 @@ export default function Learning() {
     >
       {error && <div className="alert">{error}</div>}
       {successMessage && <div className="account-success learning-flash">{successMessage}</div>}
+
+      {isActiveDraftPreview && (
+        <div className="learning-preview-notice">
+          <strong>Preview draft admin aktif.</strong>
+          <span>
+            Anda sedang melihat draft materi untuk subtest {previewInfo.section_code}. Tampilan ini memakai konten draft yang belum dipublish ke peserta.
+          </span>
+        </div>
+      )}
 
       {!hasAccess && (
         <div className="learning-lock-notice">

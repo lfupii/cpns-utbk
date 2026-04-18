@@ -1484,7 +1484,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .landing-mindmap-shell {
   position: relative;
   overflow: hidden;
-  padding: 1.4rem 2rem 1.2rem;
+  padding: 1.4rem 2rem 1.45rem;
   border-radius: 2rem;
   border: 1px solid rgba(214, 226, 240, 0.95);
   background:
@@ -1543,8 +1543,16 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .landing-mindmap-node-bottom {
-  margin-top: 6rem;
+  margin-top: 10.25rem;
   gap: 0.75rem;
+}
+
+.landing-mindmap-node-bottom .landing-mindmap-icon {
+  order: -1;
+}
+
+.landing-mindmap-node-bottom .landing-mindmap-copy {
+  order: 1;
 }
 
 .landing-mindmap-badge {
@@ -2023,6 +2031,36 @@ html[data-theme='dark'] .theme-toggle-thumb {
   color: #8290a5;
   font-size: 0.85rem;
   font-weight: 700;
+}
+
+.landing-package-price-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.45rem;
+}
+
+.landing-package-discount-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.85rem;
+  padding: 0 0.72rem;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #d93025;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.landing-package-price-original {
+  color: #94a3b8;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(148, 163, 184, 0.9);
 }
 
 .landing-package-price {
@@ -2600,6 +2638,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
   border: 1px solid rgba(245, 158, 11, 0.32);
   background: #fffbeb;
   color: #744d0b;
+}
+
+.learning-preview-notice {
+  margin-top: 1.1rem;
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem 1.15rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  background: rgba(239, 246, 255, 0.96);
+  color: #1d4ed8;
 }
 
 .learning-dashboard {
@@ -5125,6 +5174,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-doc-cover input,
+.admin-doc-cover textarea,
 .admin-doc-title-input,
 .admin-doc-body-input,
 .admin-doc-closing-input {
@@ -5134,6 +5184,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-doc-cover input:focus,
+.admin-doc-cover textarea:focus,
 .admin-doc-title-input:focus,
 .admin-doc-body-input:focus,
 .admin-doc-closing-input:focus {
@@ -5146,6 +5197,54 @@ html[data-theme='dark'] .theme-toggle-thumb {
   padding: 0;
   font-size: 1.5rem;
   font-weight: 800;
+}
+
+.admin-doc-cover textarea {
+  min-height: 112px;
+  padding: 0;
+  resize: vertical;
+  font-size: 1rem;
+  line-height: 1.65;
+  font-weight: 600;
+  background: transparent;
+}
+
+.admin-learning-material-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.admin-learning-material-meta-card {
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(214, 226, 240, 0.95);
+}
+
+.admin-material-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 1.7rem;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-material-status-badge-draft {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.admin-material-status-badge-published {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
 }
 
 .admin-doc-page {
@@ -5211,6 +5310,12 @@ html[data-theme='dark'] .theme-toggle-thumb {
   flex-wrap: wrap;
 }
 
+.admin-material-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
 .admin-material-editor-shell {
   padding: 1rem;
   background:
@@ -5247,6 +5352,23 @@ html[data-theme='dark'] .theme-toggle-thumb {
   line-height: 1.05;
   letter-spacing: -0.04em;
   font-weight: 700;
+}
+
+.admin-learning-editor-status-line {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-learning-editor-status-line p {
+  margin: 0;
+  color: #607089;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.admin-learning-overview-card-modern .admin-material-status-badge {
+  margin-top: 0.4rem;
 }
 
 .admin-learning-editor-nav-sticky {
@@ -8501,9 +8623,15 @@ html[data-theme='dark'] .theme-toggle-thumb {
     left: auto;
     top: auto;
     bottom: auto;
+    order: 0;
     width: 100%;
     transform: none;
     text-align: left;
+  }
+
+  .landing-mindmap-node-top .landing-mindmap-icon,
+  .landing-mindmap-node-bottom .landing-mindmap-icon {
+    order: 0;
   }
 
   .landing-mindmap-node:hover .landing-mindmap-copy {
@@ -8621,6 +8749,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
   }
 
   .admin-import-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-learning-material-meta-grid {
     grid-template-columns: 1fr;
   }
 
@@ -9345,6 +9477,16 @@ html[data-theme='dark'] .policy-section-kicker {
   color: #9ed0ff;
 }
 
+html[data-theme='dark'] .landing-package-discount-pill {
+  background: rgba(248, 113, 113, 0.14);
+  color: #ffb4b4;
+}
+
+html[data-theme='dark'] .landing-package-price-original {
+  color: #7f95b3;
+  text-decoration-color: rgba(127, 149, 179, 0.88);
+}
+
 html[data-theme='dark'] .landing-footer-note-inner,
 html[data-theme='dark'] .admin-main-card .account-form-actions {
   border-top-color: rgba(112, 142, 186, 0.22);
@@ -9448,6 +9590,7 @@ html[data-theme='dark'] .learning-locked-pages,
 html[data-theme='dark'] .learning-option,
 html[data-theme='dark'] .learning-test-result,
 html[data-theme='dark'] .learning-lock-notice,
+html[data-theme='dark'] .learning-preview-notice,
 html[data-theme='dark'] .learning-tab,
 html[data-theme='dark'] .admin-panel-card,
 html[data-theme='dark'] .admin-sidebar,
@@ -9490,6 +9633,7 @@ html[data-theme='dark'] .form-group textarea,
 html[data-theme='dark'] .form-group select,
 html[data-theme='dark'] .admin-option-row input,
 html[data-theme='dark'] .admin-doc-cover input,
+html[data-theme='dark'] .admin-doc-cover textarea,
 html[data-theme='dark'] .admin-doc-title-input,
 html[data-theme='dark'] .admin-doc-body-input,
 html[data-theme='dark'] .admin-doc-closing-input,
@@ -9576,6 +9720,12 @@ html[data-theme='dark'] .learning-dashboard-card {
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22);
 }
 
+html[data-theme='dark'] .learning-preview-notice {
+  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(14, 28, 54, 0.92);
+  color: #bfdbfe;
+}
+
 html[data-theme='dark'] .learning-mini-test-topic-chip {
   border-color: rgba(112, 142, 186, 0.24);
   background: rgba(17, 27, 45, 0.72);
@@ -9596,6 +9746,24 @@ html[data-theme='dark'] .admin-question-row-wrap-modern,
 html[data-theme='dark'] .admin-option-editor-card {
   background: rgba(11, 18, 33, 0.9);
   border-color: rgba(112, 142, 186, 0.24);
+}
+
+html[data-theme='dark'] .admin-learning-material-meta-card {
+  border-top-color: rgba(112, 142, 186, 0.24);
+}
+
+html[data-theme='dark'] .admin-learning-editor-status-line p {
+  color: #9fb0c7;
+}
+
+html[data-theme='dark'] .admin-material-status-badge-draft {
+  background: rgba(251, 191, 36, 0.16);
+  color: #ffd27a;
+}
+
+html[data-theme='dark'] .admin-material-status-badge-published {
+  background: rgba(52, 211, 153, 0.14);
+  color: #8ef0c4;
 }
 
 html[data-theme='dark'] .learning-page-document,

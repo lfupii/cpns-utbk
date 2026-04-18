@@ -348,32 +348,6 @@ export default function AdminLearningMaterialEditor() {
     });
   }, []);
 
-  const focusEditorAtStart = useCallback((pageIndex) => {
-    requestAnimationFrame(() => {
-      const editorNode = editorRefs.current[pageIndex];
-      if (!editorNode) {
-        return;
-      }
-
-      editorNode.focus();
-      const selection = window.getSelection();
-      if (!selection) {
-        return;
-      }
-
-      const range = document.createRange();
-      const firstChild = editorNode.firstChild;
-      if (firstChild) {
-        range.selectNodeContents(firstChild);
-      } else {
-        range.selectNodeContents(editorNode);
-      }
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    });
-  }, []);
-
   const syncSelectionInUrl = useCallback((topicIndex, pageIndex = 0) => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set('topic', String(Math.max(0, topicIndex)));
@@ -541,7 +515,55 @@ export default function AdminLearningMaterialEditor() {
     return node.textContent.trim() === '' && node.querySelector('img, table, figure, hr') === null;
   }, []);
 
-  const getTrailingEditorBreakNode = useCallback((editorNode) => {
+  const setSelectionRange = useCallback((range) => {
+    const selection = window.getSelection();
+    if (!selection || !range) {
+      return false;
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }, []);
+
+  const placeCaretInsideNode = useCallback((node, collapseToStart = false) => {
+    if (!node) {
+      return false;
+    }
+
+    const range = document.createRange();
+    if (node.nodeType === Node.TEXT_NODE) {
+      const textLength = node.textContent?.length || 0;
+      range.setStart(node, collapseToStart ? 0 : textLength);
+      range.collapse(true);
+      return setSelectionRange(range);
+    }
+
+    range.selectNodeContents(node);
+    range.collapse(collapseToStart);
+    return setSelectionRange(range);
+  }, [setSelectionRange]);
+
+  const ensureEditorLeadingParagraph = useCallback((editorNode) => {
+    if (!editorNode) {
+      return null;
+    }
+
+    const firstRelevantNode = [...editorNode.childNodes].find((childNode) => (
+      childNode.nodeType !== Node.TEXT_NODE || childNode.textContent.trim() !== ''
+    )) || null;
+
+    if (firstRelevantNode && isEmptyEditorBreakNode(firstRelevantNode)) {
+      return firstRelevantNode;
+    }
+
+    const paragraph = document.createElement('p');
+    paragraph.innerHTML = '<br>';
+    editorNode.insertBefore(paragraph, firstRelevantNode || editorNode.firstChild || null);
+    return paragraph;
+  }, [isEmptyEditorBreakNode]);
+
+  const ensureEditorTrailingParagraph = useCallback((editorNode) => {
     if (!editorNode) {
       return null;
     }
@@ -553,10 +575,16 @@ export default function AdminLearningMaterialEditor() {
         continue;
       }
 
-      return isEmptyEditorBreakNode(currentNode) ? currentNode : null;
+      if (isEmptyEditorBreakNode(currentNode)) {
+        return currentNode;
+      }
+      break;
     }
 
-    return null;
+    const paragraph = document.createElement('p');
+    paragraph.innerHTML = '<br>';
+    editorNode.appendChild(paragraph);
+    return paragraph;
   }, [isEmptyEditorBreakNode]);
 
   const isCaretNearPageBottom = useCallback((pageIndex, threshold = 28) => {
@@ -995,6 +1023,109 @@ export default function AdminLearningMaterialEditor() {
     return nextHasContent && hasSpareRoom;
   }, [getMovableEditorNodes]);
 
+  const placeCaretFromEditorPoint = useCallback((editorNode, pageIndex, clientX, clientY) => {
+    if (!editorNode) {
+      return false;
+    }
+
+    editorNode.focus();
+
+    if (typeof document.caretPositionFromPoint === 'function') {
+      const caretPosition = document.caretPositionFromPoint(clientX, clientY);
+      if (caretPosition?.offsetNode && editorNode.contains(caretPosition.offsetNode)) {
+        const range = document.createRange();
+        const maxOffset = caretPosition.offsetNode.nodeType === Node.TEXT_NODE
+          ? (caretPosition.offsetNode.textContent?.length || 0)
+          : (caretPosition.offsetNode.childNodes?.length || 0);
+        range.setStart(caretPosition.offsetNode, Math.min(caretPosition.offset, maxOffset));
+        range.collapse(true);
+        return setSelectionRange(range);
+      }
+    }
+
+    if (typeof document.caretRangeFromPoint === 'function') {
+      const caretRange = document.caretRangeFromPoint(clientX, clientY);
+      if (caretRange?.startContainer && editorNode.contains(caretRange.startContainer)) {
+        caretRange.collapse(true);
+        return setSelectionRange(caretRange);
+      }
+    }
+
+    const movableNodes = getMovableEditorNodes(editorNode);
+    const lastMovableNode = movableNodes[movableNodes.length - 1] || null;
+    if (lastMovableNode) {
+      const lastRect = lastMovableNode.getBoundingClientRect?.() || null;
+      if (!lastRect || clientY >= lastRect.bottom - 6) {
+        const trailingParagraph = ensureEditorTrailingParagraph(editorNode);
+        persistActivePageContent(editorNode.innerHTML, pageIndex);
+        return placeCaretInsideNode(trailingParagraph, false);
+      }
+    }
+
+    const firstMovableNode = movableNodes[0] || null;
+    if (firstMovableNode) {
+      return placeCaretInsideNode(firstMovableNode, true);
+    }
+
+    const trailingParagraph = ensureEditorTrailingParagraph(editorNode);
+    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    return placeCaretInsideNode(trailingParagraph, false);
+  }, [
+    ensureEditorTrailingParagraph,
+    getMovableEditorNodes,
+    persistActivePageContent,
+    placeCaretInsideNode,
+    setSelectionRange,
+  ]);
+
+  const openNextEditorPageFromBoundary = useCallback((pageIndex) => {
+    const nextPageIndex = pageIndex + 1;
+    const nextEditorNode = editorRefs.current[nextPageIndex];
+
+    if (nextEditorNode) {
+      const leadingParagraph = ensureEditorLeadingParagraph(nextEditorNode);
+      normalizeEditorContent(nextEditorNode);
+      persistActivePageContent(nextEditorNode.innerHTML, nextPageIndex);
+      activatePage(nextPageIndex);
+      nextEditorNode.focus();
+      placeCaretInsideNode(leadingParagraph, true);
+      requestAnimationFrame(() => updateActiveParagraphMetrics(nextPageIndex));
+      return;
+    }
+
+    const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => {
+      if (topicIndex !== activeTopicIndex) {
+        return topic;
+      }
+
+      return {
+        ...topic,
+        pages: renumberMaterialPages([
+          ...topic.pages,
+          createEmptyMaterialPage(topic.pages.length + 1),
+        ]),
+      };
+    });
+
+    pendingEnterPageFocusRef.current = nextPageIndex;
+    setMaterialForm((current) => ({
+      ...current,
+      topics: nextTopics,
+    }));
+    setActivePageIndex(nextPageIndex);
+    syncSelectionInUrl(activeTopicIndex, nextPageIndex);
+  }, [
+    activatePage,
+    activeTopicIndex,
+    ensureEditorLeadingParagraph,
+    normalizeEditorContent,
+    persistActivePageContent,
+    placeCaretInsideNode,
+    readTopicsFromEditor,
+    syncSelectionInUrl,
+    updateActiveParagraphMetrics,
+  ]);
+
   const handleEditorKeyDown = useCallback((event, pageIndex) => {
     if (event.key === 'Tab') {
       event.preventDefault();
@@ -1004,72 +1135,10 @@ export default function AdminLearningMaterialEditor() {
 
     if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
       if (isCaretNearPageBottom(pageIndex, 36)) {
-        requestAnimationFrame(() => {
-          const editorNode = editorRefs.current[pageIndex];
-          if (!editorNode) {
-            return;
-          }
-
-          const trailingBreakNode = getTrailingEditorBreakNode(editorNode);
-          if (!trailingBreakNode) {
-            if (pageNeedsPaginationRebalance(pageIndex)) {
-              schedulePaginationRebalance(pageIndex);
-            }
-            return;
-          }
-
-          const nextPageIndex = pageIndex + 1;
-          const nextEditorNode = editorRefs.current[nextPageIndex];
-          const movedBreakHtml = sanitizeEditorHtml(trailingBreakNode.outerHTML || '<p><br></p>');
-          trailingBreakNode.remove();
-          normalizeEditorContent(editorNode);
-
-          if (nextEditorNode) {
-            if (getMovableEditorNodes(nextEditorNode).length === 1 && nextEditorNode.textContent.trim() === '') {
-              nextEditorNode.innerHTML = '';
-            }
-            nextEditorNode.insertAdjacentHTML('afterbegin', movedBreakHtml);
-            normalizeEditorContent(nextEditorNode);
-            persistActivePageContent(editorNode.innerHTML, pageIndex);
-            persistActivePageContent(nextEditorNode.innerHTML, nextPageIndex);
-            activatePage(nextPageIndex);
-            focusEditorAtStart(nextPageIndex);
-
-            if (pageNeedsPaginationRebalance(pageIndex) || pageNeedsPaginationRebalance(nextPageIndex)) {
-              schedulePaginationRebalance(pageIndex);
-            }
-            return;
-          }
-
-          const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => {
-            if (topicIndex !== activeTopicIndex) {
-              return topic;
-            }
-
-            return {
-              ...topic,
-              pages: renumberMaterialPages([
-                ...topic.pages,
-                {
-                  ...createEmptyMaterialPage(topic.pages.length + 1),
-                  content_html: movedBreakHtml,
-                  points: extractPointsFromHtml(movedBreakHtml),
-                },
-              ]),
-            };
-          });
-
-          pendingEnterPageFocusRef.current = nextPageIndex;
-          setMaterialForm((current) => ({
-            ...current,
-            topics: nextTopics,
-          }));
-          setActivePageIndex(nextPageIndex);
-          syncSelectionInUrl(activeTopicIndex, nextPageIndex);
-          setPendingPaginationStart(pageIndex);
-        });
+        event.preventDefault();
+        openNextEditorPageFromBoundary(pageIndex);
+        return;
       }
-      return;
     }
 
     if (event.key !== 'Backspace' && event.key !== 'Delete') {
@@ -1109,18 +1178,11 @@ export default function AdminLearningMaterialEditor() {
     activeTopicIndex,
     adjustParagraphIndent,
     focusEditorAtEnd,
-    focusEditorAtStart,
-    getMovableEditorNodes,
-    getTrailingEditorBreakNode,
     isCaretNearPageBottom,
     isEditorPageEmpty,
     materialForm.topics,
-    normalizeEditorContent,
-    pageNeedsPaginationRebalance,
-    persistActivePageContent,
+    openNextEditorPageFromBoundary,
     readTopicsFromEditor,
-    schedulePaginationRebalance,
-    syncSelectionInUrl,
   ]);
 
   const rebalancePaginatedEditors = useCallback((startIndex = 0) => {
@@ -1726,32 +1788,53 @@ export default function AdminLearningMaterialEditor() {
     }
 
     const figure = event.target.closest?.('.material-image-frame');
-    if (!figure || !figure.closest('.admin-word-editable')) {
+    if (figure && figure.closest('.admin-word-editable')) {
+      event.preventDefault();
+      selectImageFigure(figure);
+      closeImageContextMenu();
+      normalizeImageFigureSize(figure);
+
+      const rect = figure.getBoundingClientRect();
+      const resizeHandleSize = 24;
+      const mode = event.clientX >= rect.right - resizeHandleSize && event.clientY >= rect.bottom - resizeHandleSize
+        ? 'resize'
+        : 'move';
+      const metrics = getImageFigureMetrics(figure);
+      imageInteractionRef.current = {
+        figure,
+        mode,
+        startX: event.clientX,
+        startY: event.clientY,
+        startMetrics: metrics,
+        startLayout: metrics.layout,
+        totalVerticalSpace: metrics.marginTop + metrics.marginBottom,
+      };
+      figure.classList.add(mode === 'resize' ? 'is-resizing' : 'is-dragging');
+      return;
+    }
+
+    const editorNode = event.currentTarget;
+    if (!(editorNode instanceof HTMLElement) || event.target !== editorNode) {
       return;
     }
 
     event.preventDefault();
-    selectImageFigure(figure);
+    clearSelectedImageFigure();
     closeImageContextMenu();
-    normalizeImageFigureSize(figure);
-
-    const rect = figure.getBoundingClientRect();
-    const resizeHandleSize = 24;
-    const mode = event.clientX >= rect.right - resizeHandleSize && event.clientY >= rect.bottom - resizeHandleSize
-      ? 'resize'
-      : 'move';
-    const metrics = getImageFigureMetrics(figure);
-    imageInteractionRef.current = {
-      figure,
-      mode,
-      startX: event.clientX,
-      startY: event.clientY,
-      startMetrics: metrics,
-      startLayout: metrics.layout,
-      totalVerticalSpace: metrics.marginTop + metrics.marginBottom,
-    };
-    figure.classList.add(mode === 'resize' ? 'is-resizing' : 'is-dragging');
-  }, [closeImageContextMenu, getImageFigureMetrics, normalizeImageFigureSize, selectImageFigure]);
+    const pageIndex = Number(editorNode.dataset.pageIndex || 0);
+    activatePage(pageIndex);
+    placeCaretFromEditorPoint(editorNode, pageIndex, event.clientX, event.clientY);
+    requestAnimationFrame(() => updateActiveParagraphMetrics(pageIndex));
+  }, [
+    activatePage,
+    clearSelectedImageFigure,
+    closeImageContextMenu,
+    getImageFigureMetrics,
+    normalizeImageFigureSize,
+    placeCaretFromEditorPoint,
+    selectImageFigure,
+    updateActiveParagraphMetrics,
+  ]);
 
   const handleEditorKeyUp = useCallback((pageIndex) => {
     updateActiveParagraphMetrics(pageIndex);
@@ -1973,9 +2056,13 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
-    focusEditorAtStart(pendingFocusPageIndex);
+    const editorNode = editorRefs.current[pendingFocusPageIndex];
+    const leadingParagraph = ensureEditorLeadingParagraph(editorNode);
+    persistActivePageContent(editorNode.innerHTML, pendingFocusPageIndex);
+    editorNode.focus();
+    placeCaretInsideNode(leadingParagraph, true);
     pendingEnterPageFocusRef.current = null;
-  }, [focusEditorAtStart, materialForm.topics]);
+  }, [ensureEditorLeadingParagraph, materialForm.topics, persistActivePageContent, placeCaretInsideNode]);
 
   useEffect(() => () => {
     if (paginationFrameRef.current) {
@@ -2538,6 +2625,7 @@ export default function AdminLearningMaterialEditor() {
                       }
                     }}
                     className="admin-word-editable"
+                    data-page-index={pageIndex}
                     contentEditable
                     suppressContentEditableWarning
                     onFocus={() => {

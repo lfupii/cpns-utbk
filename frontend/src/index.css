@@ -5533,6 +5533,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   tab-size: 4;
   outline: none;
   overflow: hidden;
+  cursor: text;
 }
 
 .admin-word-editable:focus {

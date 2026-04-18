@@ -316,12 +316,16 @@ class LearningController {
         return $counts;
     }
 
-    private function buildLearningSections(array $package, array $workflow, array $progress, bool $hasAccess): array {
+    private function buildLearningSections(array $package, array $workflow, array $progress, bool $hasAccess, array $options = []): array {
         $sectionQuestionCounts = $this->getSectionQuestionCounts((int) ($package['id'] ?? 0));
+        $previewDraftSectionCode = trim((string) ($options['preview_draft_section_code'] ?? ''));
+        $isDraftPreview = $previewDraftSectionCode !== '';
         $sections = [];
         foreach ($workflow['sections'] as $section) {
             $sectionCode = (string) $section['code'];
-            $material = $this->getMaterialContent($package, $workflow, $section);
+            $material = $this->getMaterialContent($package, $workflow, $section, [
+                'include_draft' => $isDraftPreview && $previewDraftSectionCode === $sectionCode,
+            ]);
             $allTopics = $material['topics'];
             $allPages = $this->flattenMaterialTopics($allTopics);
             $previewPageCount = min(2, count($allPages));
@@ -350,6 +354,8 @@ class LearningController {
                 'material' => [
                     'title' => $material['title'],
                     'topics' => $visibleTopics,
+                    'status' => $material['status'],
+                    'is_draft_preview' => $isDraftPreview && $previewDraftSectionCode === $sectionCode,
                 ],
                 'pages' => $visiblePages,
                 'progress' => [
@@ -525,14 +531,23 @@ class LearningController {
         return $pages;
     }
 
-    private function getMaterialContent(array $package, array $workflow, array $section): array {
+    private function getMaterialContent(array $package, array $workflow, array $section, array $options = []): array {
         $packageId = (int) ($package['id'] ?? 0);
         $sectionCode = (string) ($section['code'] ?? '');
         $defaultPages = LearningContent::defaultMaterialPages($section, (string) ($workflow['mode'] ?? ''));
         $defaultTopics = $this->buildTopicsFromPages($defaultPages);
+        $includeDraft = !empty($options['include_draft']);
 
         if ($packageId > 0 && $sectionCode !== '') {
-            $query = 'SELECT title, content_json FROM learning_materials WHERE package_id = ? AND section_code = ? LIMIT 1';
+            $query = $includeDraft
+                ? "SELECT title, content_json, status
+                   FROM learning_materials
+                   WHERE package_id = ? AND section_code = ?
+                   LIMIT 1"
+                : "SELECT title, content_json, status
+                   FROM learning_materials
+                   WHERE package_id = ? AND section_code = ? AND status = 'published'
+                   LIMIT 1";
             $stmt = $this->mysqli->prepare($query);
             $stmt->bind_param('is', $packageId, $sectionCode);
             $stmt->execute();
@@ -542,6 +557,7 @@ class LearningController {
                 return [
                     'title' => trim((string) ($row['title'] ?? '')) ?: (string) ($section['name'] ?? 'Materi'),
                     'topics' => $this->hydrateMaterialTopics($materialPayload, $defaultPages),
+                    'status' => $includeDraft ? trim((string) ($row['status'] ?? 'published')) ?: 'published' : 'published',
                 ];
             }
         }
@@ -549,6 +565,7 @@ class LearningController {
         return [
             'title' => (string) ($section['name'] ?? 'Materi'),
             'topics' => $defaultTopics,
+            'status' => 'published',
         ];
     }
 
@@ -1027,6 +1044,8 @@ class LearningController {
         $tokenData = $this->getOptionalTokenData();
         $userId = (int) ($tokenData['userId'] ?? 0);
         $packageId = (int) ($_GET['package_id'] ?? 0);
+        $previewMode = trim((string) ($_GET['preview'] ?? ''));
+        $previewSectionCode = trim((string) ($_GET['section_code'] ?? ''));
 
         if ($packageId <= 0) {
             sendResponse('error', 'Package ID harus diisi', null, 400);
@@ -1037,13 +1056,25 @@ class LearningController {
             $isAdmin = $isAuthenticated ? userHasRole($tokenData, $this->mysqli, 'admin') : false;
             $package = $this->getPackage($packageId);
             $workflow = TestWorkflow::buildPackageWorkflow($package);
+            $isDraftPreview = $previewMode === 'draft';
+            if ($isDraftPreview && !$isAdmin) {
+                sendResponse('error', 'Preview draft hanya tersedia untuk admin', null, 403);
+            }
+            if ($isDraftPreview && $previewSectionCode === '') {
+                sendResponse('error', 'Section code preview draft harus diisi', null, 400);
+            }
+            if ($isDraftPreview && !$this->sectionExists($workflow, $previewSectionCode)) {
+                sendResponse('error', 'Subtest preview draft tidak ditemukan', null, 404);
+            }
             $hasAccess = $isAuthenticated && $this->hasActiveAccess($userId, $packageId, $isAdmin);
             $progress = $isAuthenticated ? $this->getProgressMap($userId, $packageId) : [];
             $attemptStats = $isAuthenticated
                 ? $this->getAttemptStats($userId, $packageId)
                 : ['completed_attempts' => 0, 'ongoing_attempts' => 0];
             $remainingAttempts = $isAdmin ? null : max(0, (int) $package['max_attempts'] - $attemptStats['completed_attempts']);
-            $sections = $this->buildLearningSections($package, $workflow, $progress, $hasAccess);
+            $sections = $this->buildLearningSections($package, $workflow, $progress, $hasAccess, [
+                'preview_draft_section_code' => $isDraftPreview ? $previewSectionCode : '',
+            ]);
             $materialDone = count($sections) > 0 && count(array_filter($sections, static function (array $section): bool {
                 return !empty($section['progress']['material_read']);
             })) === count($sections);
@@ -1068,6 +1099,10 @@ class LearningController {
                     'test_mode' => $workflow['mode'],
                 ],
                 'workflow' => $workflow,
+                'preview' => [
+                    'mode' => $isDraftPreview ? 'draft' : null,
+                    'section_code' => $isDraftPreview ? $previewSectionCode : null,
+                ],
                 'sections' => $sections,
                 'summary' => [
                     'material_done' => $materialDone,

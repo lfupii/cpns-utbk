@@ -423,6 +423,15 @@ class AdminController {
         return $pages;
     }
 
+    private function normalizeMaterialStatus($value, string $fallback = 'published'): string {
+        $status = strtolower(trim((string) $value));
+        if (in_array($status, ['draft', 'published'], true)) {
+            return $status;
+        }
+
+        return $fallback;
+    }
+
     private function normalizeMaterialPages(array $pages, string $errorContext = '', bool $allowEmpty = false): array {
         if (count($pages) === 0) {
             if ($allowEmpty) {
@@ -1239,7 +1248,7 @@ class AdminController {
         $package = $this->getPackage($packageId);
         $workflow = TestWorkflow::buildPackageWorkflow($package);
 
-        $materialQuery = 'SELECT section_code, title, content_json FROM learning_materials WHERE package_id = ?';
+        $materialQuery = 'SELECT section_code, title, content_json, status, source_url, review_notes, published_at FROM learning_materials WHERE package_id = ?';
         $stmt = $this->mysqli->prepare($materialQuery);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -1252,6 +1261,10 @@ class AdminController {
                 'title' => $row['title'],
                 'topics' => $topics,
                 'pages' => $this->flattenMaterialTopics($topics),
+                'status' => $this->normalizeMaterialStatus($row['status'] ?? 'published'),
+                'source_url' => $row['source_url'] ?: null,
+                'review_notes' => (string) ($row['review_notes'] ?? ''),
+                'published_at' => $row['published_at'] ?? null,
             ];
         }
 
@@ -1301,6 +1314,10 @@ class AdminController {
                     'title' => (string) $section['name'],
                     'topics' => $defaultTopics,
                     'pages' => $defaultPages,
+                    'status' => 'published',
+                    'source_url' => null,
+                    'review_notes' => '',
+                    'published_at' => null,
                 ],
                 'questions' => $questionMap[$sectionCode] ?? LearningContent::defaultSectionQuestions($section, (string) $workflow['mode']),
             ];
@@ -1319,6 +1336,7 @@ class AdminController {
         $sectionCode = trim((string) ($data['section_code'] ?? ''));
         $topics = $data['topics'] ?? null;
         $pages = $data['pages'] ?? [];
+        $requestedStatus = $data['status'] ?? null;
 
         if ($packageId <= 0 || $sectionCode === '') {
             sendResponse('error', 'Package ID dan section harus diisi', null, 400);
@@ -1335,20 +1353,58 @@ class AdminController {
             $title = (string) $section['name'];
         }
 
+        $existingStmt = $this->mysqli->prepare(
+            'SELECT status, source_url, review_notes, published_at FROM learning_materials WHERE package_id = ? AND section_code = ? LIMIT 1'
+        );
+        $existingStmt->bind_param('is', $packageId, $sectionCode);
+        $existingStmt->execute();
+        $existingMaterial = $existingStmt->get_result()->fetch_assoc() ?: null;
+
+        $statusFallback = $this->normalizeMaterialStatus($existingMaterial['status'] ?? 'published');
+        $status = $this->normalizeMaterialStatus($requestedStatus, $statusFallback);
+        $sourceUrl = array_key_exists('source_url', $data)
+            ? trim((string) ($data['source_url'] ?? ''))
+            : trim((string) ($existingMaterial['source_url'] ?? ''));
+        $reviewNotes = array_key_exists('review_notes', $data)
+            ? trim((string) ($data['review_notes'] ?? ''))
+            : trim((string) ($existingMaterial['review_notes'] ?? ''));
+        $sourceUrl = $sourceUrl !== '' ? $sourceUrl : null;
+        $reviewNotes = $reviewNotes !== '' ? $reviewNotes : null;
+        $publishedAt = null;
+        if ($status === 'published') {
+            $publishedAt = !empty($existingMaterial['published_at']) && ($existingMaterial['status'] ?? '') === 'published'
+                ? (string) $existingMaterial['published_at']
+                : date('Y-m-d H:i:s');
+        }
+
         $contentJson = json_encode([
             'topics' => $normalizedTopics,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $query = "INSERT INTO learning_materials (package_id, section_code, title, content_json)
-                  VALUES (?, ?, ?, ?)
+        $query = "INSERT INTO learning_materials (package_id, section_code, title, content_json, status, source_url, review_notes, published_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                   ON DUPLICATE KEY UPDATE
                     title = VALUES(title),
                     content_json = VALUES(content_json),
+                    status = VALUES(status),
+                    source_url = VALUES(source_url),
+                    review_notes = VALUES(review_notes),
+                    published_at = VALUES(published_at),
                     updated_at = CURRENT_TIMESTAMP";
         $stmt = $this->mysqli->prepare($query);
-        $stmt->bind_param('isss', $packageId, $sectionCode, $title, $contentJson);
+        $stmt->bind_param('isssssss', $packageId, $sectionCode, $title, $contentJson, $status, $sourceUrl, $reviewNotes, $publishedAt);
         $stmt->execute();
 
-        sendResponse('success', 'Materi subtest berhasil disimpan');
+        sendResponse('success', $status === 'published' ? 'Materi subtest berhasil dipublish' : 'Draft materi subtest berhasil disimpan', [
+            'material' => [
+                'title' => $title,
+                'topics' => $normalizedTopics,
+                'pages' => $this->flattenMaterialTopics($normalizedTopics),
+                'status' => $status,
+                'source_url' => $sourceUrl,
+                'review_notes' => $reviewNotes ?? '',
+                'published_at' => $publishedAt,
+            ],
+        ]);
     }
 
     public function updateLearningSectionQuestions() {

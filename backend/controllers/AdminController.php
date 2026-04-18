@@ -1406,6 +1406,7 @@ class AdminController {
                  VALUES (?, ?, ?, ?, ?)'
             );
 
+            $savedQuestions = [];
             foreach ($normalizedQuestions as $question) {
                 $questionText = $question['question_text'];
                 $questionImageUrl = $question['question_image_url'];
@@ -1415,6 +1416,15 @@ class AdminController {
                 $insertQuestion->execute();
                 $questionId = (int) $insertQuestion->insert_id;
 
+                $savedQuestion = [
+                    'id' => $questionId,
+                    'question_text' => $questionText,
+                    'question_image_url' => $questionImageUrl,
+                    'difficulty' => $difficulty,
+                    'question_order' => $questionOrder,
+                    'options' => [],
+                ];
+
                 foreach ($question['options'] as $option) {
                     $letter = $option['letter'];
                     $text = $option['text'];
@@ -1422,11 +1432,22 @@ class AdminController {
                     $isCorrect = $option['is_correct'];
                     $insertOption->bind_param('isssi', $questionId, $letter, $text, $imageUrl, $isCorrect);
                     $insertOption->execute();
+                    $savedQuestion['options'][] = [
+                        'letter' => $letter,
+                        'text' => $text,
+                        'image_url' => $imageUrl,
+                        'is_correct' => $isCorrect,
+                    ];
                 }
+
+                $savedQuestions[] = $savedQuestion;
             }
 
             $this->mysqli->commit();
-            sendResponse('success', 'Soal mini test subtest berhasil disimpan');
+            sendResponse('success', 'Soal mini test subtest berhasil disimpan', [
+                'section_code' => $sectionCode,
+                'questions' => $savedQuestions,
+            ]);
         } catch (Throwable $error) {
             $this->mysqli->rollback();
             sendResponse('error', 'Gagal menyimpan soal mini test', ['details' => $error->getMessage()], 500);

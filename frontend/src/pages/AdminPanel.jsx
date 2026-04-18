@@ -418,6 +418,8 @@ export default function AdminPanel() {
   const [openLearningOptionImageEditors, setOpenLearningOptionImageEditors] = useState({});
   const [expandedLearningQuestionKey, setExpandedLearningQuestionKey] = useState('');
   const [adminView, setAdminView] = useState('dashboard');
+  const [savingWorkspaceDraft, setSavingWorkspaceDraft] = useState(false);
+  const [publishingWorkspaceDraft, setPublishingWorkspaceDraft] = useState(false);
   const [packagesExpanded, setPackagesExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
   const [editingSectionActionsCode, setEditingSectionActionsCode] = useState('');
@@ -430,6 +432,8 @@ export default function AdminPanel() {
   const requestedLearningSectionCode = routeSearchParams.get('section') || '';
   const requestedLearningMode = routeSearchParams.get('mode') || '';
   const requestedMiniPreviewId = Number(routeSearchParams.get('mini_preview') || 0);
+  const adminWorkspace = routeSearchParams.get('workspace') === 'draft' ? 'draft' : 'published';
+  const isDraftWorkspace = adminWorkspace === 'draft';
 
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === Number(selectedPackageId)) || null,
@@ -499,14 +503,14 @@ export default function AdminPanel() {
   }, [learningQuestionsForm, syncLearningQuestionPanels]);
 
   const fetchAdminQuestions = useCallback(async (packageId) => {
-    const response = await apiClient.get(`/admin/questions?package_id=${packageId}&_=${Date.now()}`);
+    const response = await apiClient.get(`/admin/questions?package_id=${packageId}&workspace=${adminWorkspace}&_=${Date.now()}`);
     return response.data.data || [];
-  }, []);
+  }, [adminWorkspace]);
 
   const fetchLearningContent = useCallback(async (packageId) => {
-    const response = await apiClient.get(`/admin/learning-content?package_id=${packageId}&_=${Date.now()}`);
+    const response = await apiClient.get(`/admin/learning-content?package_id=${packageId}&workspace=${adminWorkspace}&_=${Date.now()}`);
     return response.data.data?.sections || [];
-  }, []);
+  }, [adminWorkspace]);
 
   const fetchPackageTypes = useCallback(async () => {
     const response = await apiClient.get('/admin/package-types');
@@ -575,7 +579,7 @@ export default function AdminPanel() {
     const fetchPackages = async () => {
       try {
         const [packagesResponse, typesResponse] = await Promise.all([
-          apiClient.get('/admin/packages'),
+          apiClient.get(`/admin/packages?workspace=${adminWorkspace}`),
           fetchPackageTypes(),
         ]);
         const nextPackages = packagesResponse.data.data || [];
@@ -593,7 +597,7 @@ export default function AdminPanel() {
     };
 
     fetchPackages();
-  }, [fetchPackageTypes, requestedPackageId]);
+  }, [adminWorkspace, fetchPackageTypes, requestedPackageId]);
 
   useEffect(() => {
     if (!selectedPackage) {
@@ -621,7 +625,7 @@ export default function AdminPanel() {
 
     const [questionsResponse, packagesResponse, learningResponse, typesResponse] = await Promise.all([
       fetchAdminQuestions(packageId),
-      apiClient.get('/admin/packages'),
+      apiClient.get(`/admin/packages?workspace=${adminWorkspace}`),
       fetchLearningContent(packageId),
       fetchPackageTypes(),
     ]);
@@ -646,6 +650,70 @@ export default function AdminPanel() {
       learningContent: nextLearningContent,
       packageTypes: typesResponse || [],
     };
+  };
+
+  const handleWorkspaceChange = (nextWorkspace) => {
+    if (nextWorkspace === adminWorkspace) {
+      return;
+    }
+
+    const query = new URLSearchParams(location.search);
+    query.set('workspace', nextWorkspace);
+    query.set('view', adminView);
+    if (selectedPackageId) {
+      query.set('package', String(selectedPackageId));
+    }
+
+    navigate(`/admin?${query.toString()}`);
+  };
+
+  const handleSaveWorkspaceDraft = async () => {
+    if (!selectedPackageId) {
+      return;
+    }
+
+    setSavingWorkspaceDraft(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await apiClient.post('/admin/package-drafts/save', {
+        package_id: Number(selectedPackageId),
+      });
+      await refreshAdminData(Number(selectedPackageId));
+      setSuccess(response.data?.message || 'Draft paket berhasil disimpan.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal menyimpan draft paket');
+    } finally {
+      setSavingWorkspaceDraft(false);
+    }
+  };
+
+  const handlePublishWorkspaceDraft = async () => {
+    if (!selectedPackageId) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Publish seluruh draft paket "${selectedPackage?.name || ''}" ke tampilan user?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setPublishingWorkspaceDraft(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await apiClient.post('/admin/package-drafts/publish', {
+        package_id: Number(selectedPackageId),
+      });
+      await refreshAdminData(Number(selectedPackageId));
+      setSuccess(response.data?.message || 'Draft paket berhasil dipublish.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal mempublish draft paket');
+    } finally {
+      setPublishingWorkspaceDraft(false);
+    }
   };
 
   useEffect(() => {
@@ -854,11 +922,14 @@ export default function AdminPanel() {
     setSuccess('');
 
     try {
-      await apiClient.put('/admin/packages', packageForm);
-      const response = await apiClient.get('/admin/packages');
+      await apiClient.put('/admin/packages', {
+        ...packageForm,
+        workspace: adminWorkspace,
+      });
+      const response = await apiClient.get(`/admin/packages?workspace=${adminWorkspace}`);
       const nextPackages = response.data.data || [];
       setPackages(nextPackages);
-      setSuccess('Paket berhasil diperbarui.');
+      setSuccess(isDraftWorkspace ? 'Draft paket berhasil diperbarui.' : 'Paket berhasil diperbarui.');
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyimpan paket');
     } finally {
@@ -867,6 +938,11 @@ export default function AdminPanel() {
   };
 
   const handleCreatePackage = async () => {
+    if (isDraftWorkspace) {
+      setError('Pembuatan paket baru dilakukan dari tab Published terlebih dahulu.');
+      return;
+    }
+
     setPackageCreating(true);
     setError('');
     setSuccess('');
@@ -878,7 +954,7 @@ export default function AdminPanel() {
         test_mode: packageForm?.test_mode || selectedPackage?.test_mode || 'standard',
       });
       const createdPackageId = Number(response.data?.data?.package_id || 0);
-      const packagesResponse = await apiClient.get('/admin/packages');
+      const packagesResponse = await apiClient.get('/admin/packages?workspace=published');
       const nextPackages = packagesResponse.data.data || [];
       setPackages(nextPackages);
       if (createdPackageId > 0) {
@@ -965,6 +1041,11 @@ export default function AdminPanel() {
       return;
     }
 
+    if (isDraftWorkspace) {
+      setError('Penghapusan paket dilakukan dari tab Published terlebih dahulu.');
+      return;
+    }
+
     const confirmed = window.confirm(`Hapus paket "${selectedPackage.name}"? Semua materi, soal, dan riwayat terkait akan ikut terhapus.`);
     if (!confirmed) {
       return;
@@ -976,7 +1057,7 @@ export default function AdminPanel() {
 
     try {
       await apiClient.delete(`/admin/packages?id=${selectedPackage.id}`);
-      const packagesResponse = await apiClient.get('/admin/packages');
+      const packagesResponse = await apiClient.get('/admin/packages?workspace=published');
       const nextPackages = packagesResponse.data.data || [];
       setPackages(nextPackages);
       setSelectedPackageId(nextPackages[0] ? Number(nextPackages[0].id) : null);
@@ -1095,6 +1176,7 @@ export default function AdminPanel() {
     const payload = {
       ...questionForm,
       package_id: Number(selectedPackageId),
+      workspace: adminWorkspace,
       options: questionForm.options
         .filter((option) => option.text.trim() !== '' || option.image_url.trim() !== '')
         .map((option, index) => ({
@@ -1108,10 +1190,10 @@ export default function AdminPanel() {
     try {
       if (questionForm.question_id) {
         await apiClient.put('/admin/questions', payload);
-        setSuccess('Soal berhasil diperbarui.');
+        setSuccess(isDraftWorkspace ? 'Soal draft berhasil diperbarui.' : 'Soal berhasil diperbarui.');
       } else {
         await apiClient.post('/admin/questions', payload);
-        setSuccess('Soal berhasil ditambahkan.');
+        setSuccess(isDraftWorkspace ? 'Soal draft berhasil ditambahkan.' : 'Soal berhasil ditambahkan.');
       }
 
       await refreshAdminData(Number(selectedPackageId));
@@ -1135,8 +1217,12 @@ export default function AdminPanel() {
       return;
     }
 
-    const sectionQuery = preferredSectionCode ? `?section=${encodeURIComponent(preferredSectionCode)}` : '';
-    navigate(`/admin/question-editor/${selectedPackageId}/new${sectionQuery}`);
+    const query = new URLSearchParams();
+    if (preferredSectionCode) {
+      query.set('section', preferredSectionCode);
+    }
+    query.set('workspace', adminWorkspace);
+    navigate(`/admin/question-editor/${selectedPackageId}/new?${query.toString()}`);
   };
 
   const openLearningEditor = (sectionCode, mode) => {
@@ -1150,6 +1236,7 @@ export default function AdminPanel() {
 
   const openMiniTestQuestionEditor = (sectionCode, questionId = 'new', options = {}) => {
     const query = new URLSearchParams();
+    query.set('workspace', adminWorkspace);
     if (Number.isInteger(options.draftIndex) && options.draftIndex >= 0) {
       query.set('draft', String(options.draftIndex));
     }
@@ -1165,7 +1252,7 @@ export default function AdminPanel() {
     setSuccess('');
 
     try {
-      await apiClient.delete(`/admin/questions?id=${questionId}`);
+      await apiClient.delete(`/admin/questions?id=${questionId}&workspace=${adminWorkspace}`);
       await refreshAdminData(Number(selectedPackageId));
 
       if (Number(questionForm.question_id) === Number(questionId)) {
@@ -1176,7 +1263,7 @@ export default function AdminPanel() {
         setExpandedQuestionId(null);
       }
 
-      setSuccess('Soal berhasil dihapus.');
+      setSuccess(isDraftWorkspace ? 'Soal draft berhasil dihapus.' : 'Soal berhasil dihapus.');
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menghapus soal');
     }
@@ -1434,13 +1521,14 @@ export default function AdminPanel() {
       await apiClient.put('/admin/learning-section-questions', {
         package_id: Number(selectedPackageId),
         section_code: activeLearningSection.code,
+        workspace: adminWorkspace,
         questions: learningQuestionsForm.map((question, index) => ({
           ...question,
           question_order: index + 1,
         })),
       });
       await refreshAdminData(Number(selectedPackageId));
-      setSuccess('Soal mini test subtest berhasil disimpan.');
+      setSuccess(isDraftWorkspace ? 'Soal mini test draft berhasil disimpan.' : 'Soal mini test subtest berhasil disimpan.');
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyimpan soal mini test subtest');
     } finally {
@@ -1494,6 +1582,7 @@ export default function AdminPanel() {
     try {
       const response = await apiClient.post('/admin/questions/import', {
         package_id: Number(selectedPackageId),
+        workspace: adminWorkspace,
         rows: importRows,
       });
       await refreshAdminData(Number(selectedPackageId));
@@ -1566,7 +1655,7 @@ export default function AdminPanel() {
     }
 
     const resolvedTopic = topicIndex === 'new' ? 'new' : Math.max(0, Number(topicIndex) || 0);
-    navigate(`/admin/learning-material/${selectedPackageId}/${sectionCode}?topic=${resolvedTopic}`);
+    navigate(`/admin/learning-material/${selectedPackageId}/${sectionCode}?topic=${resolvedTopic}&workspace=${adminWorkspace}`);
   };
 
   const openMaterialTopicPreview = (sectionCode, topicIndex = 0) => {
@@ -1589,6 +1678,7 @@ export default function AdminPanel() {
     try {
       await apiClient.put('/admin/packages', {
         ...packageForm,
+        workspace: adminWorkspace,
         workflow_config: {
           ...selectedPackage.workflow,
           sections: nextSections.map((section, index) => ({
@@ -1795,6 +1885,7 @@ export default function AdminPanel() {
         package_id: Number(selectedPackageId),
         section_code: section.code,
         title: section.material?.title || section.name,
+        workspace: adminWorkspace,
         topics: nextTopics,
       });
 
@@ -1919,6 +2010,55 @@ export default function AdminPanel() {
             </div>
           )}
 
+          <div className="account-card admin-message-card">
+            <div className="admin-list-toolbar">
+              <div>
+                <h3>Workspace Admin</h3>
+                <p className="text-muted">
+                  {isDraftWorkspace
+                    ? 'Mode Draft aktif. Semua perubahan paket, materi, mini test, dan tryout disimpan ke draft sampai Anda publish.'
+                    : 'Mode Published aktif. Tampilan ini menunjukkan data live yang sedang dilihat oleh user.'}
+                </p>
+              </div>
+              <div className="admin-list-toolbar-actions">
+                <button
+                  type="button"
+                  className={adminWorkspace === 'published' ? 'btn btn-primary' : 'btn btn-outline'}
+                  onClick={() => handleWorkspaceChange('published')}
+                >
+                  Published
+                </button>
+                <button
+                  type="button"
+                  className={adminWorkspace === 'draft' ? 'btn btn-primary' : 'btn btn-outline'}
+                  onClick={() => handleWorkspaceChange('draft')}
+                >
+                  Draft
+                </button>
+                {isDraftWorkspace && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={handleSaveWorkspaceDraft}
+                      disabled={savingWorkspaceDraft || !selectedPackageId}
+                    >
+                      {savingWorkspaceDraft ? 'Menyimpan Draft...' : 'Simpan Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handlePublishWorkspaceDraft}
+                      disabled={publishingWorkspaceDraft || !selectedPackageId}
+                    >
+                      {publishingWorkspaceDraft ? 'Publish Draft...' : 'Publish Draft'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
           <section className="learning-workspace admin-user-workspace">
             <aside className="learning-sidebar admin-user-sidebar">
               <div className="learning-sidebar-card admin-user-sidebar-card admin-package-settings-card">
@@ -1993,7 +2133,7 @@ export default function AdminPanel() {
                   <span>{materialsExpanded ? '▴' : '▾'}</span>
                 </button>
 
-                {materialsExpanded && (
+                {isDraftWorkspace && materialsExpanded && (
                   <button
                     type="button"
                     className="learning-sidebar-link admin-material-add-subtest"
@@ -2031,62 +2171,64 @@ export default function AdminPanel() {
                                 {expandedMaterialSections[section.code] ? '▾' : '▸'}
                               </span>
                             </button>
-                          <div className="admin-section-sidebar-actions">
-                            <button
-                              type="button"
-                              className={`admin-section-action-btn admin-section-action-btn-edit ${
-                                editingSectionActionsCode === section.code ? 'admin-section-action-btn-edit-active' : ''
-                              }`}
-                              aria-label={`Kelola aksi subtest ${section.name}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setEditingSectionActionsCode((current) => current === section.code ? '' : section.code);
-                              }}
-                              disabled={workflowSaving}
-                            >
-                              ✎
-                            </button>
-                            {editingSectionActionsCode === section.code && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="admin-section-action-btn"
-                                  aria-label={`Edit subtest ${section.name}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleEditSection(section);
-                                  }}
-                                  disabled={workflowSaving}
-                                >
-                                  ✎
-                                </button>
-                                <button
-                                  type="button"
-                                  className="admin-section-action-btn"
-                                  aria-label={`Tambah topik materi untuk ${section.name}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleAddSectionChildPage(section);
-                                  }}
-                                  disabled={workflowSaving}
-                                >
-                                  +
-                                </button>
-                                <button
-                                  type="button"
-                                  className="admin-section-action-btn admin-section-action-btn-danger"
-                                  aria-label={`Hapus subtest ${section.name}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleDeleteSection(section);
-                                  }}
-                                  disabled={workflowSaving || packageSections.length <= 1}
-                                >
-                                  🗑
-                                </button>
-                              </>
-                            )}
-                          </div>
+                          {isDraftWorkspace && (
+                            <div className="admin-section-sidebar-actions">
+                              <button
+                                type="button"
+                                className={`admin-section-action-btn admin-section-action-btn-edit ${
+                                  editingSectionActionsCode === section.code ? 'admin-section-action-btn-edit-active' : ''
+                                }`}
+                                aria-label={`Kelola aksi subtest ${section.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEditingSectionActionsCode((current) => current === section.code ? '' : section.code);
+                                }}
+                                disabled={workflowSaving}
+                              >
+                                ✎
+                              </button>
+                              {editingSectionActionsCode === section.code && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="admin-section-action-btn"
+                                    aria-label={`Edit subtest ${section.name}`}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleEditSection(section);
+                                    }}
+                                    disabled={workflowSaving}
+                                  >
+                                    ✎
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="admin-section-action-btn"
+                                    aria-label={`Tambah topik materi untuk ${section.name}`}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleAddSectionChildPage(section);
+                                    }}
+                                    disabled={workflowSaving}
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="admin-section-action-btn admin-section-action-btn-danger"
+                                    aria-label={`Hapus subtest ${section.name}`}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleDeleteSection(section);
+                                    }}
+                                    disabled={workflowSaving || packageSections.length <= 1}
+                                  >
+                                    🗑
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
                           </div>
 
                           {expandedMaterialSections[section.code] && (
@@ -2106,26 +2248,28 @@ export default function AdminPanel() {
                                     <span>{index + 1}</span>
                                     <strong>{topic.title || `Topik ${index + 1}`}</strong>
                                   </button>
-                                  <div className="admin-section-sidebar-child-actions">
-                                    <button
-                                      type="button"
-                                      className="admin-section-action-btn admin-section-action-btn-inline"
-                                      aria-label={`Edit nama topik ${topic.title || `Topik ${index + 1}`}`}
-                                      onClick={() => handleRenameSectionChildPage(section, index)}
-                                      disabled={workflowSaving}
-                                    >
-                                      ✎
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="admin-section-action-btn admin-section-action-btn-inline admin-section-action-btn-danger"
-                                      aria-label={`Hapus topik ${topic.title || `Topik ${index + 1}`}`}
-                                      onClick={() => handleRemoveSectionChildPage(section, index)}
-                                      disabled={workflowSaving || topics.length <= 1}
-                                    >
-                                      🗑
-                                    </button>
-                                  </div>
+                                  {isDraftWorkspace && (
+                                    <div className="admin-section-sidebar-child-actions">
+                                      <button
+                                        type="button"
+                                        className="admin-section-action-btn admin-section-action-btn-inline"
+                                        aria-label={`Edit nama topik ${topic.title || `Topik ${index + 1}`}`}
+                                        onClick={() => handleRenameSectionChildPage(section, index)}
+                                        disabled={workflowSaving}
+                                      >
+                                        ✎
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="admin-section-action-btn admin-section-action-btn-inline admin-section-action-btn-danger"
+                                        aria-label={`Hapus topik ${topic.title || `Topik ${index + 1}`}`}
+                                        onClick={() => handleRemoveSectionChildPage(section, index)}
+                                        disabled={workflowSaving || topics.length <= 1}
+                                      >
+                                        🗑
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                               <div className="admin-section-sidebar-child-row admin-section-sidebar-child-row-mini-test">
@@ -2141,17 +2285,19 @@ export default function AdminPanel() {
                                   <span>MT</span>
                                   <strong>Mini Test Subtest</strong>
                                 </button>
-                                <div className="admin-section-sidebar-child-actions">
-                                  <button
-                                    type="button"
-                                    className="admin-section-action-btn admin-section-action-btn-inline"
-                                    aria-label={`Edit mini test ${section.name}`}
-                                    onClick={() => openLearningEditor(section.code, 'quiz')}
-                                    disabled={workflowSaving}
-                                  >
-                                    ✎
-                                  </button>
-                                </div>
+                                {isDraftWorkspace && (
+                                  <div className="admin-section-sidebar-child-actions">
+                                    <button
+                                      type="button"
+                                      className="admin-section-action-btn admin-section-action-btn-inline"
+                                      aria-label={`Edit mini test ${section.name}`}
+                                      onClick={() => openLearningEditor(section.code, 'quiz')}
+                                      disabled={workflowSaving}
+                                    >
+                                      ✎
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -2356,20 +2502,24 @@ export default function AdminPanel() {
                       </div>
 
                       <div className="account-form-actions">
-                        <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
-                          {packageCreating ? 'Membuat...' : 'Tambah Paket'}
-                        </button>
+                        {!isDraftWorkspace && (
+                          <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
+                            {packageCreating ? 'Membuat...' : 'Tambah Paket'}
+                          </button>
+                        )}
                         <button type="submit" className="btn btn-primary" disabled={packageSaving}>
-                          {packageSaving ? 'Menyimpan...' : 'Simpan Paket'}
+                          {packageSaving ? 'Menyimpan...' : isDraftWorkspace ? 'Simpan Draft Paket' : 'Simpan Paket'}
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-danger"
-                          onClick={handleDeletePackage}
-                          disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
-                        >
-                          {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
-                        </button>
+                        {!isDraftWorkspace && (
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={handleDeletePackage}
+                            disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
+                          >
+                            {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
+                          </button>
+                        )}
                       </div>
                     </form>
                   </div>
@@ -2447,17 +2597,21 @@ export default function AdminPanel() {
                     </div>
                     {activeLearningSection && (
                       <div className="learning-hero-actions">
-                        {activeMaterialTopic && learningEditorMode !== 'quiz' && (
+                        {isDraftWorkspace && activeMaterialTopic && learningEditorMode !== 'quiz' && (
                           <Link
-                            to={`/admin/learning-material/${selectedPackageId}/${activeLearningSection.code}?topic=${activeMaterialTopicIndex || 0}`}
+                            to={`/admin/learning-material/${selectedPackageId}/${activeLearningSection.code}?topic=${activeMaterialTopicIndex || 0}&workspace=${adminWorkspace}`}
                             className="btn btn-primary"
                           >
                             Edit Topik Materi
                           </Link>
                         )}
-                        <button type="button" className="btn btn-outline" onClick={() => openLearningEditor(activeLearningSection.code, learningEditorMode === 'quiz' ? '' : 'quiz')}>
-                          {learningEditorMode === 'quiz' ? 'Kembali ke Materi' : 'Edit Mini Test'}
-                        </button>
+                        {isDraftWorkspace ? (
+                          <button type="button" className="btn btn-outline" onClick={() => openLearningEditor(activeLearningSection.code, learningEditorMode === 'quiz' ? '' : 'quiz')}>
+                            {learningEditorMode === 'quiz' ? 'Kembali ke Materi' : 'Edit Mini Test'}
+                          </button>
+                        ) : (
+                          <span className="text-muted">Published hanya untuk review.</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2490,14 +2644,16 @@ export default function AdminPanel() {
                                 </p>
                               </div>
                               <div className="admin-mini-test-settings-actions">
-                                <button
-                                  type="button"
-                                  className="btn btn-outline"
-                                  onClick={() => handleMiniTestTimingEdit(activeLearningSection)}
-                                  disabled={workflowSaving}
-                                >
-                                  {workflowSaving ? 'Menyimpan Waktu...' : 'Atur Waktu Mini Test'}
-                                </button>
+                                {isDraftWorkspace && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline"
+                                    onClick={() => handleMiniTestTimingEdit(activeLearningSection)}
+                                    disabled={workflowSaving}
+                                  >
+                                    {workflowSaving ? 'Menyimpan Waktu...' : 'Atur Waktu Mini Test'}
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div className="admin-mini-test-settings-grid">
@@ -2528,20 +2684,22 @@ export default function AdminPanel() {
                               </p>
                             </div>
                             <div className="admin-question-editor-actions">
-                              <button
-                                type="button"
-                                className="btn btn-outline"
-                                onClick={() => {
-                                  const firstDraftIndex = learningQuestionsForm.findIndex((question) => !Number(question.id || 0));
-                                  openMiniTestQuestionEditor(
-                                    activeLearningSection.code,
-                                    'new',
-                                    firstDraftIndex >= 0 ? { draftIndex: firstDraftIndex } : {}
-                                  );
-                                }}
-                              >
-                                Tambah Soal
-                              </button>
+                              {isDraftWorkspace && (
+                                <button
+                                  type="button"
+                                  className="btn btn-outline"
+                                  onClick={() => {
+                                    const firstDraftIndex = learningQuestionsForm.findIndex((question) => !Number(question.id || 0));
+                                    openMiniTestQuestionEditor(
+                                      activeLearningSection.code,
+                                      'new',
+                                      firstDraftIndex >= 0 ? { draftIndex: firstDraftIndex } : {}
+                                    );
+                                  }}
+                                >
+                                  Tambah Soal
+                                </button>
+                              )}
                               <button type="button" className="btn btn-outline" onClick={() => setLearningEditorMode('')}>
                                 Tutup Editor
                               </button>
@@ -2610,14 +2768,16 @@ export default function AdminPanel() {
                                         >
                                           {isExpanded ? 'Aktif' : 'Lihat'}
                                         </button>
-                                        <button
-                                          type="button"
-                                          className="btn btn-danger"
-                                          onClick={() => removeLearningQuestion(questionIndex)}
-                                          disabled={learningQuestionsForm.length <= 1}
-                                        >
-                                          Hapus
-                                        </button>
+                                        {isDraftWorkspace && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-danger"
+                                            onClick={() => removeLearningQuestion(questionIndex)}
+                                            disabled={learningQuestionsForm.length <= 1}
+                                          >
+                                            Hapus
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
 
@@ -2638,13 +2798,15 @@ export default function AdminPanel() {
                                         </div>
 
                                         <div className="admin-question-preview-actions">
-                                          <button
-                                            type="button"
-                                            className="btn btn-primary"
-                                            onClick={() => openMiniTestQuestionEditor(activeLearningSection.code, editorTargetId, editorOptions)}
-                                          >
-                                            Edit Soal
-                                          </button>
+                                          {isDraftWorkspace && (
+                                            <button
+                                              type="button"
+                                              className="btn btn-primary"
+                                              onClick={() => openMiniTestQuestionEditor(activeLearningSection.code, editorTargetId, editorOptions)}
+                                            >
+                                              Edit Soal
+                                            </button>
+                                          )}
                                           <button
                                             type="button"
                                             className="btn btn-outline"
@@ -2679,16 +2841,18 @@ export default function AdminPanel() {
                               })}
                             </div>
 
-                            <div className="account-form-actions">
-                              <button
-                                type="button"
-                                className="btn btn-primary"
-                                onClick={handleLearningQuestionsSave}
-                                disabled={learningQuestionsSaving}
-                              >
-                                {learningQuestionsSaving ? 'Menyimpan Mini Test...' : 'Simpan Mini Test'}
-                              </button>
-                            </div>
+                            {isDraftWorkspace && (
+                              <div className="account-form-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  onClick={handleLearningQuestionsSave}
+                                  disabled={learningQuestionsSaving}
+                                >
+                                  {learningQuestionsSaving ? 'Menyimpan Mini Test...' : 'Simpan Mini Test'}
+                                </button>
+                              </div>
+                            )}
                           </section>
                         </div>
                       ) : (
@@ -2787,9 +2951,11 @@ export default function AdminPanel() {
                           placeholder="Cari soal atau section"
                           className="admin-search-input"
                         />
-                        <button type="button" className="btn btn-primary" onClick={handleCreateQuestion}>
-                          Tambah Soal
-                        </button>
+                        {isDraftWorkspace && (
+                          <button type="button" className="btn btn-primary" onClick={handleCreateQuestion}>
+                            Tambah Soal
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -2817,6 +2983,7 @@ export default function AdminPanel() {
                       </div>
                     )}
 
+                    {isDraftWorkspace && (
                     <div className="admin-import-card">
                       <div>
                         <h3>Import Pertanyaan CSV / Excel</h3>
@@ -2847,15 +3014,18 @@ export default function AdminPanel() {
                         </p>
                       )}
                     </div>
+                    )}
 
                     {loadingQuestions ? (
                       <p>Memuat soal...</p>
                     ) : filteredQuestions.length === 0 ? (
                       <div className="admin-empty-state">
                         <p className="text-muted">Belum ada soal yang cocok untuk ditampilkan.</p>
-                        <button type="button" className="btn btn-outline" onClick={handleCreateQuestion}>
-                          Tambah Soal
-                        </button>
+                        {isDraftWorkspace && (
+                          <button type="button" className="btn btn-outline" onClick={handleCreateQuestion}>
+                            Tambah Soal
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="admin-question-table admin-question-table-modern">
@@ -2897,11 +3067,13 @@ export default function AdminPanel() {
 
                                 <div className="admin-question-row-actions">
                                   <button type="button" className="btn btn-outline" onClick={() => handleQuestionEdit(question)}>
-                                    {isExpanded ? 'Aktif' : 'Edit'}
+                                    {isDraftWorkspace ? (isExpanded ? 'Aktif' : 'Edit') : 'Lihat'}
                                   </button>
-                                  <button type="button" className="btn btn-danger" onClick={() => handleQuestionDelete(question.id)}>
-                                    Hapus
-                                  </button>
+                                  {isDraftWorkspace && (
+                                    <button type="button" className="btn btn-danger" onClick={() => handleQuestionDelete(question.id)}>
+                                      Hapus
+                                    </button>
+                                  )}
                                 </div>
                               </div>
 
@@ -2922,12 +3094,14 @@ export default function AdminPanel() {
                                   </div>
 
                                   <div className="admin-question-preview-actions">
-                                    <Link
-                                      className="btn btn-primary"
-                                      to={`/admin/question-editor/${selectedPackageId}/${question.id}`}
-                                    >
-                                      Edit Soal
-                                    </Link>
+                                    {isDraftWorkspace && (
+                                      <Link
+                                        className="btn btn-primary"
+                                        to={`/admin/question-editor/${selectedPackageId}/${question.id}?workspace=${adminWorkspace}`}
+                                      >
+                                        Edit Soal
+                                      </Link>
+                                    )}
                                     <button
                                       type="button"
                                       className="btn btn-outline"

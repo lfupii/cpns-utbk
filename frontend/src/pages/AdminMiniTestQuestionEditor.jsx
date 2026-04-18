@@ -103,6 +103,8 @@ export default function AdminMiniTestQuestionEditor() {
   const isCreating = questionId === 'new';
   const draftIndex = Number(searchParams.get('draft') || -1);
   const createdFlag = searchParams.get('created') || '';
+  const workspace = searchParams.get('workspace') === 'draft' ? 'draft' : 'published';
+  const isDraftWorkspace = workspace === 'draft';
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === numericPackageId) || null,
     [numericPackageId, packages]
@@ -116,7 +118,7 @@ export default function AdminMiniTestQuestionEditor() {
     [numericQuestionId, sectionQuestions]
   );
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
-  const backToMiniTestHref = `/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&mode=quiz${questionForm.id ? `&mini_preview=${questionForm.id}` : ''}`;
+  const backToMiniTestHref = `/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&mode=quiz&workspace=${workspace}${questionForm.id ? `&mini_preview=${questionForm.id}` : ''}`;
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !sectionCode) {
@@ -130,8 +132,8 @@ export default function AdminMiniTestQuestionEditor() {
 
     try {
       const [packagesResponse, learningResponse] = await Promise.all([
-        apiClient.get('/admin/packages'),
-        apiClient.get(`/admin/learning-content?package_id=${numericPackageId}&_=${Date.now()}`),
+        apiClient.get(`/admin/packages?workspace=${workspace}`),
+        apiClient.get(`/admin/learning-content?package_id=${numericPackageId}&workspace=${workspace}&_=${Date.now()}`),
       ]);
       const nextPackages = packagesResponse.data.data || [];
       const nextSections = learningResponse.data.data?.sections || [];
@@ -149,7 +151,7 @@ export default function AdminMiniTestQuestionEditor() {
     } finally {
       setLoading(false);
     }
-  }, [numericPackageId, sectionCode]);
+  }, [numericPackageId, sectionCode, workspace]);
 
   useEffect(() => {
     fetchEditorData();
@@ -401,6 +403,7 @@ export default function AdminMiniTestQuestionEditor() {
       const response = await apiClient.put('/admin/learning-section-questions', {
         package_id: numericPackageId,
         section_code: activeSection.code,
+        workspace,
         questions: nextQuestions.map((question, index) => ({
           ...question,
           question_order: index + 1,
@@ -412,7 +415,7 @@ export default function AdminMiniTestQuestionEditor() {
       if (isCreating) {
         const createdQuestion = savedQuestions[targetIndex] || null;
         if (createdQuestion?.id) {
-          navigate(`/admin/mini-test-question-editor/${numericPackageId}/${activeSection.code}/${createdQuestion.id}?created=1`, { replace: true });
+          navigate(`/admin/mini-test-question-editor/${numericPackageId}/${activeSection.code}/${createdQuestion.id}?created=1&workspace=${workspace}`, { replace: true });
           return;
         }
       }
@@ -421,7 +424,7 @@ export default function AdminMiniTestQuestionEditor() {
       if (updatedQuestion) {
         setQuestionForm(questionToForm(updatedQuestion, updatedQuestion.question_order || targetIndex + 1));
       }
-      setSuccess('Soal mini test berhasil disimpan.');
+      setSuccess(isDraftWorkspace ? 'Soal mini test draft berhasil disimpan.' : 'Soal mini test berhasil disimpan.');
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyimpan soal mini test');
     } finally {
@@ -444,6 +447,7 @@ export default function AdminMiniTestQuestionEditor() {
               <p className="text-muted">
                 Edit satu soal mini test dari halaman khusus agar daftar soal di panel admin tetap ringkas seperti bank soal tryout.
               </p>
+              {!isDraftWorkspace && <p className="text-muted">Mode Published hanya untuk review. Edit dilakukan dari tab Draft.</p>}
             </div>
             <div className="admin-question-editor-actions">
               <Link className="btn btn-outline" to={backToMiniTestHref}>
@@ -680,8 +684,8 @@ export default function AdminMiniTestQuestionEditor() {
               </div>
 
               <div className="account-form-actions">
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Menyimpan...' : questionForm.id ? 'Update Soal' : 'Tambah Soal'}
+                <button type="submit" className="btn btn-primary" disabled={saving || !isDraftWorkspace}>
+                  {saving ? 'Menyimpan...' : !isDraftWorkspace ? 'Published Terkunci' : questionForm.id ? 'Update Soal' : 'Tambah Soal'}
                 </button>
                 {!questionForm.id && (
                   <Link className="btn btn-outline" to={backToMiniTestHref}>

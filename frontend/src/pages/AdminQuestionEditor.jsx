@@ -104,6 +104,8 @@ export default function AdminQuestionEditor() {
   const numericQuestionId = Number(questionId || 0);
   const requestedSectionCode = searchParams.get('section') || '';
   const createdFlag = searchParams.get('created') || '';
+  const workspace = searchParams.get('workspace') === 'draft' ? 'draft' : 'published';
+  const isDraftWorkspace = workspace === 'draft';
   const selectedPackage = useMemo(
     () => packages.find((pkg) => Number(pkg.id) === numericPackageId) || null,
     [numericPackageId, packages]
@@ -124,7 +126,7 @@ export default function AdminQuestionEditor() {
     [numericQuestionId, questions]
   );
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
-  const backToBankSoalHref = `/admin?view=soal&package=${numericPackageId}${questionForm.question_id ? `&preview=${questionForm.question_id}` : ''}`;
+  const backToBankSoalHref = `/admin?view=soal&package=${numericPackageId}&workspace=${workspace}${questionForm.question_id ? `&preview=${questionForm.question_id}` : ''}`;
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0) {
@@ -138,8 +140,8 @@ export default function AdminQuestionEditor() {
 
     try {
       const [packagesResponse, questionsResponse] = await Promise.all([
-        apiClient.get('/admin/packages'),
-        apiClient.get(`/admin/questions?package_id=${numericPackageId}&_=${Date.now()}`),
+        apiClient.get(`/admin/packages?workspace=${workspace}`),
+        apiClient.get(`/admin/questions?package_id=${numericPackageId}&workspace=${workspace}&_=${Date.now()}`),
       ]);
 
       setPackages(packagesResponse.data.data || []);
@@ -149,7 +151,7 @@ export default function AdminQuestionEditor() {
     } finally {
       setLoading(false);
     }
-  }, [numericPackageId]);
+  }, [numericPackageId, workspace]);
 
   useEffect(() => {
     fetchEditorData();
@@ -364,6 +366,7 @@ export default function AdminQuestionEditor() {
     const payload = {
       ...questionForm,
       package_id: numericPackageId,
+      workspace,
       options: questionForm.options
         .filter((option) => option.text.trim() !== '' || option.image_url.trim() !== '')
         .map((option, index) => ({
@@ -377,16 +380,16 @@ export default function AdminQuestionEditor() {
     try {
       if (questionForm.question_id) {
         await apiClient.put('/admin/questions', payload);
-        setSuccess('Soal berhasil diperbarui.');
+        setSuccess(isDraftWorkspace ? 'Soal draft berhasil diperbarui.' : 'Soal berhasil diperbarui.');
         await fetchEditorData();
       } else {
         const response = await apiClient.post('/admin/questions', payload);
         const createdQuestionId = Number(response.data?.data?.question_id || 0);
         if (createdQuestionId > 0) {
-          navigate(`/admin/question-editor/${numericPackageId}/${createdQuestionId}?created=1`, { replace: true });
+          navigate(`/admin/question-editor/${numericPackageId}/${createdQuestionId}?created=1&workspace=${workspace}`, { replace: true });
           return;
         }
-        setSuccess('Soal berhasil ditambahkan.');
+        setSuccess(isDraftWorkspace ? 'Soal draft berhasil ditambahkan.' : 'Soal berhasil ditambahkan.');
         await fetchEditorData();
       }
     } catch (err) {
@@ -413,6 +416,7 @@ export default function AdminQuestionEditor() {
                   ? 'Isi pertanyaan, gambar, dan opsi jawaban di editor ini.'
                   : 'Preview ringkas soal aktif ditampilkan di bawah, lalu kamu bisa langsung edit detailnya.'}
               </p>
+              {!isDraftWorkspace && <p className="text-muted">Mode Published hanya untuk review. Edit dilakukan dari tab Draft.</p>}
             </div>
             <div className="admin-question-editor-actions">
               <Link className="btn btn-outline" to={backToBankSoalHref}>
@@ -689,8 +693,8 @@ export default function AdminQuestionEditor() {
               </div>
 
               <div className="account-form-actions">
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Menyimpan...' : questionForm.question_id ? 'Update Soal' : 'Tambah Soal'}
+                <button type="submit" className="btn btn-primary" disabled={saving || !isDraftWorkspace}>
+                  {saving ? 'Menyimpan...' : !isDraftWorkspace ? 'Published Terkunci' : questionForm.question_id ? 'Update Soal' : 'Tambah Soal'}
                 </button>
                 {!questionForm.question_id && (
                   <Link className="btn btn-outline" to={backToBankSoalHref}>

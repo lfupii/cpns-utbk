@@ -329,6 +329,8 @@ export default function AdminLearningMaterialEditor() {
   const pendingEnterPageFocusRef = useRef(null);
 
   const numericPackageId = Number(packageId);
+  const workspace = searchParams.get('workspace') === 'draft' ? 'draft' : 'published';
+  const isDraftWorkspace = workspace === 'draft';
   const requestedTopicParam = searchParams.get('topic') || '0';
   const shouldCreateTopic = requestedTopicParam === 'new';
   const requestedTopicIndex = useMemo(() => {
@@ -356,22 +358,6 @@ export default function AdminLearningMaterialEditor() {
     [learningContent, sectionCode]
   );
   const activeMaterialStatus = normalizeMaterialStatus(materialMeta.status);
-  const previewDraftLabel = useMemo(() => {
-    const sectionLabel = String(activeSection?.name || '').trim();
-    return sectionLabel ? `Preview Draft ${sectionLabel}` : 'Preview Draft';
-  }, [activeSection?.name]);
-  const previewDraftUrl = useMemo(() => {
-    if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !activeSection?.code) {
-      return '';
-    }
-
-    const params = new URLSearchParams({
-      preview: 'draft',
-      section: activeSection.code,
-      topic: String(activeTopicIndex),
-    });
-    return `/learning/${numericPackageId}?${params.toString()}`;
-  }, [activeSection?.code, activeTopicIndex, numericPackageId]);
   const activeTopic = materialForm.topics[activeTopicIndex] || null;
   const activePage = activeTopic?.pages?.[activePageIndex] || null;
   const getEditorNode = useCallback((pageIndex = activePageIndex) => editorRefs.current[pageIndex] || null, [activePageIndex]);
@@ -423,7 +409,7 @@ export default function AdminLearningMaterialEditor() {
     }
 
     try {
-      const response = await apiClient.get(`/admin/learning-content?package_id=${numericPackageId}&_=${Date.now()}`);
+      const response = await apiClient.get(`/admin/learning-content?package_id=${numericPackageId}&workspace=${workspace}&_=${Date.now()}`);
       const sections = response.data.data?.sections || [];
       const section = sections.find((item) => item.code === sectionCode);
       setLearningContent(sections);
@@ -477,7 +463,7 @@ export default function AdminLearningMaterialEditor() {
     } finally {
       setLoading(false);
     }
-  }, [numericPackageId, sectionCode, shouldCreateTopic]);
+  }, [numericPackageId, sectionCode, shouldCreateTopic, workspace]);
 
   useEffect(() => {
     fetchLearningContent();
@@ -2158,7 +2144,7 @@ export default function AdminLearningMaterialEditor() {
   const activeRulerLeftPercent = `${Math.max(0, Math.min(100, (activeParagraphMetrics.leftIndent / PARAGRAPH_INDENT_LIMIT) * 100))}%`;
   const activeRulerFirstLinePercent = `${Math.max(0, Math.min(100, ((activeParagraphMetrics.leftIndent + activeParagraphMetrics.firstLineIndent) / PARAGRAPH_INDENT_LIMIT) * 100))}%`;
 
-  const handleSave = async (nextStatus) => {
+  const handleSave = async () => {
     if (!activeSection) {
       return;
     }
@@ -2166,7 +2152,7 @@ export default function AdminLearningMaterialEditor() {
     rebalancePaginatedEditors(0);
     const topics = readTopicsFromEditor();
     setSaving(true);
-    setSavingAction(nextStatus);
+    setSavingAction('draft');
     setError('');
     setSuccess('');
 
@@ -2176,7 +2162,7 @@ export default function AdminLearningMaterialEditor() {
         section_code: activeSection.code,
         title: materialForm.title,
         topics,
-        status: nextStatus,
+        workspace,
         source_url: materialMeta.sourceUrl,
         review_notes: materialMeta.reviewNotes,
       });
@@ -2193,11 +2179,10 @@ export default function AdminLearningMaterialEditor() {
       } else {
         setMaterialMeta((current) => ({
           ...current,
-          status: normalizeMaterialStatus(nextStatus),
-          publishedAt: nextStatus === 'published' ? current.publishedAt || new Date().toISOString() : null,
+          status: normalizeMaterialStatus(isDraftWorkspace ? 'draft' : 'published'),
         }));
       }
-      setSuccess(response.data?.message || (nextStatus === 'published' ? 'Materi berhasil dipublish.' : 'Draft berhasil disimpan.'));
+      setSuccess(response.data?.message || (isDraftWorkspace ? 'Draft berhasil disimpan.' : 'Materi berhasil diperbarui.'));
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyimpan materi');
     } finally {
@@ -2213,24 +2198,18 @@ export default function AdminLearningMaterialEditor() {
       subtitle="Kelola isi halaman di dalam topik materi yang sedang dipilih."
     >
       <div className="admin-material-editor-topbar admin-learning-editor-topbar">
-        <Link to="/admin" className="btn btn-outline">Kembali ke Admin</Link>
+        <Link to={`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`} className="btn btn-outline">Kembali ke Admin</Link>
         <div className="admin-material-editor-actions">
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => handleSave('draft')}
-            disabled={saving || loading || pdfImporting}
-          >
-            {saving && savingAction === 'draft' ? 'Menyimpan Draft...' : 'Simpan Draft'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => handleSave('published')}
-            disabled={saving || loading || pdfImporting}
-          >
-            {saving && savingAction === 'published' ? 'Mempublish...' : 'Publish'}
-          </button>
+          {isDraftWorkspace && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSave}
+              disabled={saving || loading || pdfImporting}
+            >
+              {saving ? 'Menyimpan Draft...' : 'Simpan Draft'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -2254,25 +2233,13 @@ export default function AdminLearningMaterialEditor() {
                 </span>
                 <p>
                   {activeMaterialStatus === 'draft'
-                    ? 'Draft hanya terlihat di area admin sampai Anda menekan Publish.'
+                    ? 'Draft ini hanya terlihat di area admin sampai Anda menekan Publish Draft dari panel admin.'
                     : `Materi aktif untuk peserta. Publish terakhir ${formatPublishedAt(materialMeta.publishedAt)}.`}
                 </p>
               </div>
             </div>
             <div className="admin-doc-toolbar-actions">
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => {
-                  if (previewDraftUrl) {
-                    window.open(previewDraftUrl, '_blank', 'noopener,noreferrer');
-                  }
-                }}
-                disabled={!previewDraftUrl}
-              >
-                {previewDraftLabel}
-              </button>
-              <button type="button" className="btn btn-outline" onClick={() => navigate('/admin')}>Tutup Editor</button>
+              <button type="button" className="btn btn-outline" onClick={() => navigate(`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`)}>Tutup Editor</button>
             </div>
           </div>
 

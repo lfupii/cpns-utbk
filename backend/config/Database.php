@@ -390,6 +390,124 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
     );
 
     $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS test_package_drafts (
+            package_id INT PRIMARY KEY,
+            category_id INT NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            description TEXT NULL,
+            price INT NOT NULL DEFAULT 0,
+            duration_days INT NOT NULL DEFAULT 30,
+            max_attempts INT NOT NULL DEFAULT 1,
+            question_count INT NOT NULL DEFAULT 0,
+            time_limit INT NOT NULL DEFAULT 90,
+            test_mode VARCHAR(50) NOT NULL DEFAULT 'standard',
+            workflow_config LONGTEXT NULL,
+            last_saved_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            last_published_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+            FOREIGN KEY (category_id) REFERENCES test_categories(id) ON DELETE CASCADE,
+            INDEX (category_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    if (!databaseColumnExists($mysqli, 'test_package_drafts', 'last_saved_at')) {
+        $mysqli->query(
+            "ALTER TABLE test_package_drafts
+             ADD COLUMN last_saved_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP AFTER workflow_config"
+        );
+    }
+
+    if (!databaseColumnExists($mysqli, 'test_package_drafts', 'last_published_at')) {
+        $mysqli->query(
+            "ALTER TABLE test_package_drafts
+             ADD COLUMN last_published_at TIMESTAMP NULL DEFAULT NULL AFTER last_saved_at"
+        );
+    }
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS question_drafts (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            package_id INT NOT NULL,
+            question_text LONGTEXT NOT NULL,
+            question_image_url VARCHAR(1000) DEFAULT NULL,
+            question_image_layout VARCHAR(20) NOT NULL DEFAULT 'top',
+            question_type VARCHAR(50) NOT NULL DEFAULT 'single_choice',
+            difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+            section_code VARCHAR(100) DEFAULT NULL,
+            section_name VARCHAR(255) DEFAULT NULL,
+            section_order INT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+            INDEX (package_id, section_code),
+            INDEX (package_id, section_order)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS question_option_drafts (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            question_id INT NOT NULL,
+            option_letter VARCHAR(5) NOT NULL,
+            option_text LONGTEXT NOT NULL,
+            option_image_url VARCHAR(1000) DEFAULT NULL,
+            is_correct BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (question_id) REFERENCES question_drafts(id) ON DELETE CASCADE,
+            INDEX (question_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS learning_material_drafts (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            package_id INT NOT NULL,
+            section_code VARCHAR(100) NOT NULL,
+            title VARCHAR(150) NOT NULL,
+            content_json LONGTEXT NOT NULL,
+            source_url VARCHAR(1000) NULL,
+            review_notes LONGTEXT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_learning_material_draft (package_id, section_code),
+            INDEX (package_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS learning_section_question_drafts (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            package_id INT NOT NULL,
+            section_code VARCHAR(100) NOT NULL,
+            question_text LONGTEXT NOT NULL,
+            question_image_url VARCHAR(1000) DEFAULT NULL,
+            difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+            question_order INT NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+            INDEX (package_id, section_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS learning_section_question_option_drafts (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            question_id INT NOT NULL,
+            option_letter VARCHAR(5) NOT NULL,
+            option_text LONGTEXT NOT NULL,
+            option_image_url VARCHAR(1000) DEFAULT NULL,
+            is_correct BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (question_id) REFERENCES learning_section_question_drafts(id) ON DELETE CASCADE,
+            INDEX (question_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $mysqli->query(
         "CREATE TABLE IF NOT EXISTS learning_section_questions (
             id INT PRIMARY KEY AUTO_INCREMENT,
             package_id INT NOT NULL,
@@ -484,7 +602,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
     }
 
     seedDefaultLearningContent($mysqli);
-    seedTwkDraftContent($mysqli);
+    migrateLegacyLearningMaterialDrafts($mysqli);
 }
 
 function seedDefaultLearningContent(mysqli $mysqli): void {
@@ -581,13 +699,17 @@ function seedDefaultLearningContent(mysqli $mysqli): void {
     setSystemSetting($mysqli, 'learning_content_seed_version', $schemaVersion);
 }
 
-function seedTwkDraftContent(mysqli $mysqli): void {
-    if (!databaseTableExists($mysqli, 'test_packages') || !databaseTableExists($mysqli, 'learning_materials')) {
+function migrateLegacyLearningMaterialDrafts(mysqli $mysqli): void {
+    if (
+        !databaseTableExists($mysqli, 'test_packages')
+        || !databaseTableExists($mysqli, 'learning_materials')
+        || !databaseTableExists($mysqli, 'learning_material_drafts')
+    ) {
         return;
     }
 
-    $schemaVersion = '20260419_twk_draft_topics_v1';
-    if (getSystemSetting($mysqli, 'learning_twk_draft_seed_version') === $schemaVersion) {
+    $schemaVersion = '20260419_workspace_draft_migration_v1';
+    if (getSystemSetting($mysqli, 'workspace_draft_migration_version') === $schemaVersion) {
         return;
     }
 
@@ -601,25 +723,32 @@ function seedTwkDraftContent(mysqli $mysqli): void {
         return;
     }
 
-    $upsertMaterial = $mysqli->prepare(
-        "INSERT INTO learning_materials (
+    $upsertDraftMaterial = $mysqli->prepare(
+        "INSERT INTO learning_material_drafts (
             package_id,
             section_code,
             title,
             content_json,
-            status,
             source_url,
-            review_notes,
-            published_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            review_notes
+        ) VALUES (?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             title = VALUES(title),
             content_json = VALUES(content_json),
-            status = VALUES(status),
             source_url = VALUES(source_url),
             review_notes = VALUES(review_notes),
-            published_at = VALUES(published_at),
             updated_at = CURRENT_TIMESTAMP"
+    );
+    $updatePublishedMaterial = $mysqli->prepare(
+        "UPDATE learning_materials
+         SET title = ?,
+             content_json = ?,
+             status = 'published',
+             source_url = NULL,
+             review_notes = NULL,
+             published_at = COALESCE(published_at, CURRENT_TIMESTAMP),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE package_id = ? AND section_code = ?"
     );
 
     while ($package = $packageResult->fetch_assoc()) {
@@ -627,33 +756,49 @@ function seedTwkDraftContent(mysqli $mysqli): void {
         $mode = (string) ($workflow['mode'] ?? '');
 
         foreach ($workflow['sections'] as $section) {
-            if ((string) ($section['code'] ?? '') !== 'twk') {
+            $packageId = (int) ($package['id'] ?? 0);
+            $sectionCode = (string) ($section['code'] ?? '');
+            if ($packageId <= 0 || $sectionCode === '') {
                 continue;
             }
 
-            $packageId = (int) ($package['id'] ?? 0);
-            $sectionCode = 'twk';
-            $sectionName = (string) ($section['name'] ?? 'TWK');
-            $pages = LearningContent::defaultMaterialPages($section, $mode);
-            $topics = array_map(static function (array $page): array {
-                return [
-                    'title' => (string) ($page['title'] ?? 'Topik'),
-                    'pages' => [$page],
-                ];
-            }, $pages);
-            $contentJson = json_encode([
-                'topics' => $topics,
+            $findMaterial = $mysqli->prepare(
+                'SELECT title, content_json, status, source_url, review_notes
+                 FROM learning_materials
+                 WHERE package_id = ? AND section_code = ?
+                 LIMIT 1'
+            );
+            $findMaterial->bind_param('is', $packageId, $sectionCode);
+            $findMaterial->execute();
+            $material = $findMaterial->get_result()->fetch_assoc();
+
+            if (!$material || (string) ($material['status'] ?? 'published') !== 'draft') {
+                continue;
+            }
+
+            $title = (string) ($material['title'] ?? ($section['name'] ?? 'Materi'));
+            $contentJson = (string) ($material['content_json'] ?? '');
+            $sourceUrl = ($material['source_url'] ?? null) ?: null;
+            $reviewNotes = ($material['review_notes'] ?? null) ?: null;
+            $upsertDraftMaterial->bind_param('isssss', $packageId, $sectionCode, $title, $contentJson, $sourceUrl, $reviewNotes);
+            $upsertDraftMaterial->execute();
+
+            $defaultPages = LearningContent::defaultMaterialPages($section, $mode);
+            $publishedContentJson = json_encode([
+                'topics' => array_map(static function (array $page): array {
+                    return [
+                        'title' => (string) ($page['title'] ?? 'Topik'),
+                        'pages' => [$page],
+                    ];
+                }, $defaultPages),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $status = 'draft';
-            $sourceUrl = null;
-            $reviewNotes = 'Draft sistem: topik TWK disesuaikan ke Pancasila, UUD 1945, Bhinneka Tunggal Ika, dan NKRI. Review admin sebelum publish.';
-            $publishedAt = null;
-            $upsertMaterial->bind_param('isssssss', $packageId, $sectionCode, $sectionName, $contentJson, $status, $sourceUrl, $reviewNotes, $publishedAt);
-            $upsertMaterial->execute();
+            $publishedTitle = (string) ($section['name'] ?? $title);
+            $updatePublishedMaterial->bind_param('ssis', $publishedTitle, $publishedContentJson, $packageId, $sectionCode);
+            $updatePublishedMaterial->execute();
         }
     }
 
-    setSystemSetting($mysqli, 'learning_twk_draft_seed_version', $schemaVersion);
+    setSystemSetting($mysqli, 'workspace_draft_migration_version', $schemaVersion);
 }
 
 function backfillTestWorkflowData(mysqli $mysqli): void {

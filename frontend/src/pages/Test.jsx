@@ -307,8 +307,13 @@ export default function Test() {
     }
   }, [attemptId, navigate]);
 
-  const handleSubmit = useCallback(async ({ confirmManual = false } = {}) => {
+  const handleSubmit = useCallback(async ({ confirmManual = false, autoSubmit = false } = {}) => {
     if (!attemptId || isSubmitting) {
+      return;
+    }
+
+    if (!autoSubmit && pendingReviewQuestionNumbers.length > 0) {
+      setError(`Matikan status ragu-ragu pada soal nomor ${pendingReviewQuestionNumberLabel} sebelum submit.`);
       return;
     }
 
@@ -335,6 +340,7 @@ export default function Test() {
       const response = await apiClient.post('/test/submit', {
         attempt_id: attemptId,
         answers: unsavedAnswers,
+        auto_submit: autoSubmit,
       });
 
       const responseMessage = response.data?.message;
@@ -348,10 +354,24 @@ export default function Test() {
       setIsSubmitting(false);
       submitTriggeredRef.current = false;
     }
-  }, [allQuestionsAnswered, attemptId, isSubmitting, navigate, unsavedAnswers, workflow]);
+  }, [
+    allQuestionsAnswered,
+    attemptId,
+    isSubmitting,
+    navigate,
+    pendingReviewQuestionNumberLabel,
+    pendingReviewQuestionNumbers.length,
+    unsavedAnswers,
+    workflow,
+  ]);
 
   const handleAdvanceSection = useCallback(async () => {
     if (!attemptId || isAdvancingSection || !nextSection) {
+      return;
+    }
+
+    if (pendingReviewQuestionNumbers.length > 0) {
+      setError(`Matikan status ragu-ragu pada soal nomor ${pendingReviewQuestionNumberLabel} sebelum pindah subtes.`);
       return;
     }
 
@@ -382,7 +402,15 @@ export default function Test() {
     } finally {
       setIsAdvancingSection(false);
     }
-  }, [attemptId, isAdvancingSection, loadQuestions, navigate, nextSection]);
+  }, [
+    attemptId,
+    isAdvancingSection,
+    loadQuestions,
+    navigate,
+    nextSection,
+    pendingReviewQuestionNumberLabel,
+    pendingReviewQuestionNumbers.length,
+  ]);
 
   useEffect(() => {
     const boot = async () => {
@@ -440,7 +468,7 @@ export default function Test() {
       return;
     }
 
-    handleSubmit();
+    handleSubmit({ autoSubmit: true });
   }, [attemptId, attemptState.isExpired, handleSubmit, workflow]);
 
   useEffect(() => {
@@ -533,10 +561,22 @@ export default function Test() {
       return;
     }
 
+    const questionKey = String(questionId);
+    const currentDraftAnswerValue = Number(draftAnswers[questionKey] || draftAnswers[questionId] || 0);
+    const currentSavedAnswerValue = Number(savedAnswers[questionKey] || savedAnswers[questionId] || 0);
+
+    if (currentDraftAnswerValue <= 0 && currentSavedAnswerValue <= 0) {
+      setError('Pilih jawaban dulu sebelum menandai ragu-ragu.');
+      return;
+    }
+
     setError('');
     setSaveMessage('');
 
-    const questionKey = String(questionId);
+    if (currentDraftAnswerValue > 0 && currentDraftAnswerValue !== currentSavedAnswerValue) {
+      await saveAnswer(questionId, currentDraftAnswerValue);
+    }
+
     const nextMarkedReview = !Boolean(reviewFlags[questionKey] || reviewFlags[questionId]);
 
     setReviewFlags((current) => {
@@ -574,7 +614,7 @@ export default function Test() {
 
       setError(err.response?.data?.message || 'Gagal menyimpan status ragu-ragu');
     }
-  }, [attemptId, navigate, reviewFlags]);
+  }, [attemptId, draftAnswers, navigate, reviewFlags, saveAnswer, savedAnswers]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Memuat soal...</div>;
@@ -605,6 +645,8 @@ export default function Test() {
   const isCpnsMode = workflow.mode === MODE_CPNS;
   const isUtbkMode = workflow.mode === MODE_UTBK;
   const currentAnswerValue = draftAnswers[String(currentQuestion.id)] || draftAnswers[currentQuestion.id] || null;
+  const currentSavedAnswerValue = savedAnswers[String(currentQuestion.id)] || savedAnswers[currentQuestion.id] || null;
+  const hasCurrentAnswerSelected = Boolean(currentAnswerValue || currentSavedAnswerValue);
   const isCurrentSaved = Number(savedAnswers[String(currentQuestion.id)] || 0) === Number(currentAnswerValue || 0)
     && Boolean(currentAnswerValue);
   const currentGlobalQuestionIndex = questions.findIndex(
@@ -619,6 +661,13 @@ export default function Test() {
   const isCurrentQuestionMarkedForReview = Boolean(
     reviewFlags[String(currentQuestion.id)] || reviewFlags[currentQuestion.id]
   );
+  const pendingReviewQuestionNumbers = orderedQuestions.reduce((numbers, question, index) => {
+    if (reviewFlags[String(question.id)] || reviewFlags[question.id]) {
+      numbers.push(index + 1);
+    }
+    return numbers;
+  }, []);
+  const pendingReviewQuestionNumberLabel = pendingReviewQuestionNumbers.join(', ');
 
   return (
     <div className="min-h-screen test-shell">
@@ -823,6 +872,8 @@ export default function Test() {
                     <button
                       type="button"
                       onClick={() => toggleReviewFlag(currentQuestion.id)}
+                      disabled={!hasCurrentAnswerSelected}
+                      title={hasCurrentAnswerSelected ? undefined : 'Pilih jawaban dulu untuk mengaktifkan ragu-ragu'}
                       className={`btn btn-outline test-action-button ${
                         isCurrentQuestionMarkedForReview ? 'test-action-button-review-active' : ''
                       }`}
@@ -834,6 +885,7 @@ export default function Test() {
                   {isUtbkMode && (
                     <div className="test-action-helper">
                       {isCurrentSaved ? 'Jawaban aktif sudah tersimpan otomatis.' : 'Jawaban akan tersimpan otomatis saat dipilih.'}
+                      {!hasCurrentAnswerSelected ? ' Pilih salah satu opsi dulu untuk membuka tombol ragu-ragu.' : ''}
                       {!hasMultipleActiveQuestions ? ' Subtes ini hanya memiliki 1 soal aktif.' : ''}
                     </div>
                   )}

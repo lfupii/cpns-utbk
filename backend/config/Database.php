@@ -389,6 +389,62 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
         $mysqli->query("ALTER TABLE learning_section_question_options ADD COLUMN option_image_url VARCHAR(1000) NULL AFTER option_text");
     }
 
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS learning_section_test_attempts (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT NOT NULL,
+            package_id INT NOT NULL,
+            section_code VARCHAR(100) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'ongoing',
+            duration_seconds INT NOT NULL DEFAULT 0,
+            answers_json LONGTEXT NULL,
+            review_flags_json LONGTEXT NULL,
+            result_json LONGTEXT NULL,
+            start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            end_time TIMESTAMP NULL DEFAULT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+            INDEX (user_id, package_id, section_code, status),
+            INDEX (package_id, section_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    if (!databaseColumnExists($mysqli, 'learning_section_test_attempts', 'duration_seconds')) {
+        $mysqli->query(
+            "ALTER TABLE learning_section_test_attempts
+             ADD COLUMN duration_seconds INT NOT NULL DEFAULT 0 AFTER status"
+        );
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_test_attempts', 'answers_json')) {
+        $mysqli->query(
+            "ALTER TABLE learning_section_test_attempts
+             ADD COLUMN answers_json LONGTEXT NULL AFTER duration_seconds"
+        );
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_test_attempts', 'review_flags_json')) {
+        $mysqli->query(
+            "ALTER TABLE learning_section_test_attempts
+             ADD COLUMN review_flags_json LONGTEXT NULL AFTER answers_json"
+        );
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_test_attempts', 'result_json')) {
+        $mysqli->query(
+            "ALTER TABLE learning_section_test_attempts
+             ADD COLUMN result_json LONGTEXT NULL AFTER review_flags_json"
+        );
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_test_attempts', 'end_time')) {
+        $mysqli->query(
+            "ALTER TABLE learning_section_test_attempts
+             ADD COLUMN end_time TIMESTAMP NULL DEFAULT NULL AFTER start_time"
+        );
+    }
+
     seedDefaultLearningContent($mysqli);
 }
 

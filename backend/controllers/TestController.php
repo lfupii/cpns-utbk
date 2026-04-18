@@ -224,6 +224,57 @@ class TestController {
         return (int) ($row['total'] ?? 0);
     }
 
+    private function hasAnsweredQuestion(int $attemptId, int $questionId): bool {
+        $query = 'SELECT selected_option_id FROM user_answers WHERE attempt_id = ? AND question_id = ? LIMIT 1';
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('ii', $attemptId, $questionId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        return isset($row['selected_option_id']) && (int) $row['selected_option_id'] > 0;
+    }
+
+    private function getMarkedReviewQuestionIds(int $attemptId, ?string $sectionCode = null): array {
+        $query = 'SELECT aqf.question_id
+                  FROM attempt_question_flags aqf
+                  JOIN questions q ON q.id = aqf.question_id
+                  WHERE aqf.attempt_id = ? AND aqf.is_marked_review = 1';
+
+        if ($sectionCode !== null && $sectionCode !== '') {
+            $query .= ' AND q.section_code = ?';
+        }
+
+        $stmt = $this->mysqli->prepare($query);
+        if ($sectionCode !== null && $sectionCode !== '') {
+            $stmt->bind_param('is', $attemptId, $sectionCode);
+        } else {
+            $stmt->bind_param('i', $attemptId);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $questionIds = [];
+        while ($row = $result->fetch_assoc()) {
+            $questionIds[] = (int) ($row['question_id'] ?? 0);
+        }
+
+        return array_values(array_filter($questionIds));
+    }
+
+    private function assertNoPendingReviewFlags(int $attemptId, array $workflow, array $attemptState, string $actionLabel): void {
+        $sectionCode = $workflow['mode'] === TestWorkflow::MODE_UTBK_SECTIONED
+            ? (string) ($attemptState['active_section_code'] ?? '')
+            : null;
+        $pendingReviewQuestionIds = $this->getMarkedReviewQuestionIds($attemptId, $sectionCode);
+
+        if (count($pendingReviewQuestionIds) > 0) {
+            throw new RuntimeException(
+                'Masih ada soal bertanda ragu-ragu. Matikan status ragu-ragu sebelum ' . strtolower($actionLabel) . '.',
+                409
+            );
+        }
+    }
+
     private function assertQuestionAccessible(array $workflow, array $attemptState, array $question): void {
         if ($workflow['mode'] !== TestWorkflow::MODE_UTBK_SECTIONED) {
             return;
@@ -652,6 +703,8 @@ class TestController {
                 ], 409);
             }
 
+            $this->assertNoPendingReviewFlags($attemptId, $workflow, $attemptState, 'pindah ke subtes berikutnya');
+
             $sections = array_values($workflow['sections']);
             $currentIndex = $this->findSectionIndex($sections, $attemptState);
             $nextSection = $sections[$currentIndex + 1] ?? null;
@@ -735,6 +788,9 @@ class TestController {
             }
 
             $this->assertQuestionAccessible($workflow, $attemptState, $question);
+            if ($isMarkedReview && !$this->hasAnsweredQuestion($attemptId, $questionId)) {
+                throw new RuntimeException('Jawab soal ini dulu sebelum menandai ragu-ragu.', 422);
+            }
             $this->setReviewFlag($attemptId, $questionId, $isMarkedReview);
             $this->mysqli->commit();
 
@@ -758,6 +814,7 @@ class TestController {
 
         $attemptId = (int) ($data['attempt_id'] ?? 0);
         $answers = $data['answers'] ?? [];
+        $autoSubmit = filter_var($data['auto_submit'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         if ($attemptId <= 0) {
             sendResponse('error', 'Attempt ID harus diisi', null, 400);
@@ -768,11 +825,25 @@ class TestController {
         }
 
         try {
+            $userId = (int) $tokenData['userId'];
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+
+            if (!$autoSubmit) {
+                $attempt = $this->getAttemptForUser($attemptId, $userId);
+                if ($attempt && ($attempt['status'] ?? '') === 'ongoing') {
+                    $workflow = TestWorkflow::buildPackageWorkflow($attempt);
+                    $attemptState = TestWorkflow::computeAttemptState($attempt, $workflow);
+                    if (empty($attemptState['is_expired'])) {
+                        $this->assertNoPendingReviewFlags($attemptId, $workflow, $attemptState, 'menyelesaikan ujian');
+                    }
+                }
+            }
+
             $completion = $this->finalizeAttempt(
                 $attemptId,
-                (int) $tokenData['userId'],
+                $userId,
                 $answers,
-                userHasRole($tokenData, $this->mysqli, 'admin')
+                $isAdmin
             );
             $emailDelivery = $completion['email_delivery'];
 

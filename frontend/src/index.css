@@ -2141,6 +2141,28 @@ html[data-theme='dark'] .theme-toggle-thumb {
   max-width: 980px;
 }
 
+.account-shell-workspace-offset .landing-navbar-inner {
+  display: grid;
+  grid-template-columns: 294px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.3rem;
+}
+
+.account-shell-workspace-offset .landing-navbar-inner .brand-logo {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.account-shell-workspace-offset .landing-navbar-inner .landing-nav-actions {
+  grid-column: 3;
+  margin-left: 0;
+  justify-self: end;
+}
+
+.account-shell-workspace-offset .account-page-header {
+  margin-left: calc(294px + 1.3rem);
+}
+
 .account-page-header h1 {
   font-size: 3.35rem;
   line-height: 0.98;
@@ -8427,6 +8449,20 @@ html[data-theme='dark'] .theme-toggle-thumb {
     margin-right: auto;
     padding-left: 1.25rem;
     padding-right: 1.25rem;
+  }
+
+  .account-shell-workspace-offset .landing-navbar-inner {
+    display: flex;
+  }
+
+  .account-shell-workspace-offset .landing-navbar-inner .brand-logo,
+  .account-shell-workspace-offset .landing-navbar-inner .landing-nav-actions {
+    grid-column: auto;
+    justify-self: auto;
+  }
+
+  .account-shell-workspace-offset .account-page-header {
+    margin-left: 0;
   }
 
   .landing-mindmap-shell {

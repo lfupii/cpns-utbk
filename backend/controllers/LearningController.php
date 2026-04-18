@@ -580,6 +580,449 @@ class LearningController {
         return false;
     }
 
+    private function getWorkflowSection(array $workflow, string $sectionCode): ?array {
+        foreach ($workflow['sections'] as $section) {
+            if ((string) ($section['code'] ?? '') === $sectionCode) {
+                return $section;
+            }
+        }
+
+        return null;
+    }
+
+    private function getSectionTestQuestionCount(int $packageId, string $sectionCode): int {
+        $stmt = $this->mysqli->prepare(
+            'SELECT COUNT(*) AS total FROM learning_section_questions WHERE package_id = ? AND section_code = ?'
+        );
+        $stmt->bind_param('is', $packageId, $sectionCode);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        return (int) ($row['total'] ?? 0);
+    }
+
+    private function computeSectionTestDurationSeconds(array $section, int $questionCount): int {
+        $totalQuestions = max(0, $questionCount);
+        $durationMinutes = max(0, (float) ($section['duration_minutes'] ?? 0));
+        $targetQuestionCount = max(0, (int) ($section['target_question_count'] ?? 0));
+
+        if ($durationMinutes > 0 && $targetQuestionCount > 0 && $totalQuestions > 0) {
+            $estimatedSeconds = (int) round(($durationMinutes * 60 * $totalQuestions) / $targetQuestionCount);
+            return max(180, $estimatedSeconds);
+        }
+
+        if ($durationMinutes > 0) {
+            return max(180, (int) round($durationMinutes * 60));
+        }
+
+        return max(300, $totalQuestions * 90);
+    }
+
+    private function getSectionTestQuestions(int $packageId, string $sectionCode): array {
+        $query = "SELECT q.id, q.question_text, q.question_image_url, q.section_code,
+                         GROUP_CONCAT(
+                            JSON_OBJECT(
+                                'id', qo.id,
+                                'letter', qo.option_letter,
+                                'text', qo.option_text,
+                                'image_url', qo.option_image_url
+                            )
+                            ORDER BY qo.id SEPARATOR ','
+                         ) AS options
+                  FROM learning_section_questions q
+                  LEFT JOIN learning_section_question_options qo ON qo.question_id = q.id
+                  WHERE q.package_id = ? AND q.section_code = ?
+                  GROUP BY q.id
+                  ORDER BY q.question_order ASC, q.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('is', $packageId, $sectionCode);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $questions = [];
+        while ($row = $result->fetch_assoc()) {
+            $row['id'] = (int) $row['id'];
+            $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+            $questions[] = $row;
+        }
+
+        return $questions;
+    }
+
+    private function getSectionTestQuestion(int $packageId, string $sectionCode, int $questionId): ?array {
+        $stmt = $this->mysqli->prepare(
+            'SELECT id, package_id, section_code
+             FROM learning_section_questions
+             WHERE id = ? AND package_id = ? AND section_code = ?
+             LIMIT 1'
+        );
+        $stmt->bind_param('iis', $questionId, $packageId, $sectionCode);
+        $stmt->execute();
+        $question = $stmt->get_result()->fetch_assoc();
+
+        return $question ?: null;
+    }
+
+    private function getSectionTestOptionCorrectness(int $questionId, int $optionId): int {
+        $stmt = $this->mysqli->prepare(
+            'SELECT is_correct
+             FROM learning_section_question_options
+             WHERE id = ? AND question_id = ?
+             LIMIT 1'
+        );
+        $stmt->bind_param('ii', $optionId, $questionId);
+        $stmt->execute();
+        $option = $stmt->get_result()->fetch_assoc();
+
+        if (!$option) {
+            throw new RuntimeException('Pilihan jawaban tidak sesuai dengan soal mini test', 422);
+        }
+
+        return (int) ($option['is_correct'] ?? 0);
+    }
+
+    private function getOngoingSectionTestAttempt(int $userId, int $packageId, string $sectionCode): ?array {
+        $stmt = $this->mysqli->prepare(
+            "SELECT *
+             FROM learning_section_test_attempts
+             WHERE user_id = ? AND package_id = ? AND section_code = ? AND status = 'ongoing'
+             ORDER BY id DESC
+             LIMIT 1"
+        );
+        $stmt->bind_param('iis', $userId, $packageId, $sectionCode);
+        $stmt->execute();
+        $attempt = $stmt->get_result()->fetch_assoc();
+
+        return $attempt ?: null;
+    }
+
+    private function getSectionTestAttemptForUser(int $attemptId, int $userId, bool $forUpdate = false): ?array {
+        $query = "SELECT *
+                  FROM learning_section_test_attempts
+                  WHERE id = ? AND user_id = ?
+                  LIMIT 1";
+        if ($forUpdate) {
+            $query .= ' FOR UPDATE';
+        }
+
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('ii', $attemptId, $userId);
+        $stmt->execute();
+        $attempt = $stmt->get_result()->fetch_assoc();
+
+        return $attempt ?: null;
+    }
+
+    private function decodeSectionTestAnswers(?string $raw): array {
+        $decoded = json_decode((string) ($raw ?? ''), true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $answers = [];
+        foreach ($decoded as $questionId => $optionId) {
+            $normalizedQuestionId = (int) $questionId;
+            $normalizedOptionId = (int) $optionId;
+            if ($normalizedQuestionId > 0 && $normalizedOptionId > 0) {
+                $answers[(string) $normalizedQuestionId] = $normalizedOptionId;
+            }
+        }
+
+        return $answers;
+    }
+
+    private function decodeSectionTestReviewFlags(?string $raw): array {
+        $decoded = json_decode((string) ($raw ?? ''), true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $reviewFlags = [];
+        foreach ($decoded as $questionId => $isMarkedReview) {
+            $normalizedQuestionId = (int) $questionId;
+            if ($normalizedQuestionId > 0 && filter_var($isMarkedReview, FILTER_VALIDATE_BOOLEAN)) {
+                $reviewFlags[(string) $normalizedQuestionId] = true;
+            }
+        }
+
+        return $reviewFlags;
+    }
+
+    private function hasSectionTestAnsweredQuestion(array $answers, int $questionId): bool {
+        return isset($answers[(string) $questionId]) && (int) $answers[(string) $questionId] > 0;
+    }
+
+    private function assertNoPendingSectionTestReviewFlags(array $reviewFlags, string $actionLabel): void {
+        if (count($reviewFlags) > 0) {
+            throw new RuntimeException(
+                'Masih ada soal mini test bertanda ragu-ragu. Matikan status ragu-ragu sebelum ' . strtolower($actionLabel) . '.',
+                409
+            );
+        }
+    }
+
+    private function decodeSectionTestResult(?string $raw): ?array {
+        $decoded = json_decode((string) ($raw ?? ''), true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        return [
+            'score' => round((float) ($decoded['score'] ?? 0), 2),
+            'correct_answers' => (int) ($decoded['correct_answers'] ?? 0),
+            'total_questions' => (int) ($decoded['total_questions'] ?? 0),
+            'answered_count' => (int) ($decoded['answered_count'] ?? 0),
+            'time_taken' => (int) ($decoded['time_taken'] ?? 0),
+        ];
+    }
+
+    private function computeSectionTestAttemptState(array $attempt, int $durationSeconds, ?int $nowTimestamp = null): array {
+        $now = $nowTimestamp ?? time();
+        $startTime = strtotime((string) ($attempt['start_time'] ?? 'now'));
+        if ($startTime === false) {
+            $startTime = $now;
+        }
+
+        $safeDurationSeconds = max(0, $durationSeconds);
+        $elapsedSeconds = max(0, $now - $startTime);
+        $remainingSeconds = max(0, $safeDurationSeconds - $elapsedSeconds);
+        $isExpired = $safeDurationSeconds > 0 && $remainingSeconds <= 0;
+
+        return [
+            'started_at' => date(DATE_ATOM, $startTime),
+            'server_time' => date(DATE_ATOM, $now),
+            'elapsed_seconds' => $elapsedSeconds,
+            'remaining_seconds' => $remainingSeconds,
+            'total_duration_seconds' => $safeDurationSeconds,
+            'is_expired' => $isExpired,
+        ];
+    }
+
+    private function buildSectionTestPayload(array $attempt, array $questions, array $section): array {
+        $durationSeconds = (int) ($attempt['duration_seconds'] ?? 0);
+        $savedAnswers = $this->decodeSectionTestAnswers($attempt['answers_json'] ?? null);
+        $reviewFlags = $this->decodeSectionTestReviewFlags($attempt['review_flags_json'] ?? null);
+        $result = $this->decodeSectionTestResult($attempt['result_json'] ?? null);
+
+        return [
+            'attempt_id' => (int) $attempt['id'],
+            'package_id' => (int) $attempt['package_id'],
+            'section_code' => (string) ($attempt['section_code'] ?? ''),
+            'section' => $section,
+            'questions' => $questions,
+            'saved_answers' => $savedAnswers,
+            'review_flags' => $reviewFlags,
+            'result' => $result,
+            'attempt' => [
+                'id' => (int) $attempt['id'],
+                'status' => (string) ($attempt['status'] ?? ''),
+                'start_time' => $attempt['start_time'] ?? null,
+                'state' => $this->computeSectionTestAttemptState($attempt, $durationSeconds),
+                'answered_count' => count($savedAnswers),
+            ],
+        ];
+    }
+
+    private function persistSectionTestAnswers(
+        int $attemptId,
+        int $packageId,
+        string $sectionCode,
+        array $existingAnswers,
+        array $answers
+    ): array {
+        if (!is_array($answers)) {
+            throw new RuntimeException('Format jawaban mini test tidak valid', 422);
+        }
+
+        $nextAnswers = $existingAnswers;
+        $seenQuestionIds = [];
+
+        foreach ($answers as $answer) {
+            $questionId = (int) ($answer['question_id'] ?? 0);
+            $optionId = array_key_exists('option_id', $answer) && $answer['option_id'] !== null
+                ? (int) $answer['option_id']
+                : 0;
+
+            if ($questionId <= 0 || $optionId <= 0) {
+                throw new RuntimeException('Data jawaban mini test tidak lengkap', 422);
+            }
+
+            if (isset($seenQuestionIds[$questionId])) {
+                throw new RuntimeException('Setiap soal mini test hanya boleh dikirim sekali per request', 422);
+            }
+
+            $question = $this->getSectionTestQuestion($packageId, $sectionCode, $questionId);
+            if (!$question) {
+                throw new RuntimeException('Soal mini test tidak ditemukan pada subtest ini', 404);
+            }
+
+            $this->getSectionTestOptionCorrectness($questionId, $optionId);
+            $nextAnswers[(string) $questionId] = $optionId;
+            $seenQuestionIds[$questionId] = true;
+        }
+
+        $encodedAnswers = json_encode($nextAnswers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $stmt = $this->mysqli->prepare(
+            'UPDATE learning_section_test_attempts
+             SET answers_json = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?'
+        );
+        $stmt->bind_param('si', $encodedAnswers, $attemptId);
+        $stmt->execute();
+
+        return $nextAnswers;
+    }
+
+    private function setSectionTestReviewFlag(
+        int $attemptId,
+        int $packageId,
+        string $sectionCode,
+        int $questionId,
+        bool $isMarkedReview,
+        array $existingReviewFlags
+    ): array {
+        $question = $this->getSectionTestQuestion($packageId, $sectionCode, $questionId);
+        if (!$question) {
+            throw new RuntimeException('Soal mini test tidak ditemukan pada subtest ini', 404);
+        }
+
+        $nextReviewFlags = $existingReviewFlags;
+        $questionKey = (string) $questionId;
+
+        if ($isMarkedReview) {
+            $nextReviewFlags[$questionKey] = true;
+        } else {
+            unset($nextReviewFlags[$questionKey]);
+        }
+
+        $encodedFlags = json_encode($nextReviewFlags, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $stmt = $this->mysqli->prepare(
+            'UPDATE learning_section_test_attempts
+             SET review_flags_json = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?'
+        );
+        $stmt->bind_param('si', $encodedFlags, $attemptId);
+        $stmt->execute();
+
+        return $nextReviewFlags;
+    }
+
+    private function abandonSectionTestAttempt(int $attemptId): void {
+        $stmt = $this->mysqli->prepare(
+            "UPDATE learning_section_test_attempts
+             SET status = 'abandoned', end_time = NOW(), updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?"
+        );
+        $stmt->bind_param('i', $attemptId);
+        $stmt->execute();
+    }
+
+    private function finalizeSectionTestAttempt(int $attemptId, int $userId, array $answers = [], bool $isAdmin = false): array {
+        $this->mysqli->begin_transaction();
+
+        try {
+            $attempt = $this->getSectionTestAttemptForUser($attemptId, $userId, true);
+            if (!$attempt) {
+                throw new RuntimeException('Attempt mini test tidak ditemukan', 404);
+            }
+
+            $existingResult = $this->decodeSectionTestResult($attempt['result_json'] ?? null);
+            if (($attempt['status'] ?? '') === 'completed' && $existingResult) {
+                $this->mysqli->rollback();
+
+                return [
+                    'already_completed' => true,
+                    'result' => $existingResult,
+                ];
+            }
+
+            if (($attempt['status'] ?? '') !== 'ongoing') {
+                throw new RuntimeException('Attempt mini test sudah tidak aktif lagi', 409);
+            }
+
+            $packageId = (int) ($attempt['package_id'] ?? 0);
+            $sectionCode = (string) ($attempt['section_code'] ?? '');
+            $package = $this->getPackage($packageId);
+            $workflow = TestWorkflow::buildPackageWorkflow($package);
+            $section = $this->getWorkflowSection($workflow, $sectionCode);
+            if (!$section) {
+                throw new RuntimeException('Subtest tidak ditemukan pada paket ini', 404);
+            }
+
+            $this->assertActiveAccess($userId, $packageId, $isAdmin);
+
+            $answerMap = $this->decodeSectionTestAnswers($attempt['answers_json'] ?? null);
+            if (!empty($answers)) {
+                $answerMap = $this->persistSectionTestAnswers($attemptId, $packageId, $sectionCode, $answerMap, $answers);
+            }
+
+            $query = "SELECT q.id AS question_id, qo.id AS option_id, qo.is_correct
+                      FROM learning_section_questions q
+                      JOIN learning_section_question_options qo ON qo.question_id = q.id
+                      WHERE q.package_id = ? AND q.section_code = ?";
+            $stmt = $this->mysqli->prepare($query);
+            $stmt->bind_param('is', $packageId, $sectionCode);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            $questionIds = [];
+            $correctAnswers = 0;
+            while ($row = $result->fetch_assoc()) {
+                $questionId = (int) $row['question_id'];
+                $optionId = (int) $row['option_id'];
+                $questionIds[$questionId] = true;
+
+                if (($answerMap[(string) $questionId] ?? 0) === $optionId && (int) $row['is_correct'] === 1) {
+                    $correctAnswers++;
+                }
+            }
+
+            $totalQuestions = count($questionIds);
+            if ($totalQuestions === 0) {
+                throw new RuntimeException('Soal mini test tidak ditemukan', 404);
+            }
+
+            $durationSeconds = (int) ($attempt['duration_seconds'] ?? 0);
+            $attemptState = $this->computeSectionTestAttemptState($attempt, $durationSeconds);
+            $score = round(($correctAnswers / $totalQuestions) * 100, 2);
+            $timeTaken = $durationSeconds > 0
+                ? min($durationSeconds, (int) ($attemptState['elapsed_seconds'] ?? 0))
+                : (int) ($attemptState['elapsed_seconds'] ?? 0);
+            $resultPayload = [
+                'score' => $score,
+                'correct_answers' => $correctAnswers,
+                'total_questions' => $totalQuestions,
+                'answered_count' => count($answerMap),
+                'time_taken' => $timeTaken,
+            ];
+            $resultJson = json_encode($resultPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            $updateAttempt = $this->mysqli->prepare(
+                "UPDATE learning_section_test_attempts
+                 SET status = 'completed',
+                     answers_json = ?,
+                     result_json = ?,
+                     end_time = NOW(),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?"
+            );
+            $encodedAnswers = json_encode($answerMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $updateAttempt->bind_param('ssi', $encodedAnswers, $resultJson, $attemptId);
+            $updateAttempt->execute();
+
+            $this->upsertProgress($userId, $packageId, $sectionCode, 'subtest_test_completed', $resultPayload);
+            $this->mysqli->commit();
+
+            return [
+                'already_completed' => false,
+                'result' => $resultPayload,
+            ];
+        } catch (Throwable $error) {
+            $this->mysqli->rollback();
+            throw $error;
+        }
+    }
+
     public function getPackageLearning() {
         $tokenData = $this->getOptionalTokenData();
         $userId = (int) ($tokenData['userId'] ?? 0);
@@ -697,40 +1140,12 @@ class LearningController {
                 throw new RuntimeException('Subtest tidak ditemukan pada paket ini', 404);
             }
 
-            $query = "SELECT q.id, q.question_text, q.question_image_url, q.section_code,
-                             GROUP_CONCAT(
-                                JSON_OBJECT(
-                                    'id', qo.id,
-                                    'letter', qo.option_letter,
-                                    'text', qo.option_text,
-                                    'image_url', qo.option_image_url
-                                )
-                                ORDER BY qo.id SEPARATOR ','
-                             ) AS options
-                      FROM learning_section_questions q
-                      LEFT JOIN learning_section_question_options qo ON qo.question_id = q.id
-                      WHERE q.package_id = ? AND q.section_code = ?
-                      GROUP BY q.id
-                      ORDER BY q.question_order ASC, q.id ASC
-                      LIMIT 5";
-            $stmt = $this->mysqli->prepare($query);
-            $stmt->bind_param('is', $packageId, $sectionCode);
-            $stmt->execute();
-            $result = $stmt->get_result();
-
-            $questions = [];
-            while ($row = $result->fetch_assoc()) {
-                $row['id'] = (int) $row['id'];
-                $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
-                $questions[] = $row;
-            }
+            $questions = $this->getSectionTestQuestions($packageId, $sectionCode);
 
             sendResponse('success', 'Soal test subtest berhasil diambil', [
                 'package_id' => $packageId,
                 'section_code' => $sectionCode,
-                'section' => array_values(array_filter($workflow['sections'], static function (array $section) use ($sectionCode): bool {
-                    return (string) ($section['code'] ?? '') === $sectionCode;
-                }))[0] ?? null,
+                'section' => $this->getWorkflowSection($workflow, $sectionCode),
                 'questions' => $questions,
             ]);
         } catch (RuntimeException $error) {
@@ -740,16 +1155,16 @@ class LearningController {
         }
     }
 
-    public function submitSectionTest() {
+    public function startSectionTest() {
         $tokenData = verifyToken();
         $userId = (int) $tokenData['userId'];
         $data = json_decode(file_get_contents('php://input'), true);
         $packageId = (int) ($data['package_id'] ?? 0);
         $sectionCode = trim((string) ($data['section_code'] ?? ''));
-        $answers = $data['answers'] ?? [];
+        $restart = filter_var($data['restart'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-        if ($packageId <= 0 || $sectionCode === '' || !is_array($answers)) {
-            sendResponse('error', 'Data test subtest tidak lengkap', null, 400);
+        if ($packageId <= 0 || $sectionCode === '') {
+            sendResponse('error', 'Package ID dan section harus diisi', null, 400);
         }
 
         try {
@@ -758,59 +1173,292 @@ class LearningController {
             $workflow = TestWorkflow::buildPackageWorkflow($package);
             $this->assertActiveAccess($userId, $packageId, $isAdmin);
 
-            if (!$this->sectionExists($workflow, $sectionCode)) {
+            $section = $this->getWorkflowSection($workflow, $sectionCode);
+            if (!$section) {
                 throw new RuntimeException('Subtest tidak ditemukan pada paket ini', 404);
             }
 
-            $answerMap = [];
-            foreach ($answers as $answer) {
-                $questionId = (int) ($answer['question_id'] ?? 0);
-                $optionId = (int) ($answer['option_id'] ?? 0);
-                if ($questionId > 0 && $optionId > 0) {
-                    $answerMap[$questionId] = $optionId;
+            $questionCount = $this->getSectionTestQuestionCount($packageId, $sectionCode);
+            $questions = $this->getSectionTestQuestions($packageId, $sectionCode);
+            if ($questionCount <= 0 || count($questions) === 0) {
+                sendResponse('success', 'Soal test subtest belum tersedia', [
+                    'package_id' => $packageId,
+                    'section_code' => $sectionCode,
+                    'section' => $section,
+                    'questions' => [],
+                    'saved_answers' => [],
+                    'review_flags' => [],
+                    'result' => null,
+                    'attempt' => null,
+                    'attempt_id' => null,
+                    'resumed' => false,
+                    'result_ready' => false,
+                ]);
+            }
+
+            $ongoingAttempt = $this->getOngoingSectionTestAttempt($userId, $packageId, $sectionCode);
+            if ($ongoingAttempt) {
+                $ongoingState = $this->computeSectionTestAttemptState(
+                    $ongoingAttempt,
+                    (int) ($ongoingAttempt['duration_seconds'] ?? 0)
+                );
+
+                if (!empty($ongoingState['is_expired'])) {
+                    $completion = $this->finalizeSectionTestAttempt((int) $ongoingAttempt['id'], $userId, [], $isAdmin);
+
+                    if (!$restart) {
+                        sendResponse('success', 'Waktu mini test sebelumnya sudah habis dan hasil diproses otomatis.', [
+                            'package_id' => $packageId,
+                            'section_code' => $sectionCode,
+                            'section' => $section,
+                            'questions' => [],
+                            'saved_answers' => [],
+                            'review_flags' => [],
+                            'result' => $completion['result'],
+                            'attempt' => null,
+                            'attempt_id' => (int) $ongoingAttempt['id'],
+                            'resumed' => false,
+                            'result_ready' => true,
+                            'auto_submitted' => true,
+                        ]);
+                    }
+                } elseif (!$restart) {
+                    sendResponse('success', 'Melanjutkan mini test yang sedang berjalan', array_merge(
+                        $this->buildSectionTestPayload($ongoingAttempt, $questions, $section),
+                        [
+                            'resumed' => true,
+                            'result_ready' => false,
+                            'auto_submitted' => false,
+                        ]
+                    ));
+                }
+
+                $this->mysqli->begin_transaction();
+                try {
+                    $lockedAttempt = $this->getSectionTestAttemptForUser((int) $ongoingAttempt['id'], $userId, true);
+                    if ($lockedAttempt && ($lockedAttempt['status'] ?? '') === 'ongoing') {
+                        $this->abandonSectionTestAttempt((int) $lockedAttempt['id']);
+                    }
+                    $this->mysqli->commit();
+                } catch (Throwable $error) {
+                    $this->mysqli->rollback();
+                    throw $error;
                 }
             }
 
-            $query = "SELECT q.id AS question_id, qo.id AS option_id, qo.is_correct
-                      FROM learning_section_questions q
-                      JOIN learning_section_question_options qo ON qo.question_id = q.id
-                      WHERE q.package_id = ? AND q.section_code = ?";
-            $stmt = $this->mysqli->prepare($query);
-            $stmt->bind_param('is', $packageId, $sectionCode);
-            $stmt->execute();
-            $result = $stmt->get_result();
+            $durationSeconds = $this->computeSectionTestDurationSeconds($section, $questionCount);
+            $insertAttempt = $this->mysqli->prepare(
+                "INSERT INTO learning_section_test_attempts (
+                    user_id,
+                    package_id,
+                    section_code,
+                    status,
+                    duration_seconds,
+                    answers_json,
+                    review_flags_json
+                 ) VALUES (?, ?, ?, 'ongoing', ?, '{}', '{}')"
+            );
+            $insertAttempt->bind_param('iisi', $userId, $packageId, $sectionCode, $durationSeconds);
+            $insertAttempt->execute();
 
-            $questionIds = [];
-            $correctAnswers = 0;
-            while ($row = $result->fetch_assoc()) {
-                $questionId = (int) $row['question_id'];
-                $optionId = (int) $row['option_id'];
-                $questionIds[$questionId] = true;
+            $attemptId = (int) $insertAttempt->insert_id;
+            $attempt = $this->getSectionTestAttemptForUser($attemptId, $userId);
+            if (!$attempt) {
+                throw new RuntimeException('Gagal memulai mini test', 500);
+            }
 
-                if (array_key_exists($questionId, $answerMap) && ($answerMap[$questionId] ?? 0) === $optionId && (int) $row['is_correct'] === 1) {
-                    $correctAnswers++;
+            sendResponse('success', 'Mini test dimulai', array_merge(
+                $this->buildSectionTestPayload($attempt, $questions, $section),
+                [
+                    'resumed' => false,
+                    'result_ready' => false,
+                    'auto_submitted' => false,
+                ]
+            ));
+        } catch (RuntimeException $error) {
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 400);
+        } catch (Throwable $error) {
+            sendResponse('error', 'Gagal memulai mini test', ['details' => $error->getMessage()], 500);
+        }
+    }
+
+    public function saveSectionTestAnswer() {
+        $tokenData = verifyToken();
+        $userId = (int) $tokenData['userId'];
+        $data = json_decode(file_get_contents('php://input'), true);
+        $attemptId = (int) ($data['attempt_id'] ?? 0);
+        $questionId = (int) ($data['question_id'] ?? 0);
+        $optionId = (int) ($data['option_id'] ?? 0);
+
+        if ($attemptId <= 0 || $questionId <= 0 || $optionId <= 0) {
+            sendResponse('error', 'Attempt ID, Question ID, dan Option ID harus diisi', null, 400);
+        }
+
+        $this->mysqli->begin_transaction();
+
+        try {
+            $attempt = $this->getSectionTestAttemptForUser($attemptId, $userId, true);
+            if (!$attempt) {
+                throw new RuntimeException('Attempt mini test tidak ditemukan', 404);
+            }
+
+            $existingResult = $this->decodeSectionTestResult($attempt['result_json'] ?? null);
+            if (($attempt['status'] ?? '') !== 'ongoing') {
+                throw new RuntimeException(
+                    $existingResult ? 'Attempt mini test ini sudah selesai.' : 'Attempt mini test ini sudah tidak aktif lagi',
+                    409
+                );
+            }
+
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            $this->assertActiveAccess($userId, (int) $attempt['package_id'], $isAdmin);
+            $attemptState = $this->computeSectionTestAttemptState(
+                $attempt,
+                (int) ($attempt['duration_seconds'] ?? 0)
+            );
+
+            if (!empty($attemptState['is_expired'])) {
+                $this->mysqli->rollback();
+                $completion = $this->finalizeSectionTestAttempt($attemptId, $userId, [], $isAdmin);
+                sendResponse('error', 'Waktu mini test sudah habis. Hasil diproses otomatis.', [
+                    'attempt_completed' => true,
+                    'attempt_id' => $attemptId,
+                    'result' => $completion['result'],
+                ], 409);
+            }
+
+            $answers = $this->decodeSectionTestAnswers($attempt['answers_json'] ?? null);
+            $answers = $this->persistSectionTestAnswers(
+                $attemptId,
+                (int) $attempt['package_id'],
+                (string) ($attempt['section_code'] ?? ''),
+                $answers,
+                [[
+                    'question_id' => $questionId,
+                    'option_id' => $optionId,
+                ]]
+            );
+
+            $this->mysqli->commit();
+
+            sendResponse('success', 'Jawaban mini test berhasil disimpan', [
+                'attempt_id' => $attemptId,
+                'question_id' => $questionId,
+                'answered_count' => count($answers),
+            ]);
+        } catch (RuntimeException $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 400);
+        } catch (Throwable $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', 'Gagal menyimpan jawaban mini test', ['details' => $error->getMessage()], 500);
+        }
+    }
+
+    public function saveSectionTestReviewFlag() {
+        $tokenData = verifyToken();
+        $userId = (int) $tokenData['userId'];
+        $data = json_decode(file_get_contents('php://input'), true);
+        $attemptId = (int) ($data['attempt_id'] ?? 0);
+        $questionId = (int) ($data['question_id'] ?? 0);
+        $isMarkedReview = filter_var($data['is_marked_review'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        if ($attemptId <= 0 || $questionId <= 0) {
+            sendResponse('error', 'Attempt ID dan Question ID harus diisi', null, 400);
+        }
+
+        $this->mysqli->begin_transaction();
+
+        try {
+            $attempt = $this->getSectionTestAttemptForUser($attemptId, $userId, true);
+            if (!$attempt) {
+                throw new RuntimeException('Attempt mini test tidak ditemukan', 404);
+            }
+
+            $existingResult = $this->decodeSectionTestResult($attempt['result_json'] ?? null);
+            if (($attempt['status'] ?? '') !== 'ongoing') {
+                throw new RuntimeException(
+                    $existingResult ? 'Attempt mini test ini sudah selesai.' : 'Attempt mini test ini sudah tidak aktif lagi',
+                    409
+                );
+            }
+
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            $this->assertActiveAccess($userId, (int) $attempt['package_id'], $isAdmin);
+            $attemptState = $this->computeSectionTestAttemptState(
+                $attempt,
+                (int) ($attempt['duration_seconds'] ?? 0)
+            );
+
+            if (!empty($attemptState['is_expired'])) {
+                $this->mysqli->rollback();
+                $completion = $this->finalizeSectionTestAttempt($attemptId, $userId, [], $isAdmin);
+                sendResponse('error', 'Waktu mini test sudah habis. Hasil diproses otomatis.', [
+                    'attempt_completed' => true,
+                    'attempt_id' => $attemptId,
+                    'result' => $completion['result'],
+                ], 409);
+            }
+
+            $answers = $this->decodeSectionTestAnswers($attempt['answers_json'] ?? null);
+            if ($isMarkedReview && !$this->hasSectionTestAnsweredQuestion($answers, $questionId)) {
+                throw new RuntimeException('Jawab soal mini test ini dulu sebelum menandai ragu-ragu.', 422);
+            }
+
+            $reviewFlags = $this->decodeSectionTestReviewFlags($attempt['review_flags_json'] ?? null);
+            $reviewFlags = $this->setSectionTestReviewFlag(
+                $attemptId,
+                (int) $attempt['package_id'],
+                (string) ($attempt['section_code'] ?? ''),
+                $questionId,
+                $isMarkedReview,
+                $reviewFlags
+            );
+
+            $this->mysqli->commit();
+
+            sendResponse('success', 'Status ragu-ragu mini test berhasil disimpan', [
+                'attempt_id' => $attemptId,
+                'question_id' => $questionId,
+                'is_marked_review' => $isMarkedReview,
+                'review_count' => count($reviewFlags),
+            ]);
+        } catch (RuntimeException $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 400);
+        } catch (Throwable $error) {
+            $this->mysqli->rollback();
+            sendResponse('error', 'Gagal menyimpan status ragu-ragu mini test', ['details' => $error->getMessage()], 500);
+        }
+    }
+
+    public function submitSectionTest() {
+        $tokenData = verifyToken();
+        $userId = (int) $tokenData['userId'];
+        $data = json_decode(file_get_contents('php://input'), true);
+        $attemptId = (int) ($data['attempt_id'] ?? 0);
+        $answers = $data['answers'] ?? [];
+        $autoSubmit = filter_var($data['auto_submit'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        if ($attemptId <= 0 || !is_array($answers)) {
+            sendResponse('error', 'Data test subtest tidak lengkap', null, 400);
+        }
+
+        try {
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            if (!$autoSubmit) {
+                $attempt = $this->getSectionTestAttemptForUser($attemptId, $userId);
+                if ($attempt && ($attempt['status'] ?? '') === 'ongoing') {
+                    $reviewFlags = $this->decodeSectionTestReviewFlags($attempt['review_flags_json'] ?? null);
+                    $this->assertNoPendingSectionTestReviewFlags($reviewFlags, 'menyelesaikan mini test');
                 }
             }
 
-            $totalQuestions = count($questionIds);
-            if ($totalQuestions === 0) {
-                throw new RuntimeException('Soal test subtest tidak ditemukan', 404);
-            }
-
-            $score = round(($correctAnswers / $totalQuestions) * 100, 2);
-            $metadata = [
-                'score' => $score,
-                'correct_answers' => $correctAnswers,
-                'total_questions' => $totalQuestions,
-            ];
-            $this->upsertProgress($userId, $packageId, $sectionCode, 'subtest_test_completed', $metadata);
+            $completion = $this->finalizeSectionTestAttempt($attemptId, $userId, $answers, $isAdmin);
 
             sendResponse('success', 'Test subtest selesai dan milestone diperbarui', [
-                'package_id' => $packageId,
-                'section_code' => $sectionCode,
-                'score' => $score,
-                'correct_answers' => $correctAnswers,
-                'total_questions' => $totalQuestions,
+                'attempt_id' => $attemptId,
+                ...$completion['result'],
             ]);
         } catch (RuntimeException $error) {
             sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 400);
@@ -829,6 +1477,12 @@ if (strpos($requestPath, '/api/learning/package') !== false && $requestMethod ==
     $controller->getPackageLearning();
 } elseif (strpos($requestPath, '/api/learning/progress') !== false && $requestMethod === 'POST') {
     $controller->markProgress();
+} elseif (strpos($requestPath, '/api/learning/section-test/start') !== false && $requestMethod === 'POST') {
+    $controller->startSectionTest();
+} elseif (strpos($requestPath, '/api/learning/section-test/save-answer') !== false && $requestMethod === 'POST') {
+    $controller->saveSectionTestAnswer();
+} elseif (strpos($requestPath, '/api/learning/section-test/review-flag') !== false && $requestMethod === 'POST') {
+    $controller->saveSectionTestReviewFlag();
 } elseif (strpos($requestPath, '/api/learning/section-test/submit') !== false && $requestMethod === 'POST') {
     $controller->submitSectionTest();
 } elseif (strpos($requestPath, '/api/learning/section-test') !== false && $requestMethod === 'GET') {

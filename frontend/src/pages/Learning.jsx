@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
@@ -121,6 +121,8 @@ export default function Learning() {
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const sectionTestSavingRef = useRef({});
+  const sectionTestPendingSaveRef = useRef({});
 
   const fetchLearning = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0) {
@@ -210,6 +212,9 @@ export default function Learning() {
   const packageData = learning?.package || null;
   const currentSectionTest = activeSection ? sectionTests[activeSection.code] || {} : {};
   const currentSectionQuestions = currentSectionTest.questions || [];
+  const currentSectionSavedAnswers = currentSectionTest.savedAnswers || {};
+  const currentSectionDraftAnswers = currentSectionTest.draftAnswers || {};
+  const currentSectionReviewFlags = currentSectionTest.reviewFlags || {};
   const currentSectionQuestion = useMemo(() => {
     if (!currentSectionQuestions.length) {
       return null;
@@ -261,15 +266,59 @@ export default function Learning() {
     [activeSection?.progress?.subtest_test_result, currentSectionTest.result]
   );
   const currentSectionAnsweredCount = useMemo(
-    () => currentSectionQuestions.filter((question) => Boolean(currentSectionTest.answers?.[question.id] || currentSectionTest.answers?.[String(question.id)])).length,
-    [currentSectionQuestions, currentSectionTest.answers]
+    () => currentSectionQuestions.filter((question) => {
+      const draftValue = currentSectionDraftAnswers[question.id] || currentSectionDraftAnswers[String(question.id)];
+      const savedValue = currentSectionSavedAnswers[question.id] || currentSectionSavedAnswers[String(question.id)];
+      return Boolean(draftValue || savedValue);
+    }).length,
+    [currentSectionDraftAnswers, currentSectionQuestions, currentSectionSavedAnswers]
   );
   const currentSectionAllAnswered = useMemo(
-    () => currentSectionQuestions.length > 0 && currentSectionQuestions.every((question) => Boolean(currentSectionTest.answers?.[question.id] || currentSectionTest.answers?.[String(question.id)])),
-    [currentSectionQuestions, currentSectionTest.answers]
+    () => currentSectionQuestions.length > 0 && currentSectionQuestions.every((question) => {
+      const draftValue = currentSectionDraftAnswers[question.id] || currentSectionDraftAnswers[String(question.id)];
+      const savedValue = currentSectionSavedAnswers[question.id] || currentSectionSavedAnswers[String(question.id)];
+      return Boolean(draftValue || savedValue);
+    }),
+    [currentSectionDraftAnswers, currentSectionQuestions, currentSectionSavedAnswers]
   );
   const previousSectionQuestionId = currentSectionQuestionIndex > 0 ? currentSectionQuestions[currentSectionQuestionIndex - 1]?.id : null;
   const nextSectionQuestionId = currentSectionQuestionIndex >= 0 ? currentSectionQuestions[currentSectionQuestionIndex + 1]?.id : null;
+  const hasOngoingSectionAttempt = Boolean(currentSectionTest.attemptId && !currentSectionTest.result);
+  const currentSectionUnsavedAnswers = useMemo(() => (
+    Object.entries(currentSectionDraftAnswers)
+      .filter(([questionId, optionId]) => Number(currentSectionSavedAnswers[questionId] || 0) !== Number(optionId || 0))
+      .map(([questionId, optionId]) => ({
+        question_id: Number(questionId),
+        option_id: Number(optionId),
+      }))
+  ), [currentSectionDraftAnswers, currentSectionSavedAnswers]);
+  const isCurrentQuestionMarkedForReview = useMemo(
+    () => Boolean(
+      currentSectionReviewFlags[String(currentSectionQuestion?.id)] || currentSectionReviewFlags[currentSectionQuestion?.id]
+    ),
+    [currentSectionQuestion?.id, currentSectionReviewFlags]
+  );
+  const currentSectionCurrentAnswerValue = useMemo(
+    () => Number(
+      currentSectionDraftAnswers[currentSectionQuestion?.id]
+      || currentSectionDraftAnswers[String(currentSectionQuestion?.id)]
+      || currentSectionSavedAnswers[currentSectionQuestion?.id]
+      || currentSectionSavedAnswers[String(currentSectionQuestion?.id)]
+      || 0
+    ),
+    [currentSectionDraftAnswers, currentSectionQuestion?.id, currentSectionSavedAnswers]
+  );
+  const hasCurrentSectionAnswerSelected = currentSectionCurrentAnswerValue > 0;
+  const pendingSectionReviewQuestionNumbers = useMemo(
+    () => currentSectionQuestions.reduce((numbers, question, index) => {
+      if (currentSectionReviewFlags[String(question.id)] || currentSectionReviewFlags[question.id]) {
+        numbers.push(index + 1);
+      }
+      return numbers;
+    }, []),
+    [currentSectionQuestions, currentSectionReviewFlags]
+  );
+  const pendingSectionReviewQuestionNumberLabel = pendingSectionReviewQuestionNumbers.join(', ');
   const completedTryout = Number(summary.completed_attempts || 0) > 0;
   const materialDoneCount = sections.filter((section) => section.progress.material_read).length;
   const subtestDoneCount = sections.filter((section) => section.progress.subtest_test_completed).length;
@@ -412,7 +461,7 @@ export default function Learning() {
     }
   };
 
-  const loadSectionTest = async (sectionCode, { restart = false } = {}) => {
+  const loadSectionTest = useCallback(async (sectionCode, { restart = false } = {}) => {
     setSectionTests((current) => ({
       ...current,
       [sectionCode]: {
@@ -420,48 +469,67 @@ export default function Learning() {
         loading: true,
         open: true,
         error: '',
+        saveMessage: '',
       },
     }));
     setError('');
     setSuccessMessage('');
 
     try {
-      const response = await apiClient.get(
-        `/learning/section-test?package_id=${numericPackageId}&section_code=${encodeURIComponent(sectionCode)}`
-      );
-      const questions = response.data.data?.questions || [];
-      const sectionMeta = response.data.data?.section || sectionLookup.get(sectionCode) || null;
-      setSectionTests((current) => ({
-        ...(current || {}),
-        [sectionCode]: (() => {
-          const existingState = current[sectionCode] || {};
-          const answers = restart ? {} : (existingState.answers || {});
-          const durationSeconds = !restart && Number(existingState.totalDurationSeconds || 0) > 0
-            ? Number(existingState.totalDurationSeconds)
-            : computeMiniTestDurationSeconds(sectionMeta, questions.length);
-          const remainingSeconds = restart
-            ? durationSeconds
-            : existingState.result
-            ? Number(existingState.remainingSeconds || durationSeconds)
-            : Math.max(0, Number(existingState.remainingSeconds || durationSeconds));
+      const response = await apiClient.post('/learning/section-test/start', {
+        package_id: numericPackageId,
+        section_code: sectionCode,
+        restart,
+      });
+      const payload = response.data.data || {};
+      const questions = payload.questions || [];
+      const savedAnswers = payload.saved_answers || {};
+      const reviewFlags = payload.review_flags || {};
+      const result = payload.result || null;
+      const sectionMeta = payload.section || sectionLookup.get(sectionCode) || null;
+      const durationSeconds = Number(payload.attempt?.state?.total_duration_seconds || computeMiniTestDurationSeconds(sectionMeta, questions.length));
+      const remainingSeconds = Number(payload.attempt?.state?.remaining_seconds || durationSeconds);
 
-          return {
+      if (payload.result_ready && result) {
+        updateSectionProgress(sectionCode, {
+          subtest_test_completed: true,
+          subtest_test_completed_at: new Date().toISOString(),
+          subtest_test_result: result,
+        });
+        setSuccessMessage(payload.auto_submitted ? 'Waktu mini test habis dan hasil diproses otomatis.' : '');
+      }
+
+      sectionTestPendingSaveRef.current[sectionCode] = null;
+      sectionTestSavingRef.current[sectionCode] = false;
+
+      setSectionTests((current) => {
+        const existingState = current[sectionCode] || {};
+        const nextDraftAnswers = restart ? savedAnswers : { ...savedAnswers };
+        const nextCurrentQuestionId = questions.some((question) => Number(question.id) === Number(existingState.currentQuestionId))
+          ? Number(existingState.currentQuestionId)
+          : findInitialMiniTestQuestionId(questions, nextDraftAnswers);
+
+        return {
+          ...(current || {}),
+          [sectionCode]: {
             ...existingState,
+            attemptId: Number(payload.attempt_id || payload.attempt?.id || 0) || null,
             loading: false,
-            open: true,
+            open: !payload.result_ready,
             questions,
-            answers,
-            currentQuestionId: !restart && questions.some((question) => Number(question.id) === Number(existingState.currentQuestionId))
-              ? Number(existingState.currentQuestionId)
-              : findInitialMiniTestQuestionId(questions, answers),
+            savedAnswers,
+            draftAnswers: nextDraftAnswers,
+            reviewFlags,
+            currentQuestionId: nextCurrentQuestionId,
             totalDurationSeconds: durationSeconds,
             remainingSeconds,
-            result: restart ? null : (existingState.result || null),
+            result,
             autoSubmitting: false,
             error: '',
-          };
-        })(),
-      }));
+            saveMessage: '',
+          },
+        };
+      });
     } catch (err) {
       setSectionTests((current) => ({
         ...current,
@@ -470,10 +538,11 @@ export default function Learning() {
           loading: false,
           open: true,
           error: err.response?.data?.message || 'Gagal memuat test subtest',
+          saveMessage: '',
         },
       }));
     }
-  };
+  }, [numericPackageId, sectionLookup]);
 
   const closeSectionTest = (sectionCode) => {
     if (!sectionCode) {
@@ -488,28 +557,153 @@ export default function Learning() {
         loading: false,
         autoSubmitting: false,
         error: '',
+        saveMessage: '',
       },
     }));
   };
 
-  const setSectionAnswer = (sectionCode, questionId, optionId) => {
+  const saveSectionTestAnswer = useCallback(async (sectionCode, questionId, optionId, nextQuestionId = null) => {
+    const testState = sectionTests[sectionCode] || {};
+    const attemptId = Number(testState.attemptId || 0);
+    if (!attemptId || !questionId || !optionId) {
+      return;
+    }
+
+    if (sectionTestSavingRef.current[sectionCode]) {
+      sectionTestPendingSaveRef.current[sectionCode] = {
+        questionId: Number(questionId),
+        optionId: Number(optionId),
+        nextQuestionId: nextQuestionId ? Number(nextQuestionId) : null,
+      };
+      return;
+    }
+
+    sectionTestSavingRef.current[sectionCode] = true;
+
     setSectionTests((current) => ({
       ...current,
       [sectionCode]: {
         ...(current[sectionCode] || {}),
-        answers: {
-          ...(current[sectionCode]?.answers || {}),
+        error: '',
+        saveMessage: '',
+      },
+    }));
+
+    try {
+      await apiClient.post('/learning/section-test/save-answer', {
+        attempt_id: attemptId,
+        question_id: questionId,
+        option_id: optionId,
+      });
+
+      setSectionTests((current) => ({
+        ...current,
+        [sectionCode]: {
+          ...(current[sectionCode] || {}),
+          savedAnswers: {
+            ...(current[sectionCode]?.savedAnswers || {}),
+            [questionId]: Number(optionId),
+          },
+          draftAnswers: {
+            ...(current[sectionCode]?.draftAnswers || {}),
+            [questionId]: Number(optionId),
+          },
+          currentQuestionId: nextQuestionId ? Number(nextQuestionId) : current[sectionCode]?.currentQuestionId,
+          error: '',
+          saveMessage: 'Jawaban tersimpan.',
+        },
+      }));
+    } catch (err) {
+      const payload = err.response?.data?.data;
+      if (payload?.attempt_completed) {
+        const result = payload.result || null;
+        if (result) {
+          updateSectionProgress(sectionCode, {
+            subtest_test_completed: true,
+            subtest_test_completed_at: new Date().toISOString(),
+            subtest_test_result: result,
+          });
+        }
+        setSectionTests((current) => ({
+          ...current,
+          [sectionCode]: {
+            ...(current[sectionCode] || {}),
+            result,
+            autoSubmitting: false,
+            error: '',
+            saveMessage: '',
+          },
+        }));
+        return;
+      }
+
+      setSectionTests((current) => ({
+        ...current,
+        [sectionCode]: {
+          ...(current[sectionCode] || {}),
+          error: err.response?.data?.message || 'Gagal menyimpan jawaban mini test',
+          saveMessage: '',
+        },
+      }));
+    } finally {
+      sectionTestSavingRef.current[sectionCode] = false;
+
+      const pendingSave = sectionTestPendingSaveRef.current[sectionCode];
+      sectionTestPendingSaveRef.current[sectionCode] = null;
+
+      if (
+        pendingSave
+        && (
+          pendingSave.questionId !== Number(questionId)
+          || pendingSave.optionId !== Number(optionId)
+          || pendingSave.nextQuestionId !== (nextQuestionId ? Number(nextQuestionId) : null)
+        )
+      ) {
+        await saveSectionTestAnswer(
+          sectionCode,
+          pendingSave.questionId,
+          pendingSave.optionId,
+          pendingSave.nextQuestionId
+        );
+      }
+    }
+  }, [sectionTests]);
+
+  const setSectionAnswer = useCallback((sectionCode, questionId, optionId) => {
+    setSectionTests((current) => ({
+      ...current,
+      [sectionCode]: {
+        ...(current[sectionCode] || {}),
+        draftAnswers: {
+          ...(current[sectionCode]?.draftAnswers || {}),
           [questionId]: Number(optionId),
         },
         result: null,
         error: '',
+        saveMessage: '',
       },
     }));
-  };
 
-  const goToSectionQuestion = (sectionCode, questionId) => {
+    saveSectionTestAnswer(sectionCode, questionId, optionId);
+  }, [saveSectionTestAnswer]);
+
+  const goToSectionQuestion = useCallback((sectionCode, questionId) => {
     if (!sectionCode || !questionId) {
       return;
+    }
+
+    const testState = sectionTests[sectionCode] || {};
+    const questions = testState.questions || [];
+    const currentQuestion = questions.find((question) => Number(question.id) === Number(testState.currentQuestionId));
+
+    if (currentQuestion) {
+      const currentSavedAnswerValue = Number(testState.savedAnswers?.[String(currentQuestion.id)] || testState.savedAnswers?.[currentQuestion.id] || 0);
+      const currentDraftAnswerValue = Number(testState.draftAnswers?.[String(currentQuestion.id)] || testState.draftAnswers?.[currentQuestion.id] || 0);
+      const hasUnsavedCurrentAnswer = currentDraftAnswerValue > 0 && currentDraftAnswerValue !== currentSavedAnswerValue;
+
+      if (hasUnsavedCurrentAnswer) {
+        saveSectionTestAnswer(sectionCode, currentQuestion.id, currentDraftAnswerValue);
+      }
     }
 
     setSectionTests((current) => ({
@@ -517,9 +711,10 @@ export default function Learning() {
       [sectionCode]: {
         ...(current[sectionCode] || {}),
         currentQuestionId: Number(questionId),
+        saveMessage: '',
       },
     }));
-  };
+  }, [saveSectionTestAnswer, sectionTests]);
 
   const handleSectionRelativeNavigation = (sectionCode, direction) => {
     const testState = sectionTests[sectionCode] || {};
@@ -533,15 +728,113 @@ export default function Learning() {
     goToSectionQuestion(sectionCode, targetQuestion.id);
   };
 
-  const submitSectionTest = async (sectionCode, { allowPartial = false } = {}) => {
+  const toggleSectionReviewFlag = useCallback(async (sectionCode, questionId) => {
+    const testState = sectionTests[sectionCode] || {};
+    const attemptId = Number(testState.attemptId || 0);
+    if (!attemptId || !questionId) {
+      return;
+    }
+
+    const questionKey = String(questionId);
+    const currentDraftAnswerValue = Number(testState.draftAnswers?.[questionKey] || testState.draftAnswers?.[questionId] || 0);
+    const currentSavedAnswerValue = Number(testState.savedAnswers?.[questionKey] || testState.savedAnswers?.[questionId] || 0);
+
+    if (currentDraftAnswerValue <= 0 && currentSavedAnswerValue <= 0) {
+      setSectionTests((current) => ({
+        ...current,
+        [sectionCode]: {
+          ...(current[sectionCode] || {}),
+          error: 'Pilih jawaban dulu sebelum menandai ragu-ragu.',
+          saveMessage: '',
+        },
+      }));
+      return;
+    }
+
+    if (currentDraftAnswerValue > 0 && currentDraftAnswerValue !== currentSavedAnswerValue) {
+      await saveSectionTestAnswer(sectionCode, questionId, currentDraftAnswerValue);
+    }
+
+    const nextMarkedReview = !Boolean(testState.reviewFlags?.[questionKey] || testState.reviewFlags?.[questionId]);
+
+    setSectionTests((current) => ({
+      ...current,
+      [sectionCode]: {
+        ...(current[sectionCode] || {}),
+        reviewFlags: (() => {
+          const nextFlags = { ...(current[sectionCode]?.reviewFlags || {}) };
+          if (nextMarkedReview) {
+            nextFlags[questionKey] = true;
+          } else {
+            delete nextFlags[questionKey];
+          }
+          return nextFlags;
+        })(),
+        error: '',
+        saveMessage: '',
+      },
+    }));
+
+    try {
+      await apiClient.post('/learning/section-test/review-flag', {
+        attempt_id: attemptId,
+        question_id: questionId,
+        is_marked_review: nextMarkedReview,
+      });
+    } catch (err) {
+      const payload = err.response?.data?.data;
+      if (payload?.attempt_completed) {
+        const result = payload.result || null;
+        if (result) {
+          updateSectionProgress(sectionCode, {
+            subtest_test_completed: true,
+            subtest_test_completed_at: new Date().toISOString(),
+            subtest_test_result: result,
+          });
+        }
+        setSectionTests((current) => ({
+          ...current,
+          [sectionCode]: {
+            ...(current[sectionCode] || {}),
+            result,
+            autoSubmitting: false,
+            error: '',
+            saveMessage: '',
+          },
+        }));
+        return;
+      }
+
+      setSectionTests((current) => ({
+        ...current,
+        [sectionCode]: {
+          ...(current[sectionCode] || {}),
+          reviewFlags: (() => {
+            const revertedFlags = { ...(current[sectionCode]?.reviewFlags || {}) };
+            if (nextMarkedReview) {
+              delete revertedFlags[questionKey];
+            } else {
+              revertedFlags[questionKey] = true;
+            }
+            return revertedFlags;
+          })(),
+          error: err.response?.data?.message || 'Gagal menyimpan status ragu-ragu mini test',
+          saveMessage: '',
+        },
+      }));
+    }
+  }, [saveSectionTestAnswer, sectionTests]);
+
+  const submitSectionTest = useCallback(async (sectionCode, { allowPartial = false, confirmManual = false, autoSubmit = false } = {}) => {
     const testState = sectionTests[sectionCode] || {};
     const questions = testState.questions || [];
-    const answers = questions
-      .map((question) => ({
-        question_id: question.id,
-        option_id: testState.answers?.[question.id],
-      }))
-      .filter((answer) => answer.option_id);
+    const attemptId = Number(testState.attemptId || 0);
+    const answers = Object.entries(testState.draftAnswers || {})
+      .filter(([questionId, optionId]) => Number(testState.savedAnswers?.[questionId] || 0) !== Number(optionId || 0))
+      .map(([questionId, optionId]) => ({
+        question_id: Number(questionId),
+        option_id: Number(optionId),
+      }));
 
     if (questions.length === 0) {
       setSectionTests((current) => ({
@@ -554,15 +847,62 @@ export default function Learning() {
       return;
     }
 
-    if (!allowPartial && answers.length < questions.length) {
+    if (!attemptId) {
       setSectionTests((current) => ({
         ...current,
         [sectionCode]: {
           ...(current[sectionCode] || {}),
-          error: 'Lengkapi semua jawaban mini test dulu.',
+          error: 'Attempt mini test belum siap. Coba mulai ulang mini test ini.',
         },
       }));
       return;
+    }
+
+    const answeredCount = questions.filter((question) => {
+      const draftValue = testState.draftAnswers?.[String(question.id)] || testState.draftAnswers?.[question.id];
+      const savedValue = testState.savedAnswers?.[String(question.id)] || testState.savedAnswers?.[question.id];
+      return Boolean(draftValue || savedValue);
+    }).length;
+
+    const pendingReviewNumbers = questions.reduce((numbers, question, index) => {
+      if (testState.reviewFlags?.[String(question.id)] || testState.reviewFlags?.[question.id]) {
+        numbers.push(index + 1);
+      }
+      return numbers;
+    }, []);
+
+    if (!allowPartial && answeredCount === 0) {
+      setSectionTests((current) => ({
+        ...current,
+        [sectionCode]: {
+          ...(current[sectionCode] || {}),
+          error: 'Pilih minimal satu jawaban sebelum submit mini test.',
+        },
+      }));
+      return;
+    }
+
+    if (!autoSubmit && pendingReviewNumbers.length > 0) {
+      setSectionTests((current) => ({
+        ...current,
+        [sectionCode]: {
+          ...(current[sectionCode] || {}),
+          error: `Matikan status ragu-ragu pada soal nomor ${pendingReviewNumbers.join(', ')} sebelum submit mini test.`,
+          saveMessage: '',
+        },
+      }));
+      return;
+    }
+
+    if (confirmManual) {
+      const confirmed = window.confirm(
+        allowPartial || answeredCount === questions.length
+          ? 'Yakin ingin menyelesaikan mini test sekarang? Nilai akan langsung diproses.'
+          : 'Masih ada soal yang kosong. Yakin ingin menyelesaikan mini test sekarang? Nilai akan langsung diproses.'
+      );
+      if (!confirmed) {
+        return;
+      }
     }
 
     setActionLoading(`test-${sectionCode}`);
@@ -571,20 +911,24 @@ export default function Learning() {
 
     try {
       const response = await apiClient.post('/learning/section-test/submit', {
-        package_id: numericPackageId,
-        section_code: sectionCode,
+        attempt_id: attemptId,
         answers,
+        auto_submit: autoSubmit,
       });
-      const result = response.data.data;
+      const result = response.data.data || null;
       setSectionTests((current) => ({
         ...current,
         [sectionCode]: {
           ...(current[sectionCode] || {}),
           result,
-          open: false,
+          open: true,
           loading: false,
           autoSubmitting: false,
           error: '',
+          saveMessage: '',
+          savedAnswers: {
+            ...(current[sectionCode]?.draftAnswers || {}),
+          },
         },
       }));
       updateSectionProgress(sectionCode, {
@@ -601,12 +945,13 @@ export default function Learning() {
           ...(current[sectionCode] || {}),
           autoSubmitting: false,
           error: err.response?.data?.message || 'Gagal menyimpan mini test subtest',
+          saveMessage: '',
         },
       }));
     } finally {
       setActionLoading('');
     }
-  };
+  }, [fetchLearning, numericPackageId, sectionTests]);
 
   const openTryoutView = () => {
     setContentView('tryout');
@@ -683,8 +1028,8 @@ export default function Learning() {
       },
     }));
 
-    submitSectionTest(activeSection.code, { allowPartial: true });
-  }, [actionLoading, activeSection?.code, activeSectionView, hasAccess, sectionTests]);
+    submitSectionTest(activeSection.code, { allowPartial: true, autoSubmit: true });
+  }, [actionLoading, activeSection?.code, activeSectionView, hasAccess, sectionTests, submitSectionTest]);
 
   if (loading) {
     return (
@@ -1077,12 +1422,16 @@ export default function Learning() {
                     <p className="text-muted">Soal mini test belum siap ditampilkan.</p>
                   ) : (
                     <>
+                      {currentSectionTest.saveMessage && (
+                        <div className="test-feedback test-feedback-success">{currentSectionTest.saveMessage}</div>
+                      )}
+
                       <section className="test-hero">
                         <div className="test-hero-copy">
                           <p className="test-hero-kicker">Mini Test Subtest</p>
                           <h1 className="test-hero-title">{activeSection.name}</h1>
                           <p className="test-hero-description">
-                            Kerjakan soal satu per satu seperti mode tryout, lalu kirim hasil saat semua jawaban sudah siap.
+                            Flow mini test sekarang mengikuti tryout: jawaban tersimpan otomatis, soal bisa ditandai ragu-ragu, dan hasil diproses saat kamu selesaikan atau waktu habis.
                           </p>
                           <div className="test-hero-pills" aria-label="Ringkasan mini test subtest">
                             <span>{packageData.name}</span>
@@ -1147,12 +1496,18 @@ export default function Learning() {
                                 <div className="test-inline-navigation-head">
                                   <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
                                   <p className="test-inline-navigation-note">
-                                    Klik nomor soal untuk berpindah. Semua jawaban tersimpan lokal sampai dikirim.
+                                    Klik nomor soal. Kuning berarti ragu-ragu.
                                   </p>
                                 </div>
                                 <div className="test-question-strip test-question-strip-inline" role="tablist" aria-label="Navigasi mini test subtest">
                                   {currentSectionQuestions.map((question, index) => {
-                                    const answeredValue = currentSectionTest.answers?.[question.id] || currentSectionTest.answers?.[String(question.id)];
+                                    const answeredValue = currentSectionDraftAnswers[question.id]
+                                      || currentSectionDraftAnswers[String(question.id)]
+                                      || currentSectionSavedAnswers[question.id]
+                                      || currentSectionSavedAnswers[String(question.id)];
+                                    const isMarkedForReview = Boolean(
+                                      currentSectionReviewFlags[String(question.id)] || currentSectionReviewFlags[question.id]
+                                    );
 
                                     return (
                                       <button
@@ -1167,10 +1522,13 @@ export default function Learning() {
                                             : answeredValue
                                             ? 'test-nav-chip-done'
                                             : 'test-nav-chip-empty',
+                                          isMarkedForReview ? 'test-nav-chip-review' : '',
                                         ].filter(Boolean).join(' ')}
-                                        aria-label={`Soal ${index + 1}`}
+                                        aria-label={`Soal ${index + 1}${isMarkedForReview ? ', ditandai ragu-ragu' : ''}`}
+                                        title={isMarkedForReview ? `Soal ${index + 1} ditandai ragu-ragu` : `Soal ${index + 1}`}
                                       >
                                         {index + 1}
+                                        {isMarkedForReview && <span className="test-nav-chip-flag" aria-hidden="true" />}
                                       </button>
                                     );
                                   })}
@@ -1178,6 +1536,7 @@ export default function Learning() {
                                 <div className="test-nav-legend">
                                   <p><span className="test-nav-legend-dot test-nav-legend-dot-current" />Soal aktif</p>
                                   <p><span className="test-nav-legend-dot test-nav-legend-dot-done" />Sudah dijawab</p>
+                                  <p><span className="test-nav-legend-dot test-nav-legend-dot-review" />Ragu-ragu</p>
                                   <p><span className="test-nav-legend-dot test-nav-legend-dot-empty" />Belum dijawab</p>
                                 </div>
                               </div>
@@ -1214,13 +1573,14 @@ export default function Learning() {
                                 {currentSectionQuestion.options?.map((option) => (
                                   <label
                                     key={option.id}
-                                    className={`test-option ${Number(currentSectionTest.answers?.[currentSectionQuestion.id] || currentSectionTest.answers?.[String(currentSectionQuestion.id)] || 0) === Number(option.id) ? 'test-option-active' : ''}`}
+                                    className={`test-option ${Number(currentSectionDraftAnswers[currentSectionQuestion.id] || currentSectionDraftAnswers[String(currentSectionQuestion.id)] || currentSectionSavedAnswers[currentSectionQuestion.id] || currentSectionSavedAnswers[String(currentSectionQuestion.id)] || 0) === Number(option.id) ? 'test-option-active' : ''}`}
                                   >
                                     <input
                                       type="radio"
                                       name={`section-${activeSection.code}-question-${currentSectionQuestion.id}`}
-                                      checked={Number(currentSectionTest.answers?.[currentSectionQuestion.id] || currentSectionTest.answers?.[String(currentSectionQuestion.id)] || 0) === Number(option.id)}
+                                      checked={Number(currentSectionDraftAnswers[currentSectionQuestion.id] || currentSectionDraftAnswers[String(currentSectionQuestion.id)] || currentSectionSavedAnswers[currentSectionQuestion.id] || currentSectionSavedAnswers[String(currentSectionQuestion.id)] || 0) === Number(option.id)}
                                       onChange={() => setSectionAnswer(activeSection.code, currentSectionQuestion.id, option.id)}
+                                      disabled={Boolean(currentSectionTest.result)}
                                       className="mt-1 w-5 h-5 accent-blue-600"
                                     />
                                     <div className="test-option-copy">
@@ -1258,14 +1618,27 @@ export default function Learning() {
                                   >
                                     Selanjutnya →
                                   </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleSectionReviewFlag(activeSection.code, currentSectionQuestion.id)}
+                                    disabled={Boolean(currentSectionTest.result) || !hasCurrentSectionAnswerSelected}
+                                    title={hasCurrentSectionAnswerSelected ? undefined : 'Pilih jawaban dulu untuk mengaktifkan ragu-ragu'}
+                                    className={`btn btn-outline test-action-button ${
+                                      isCurrentQuestionMarkedForReview ? 'test-action-button-review-active' : ''
+                                    }`}
+                                  >
+                                    {isCurrentQuestionMarkedForReview ? 'Batalkan Ragu-ragu' : 'Tandai Ragu-ragu'}
+                                  </button>
                                 </div>
 
                                 <div className="test-action-helper">
                                   {currentSectionTest.result
                                     ? 'Hasil terakhir sudah tersimpan. Kamu bisa kembali ke menu mini test atau ulangi dari awal.'
                                     : currentSectionAllAnswered
-                                    ? 'Semua jawaban siap dikirim.'
-                                    : 'Lengkapi semua soal sebelum submit. Jika waktu habis, jawaban yang sudah diisi akan langsung diproses.'}
+                                    ? 'Semua jawaban sudah terisi dan terus tersimpan otomatis.'
+                                    : 'Jawaban tersimpan otomatis saat dipilih. Jika waktu habis, jawaban yang sudah masuk akan langsung diproses.'}
+                                  {!currentSectionTest.result && !hasCurrentSectionAnswerSelected ? ' Pilih salah satu opsi dulu untuk membuka tombol ragu-ragu.' : ''}
                                 </div>
 
                                 <div className="test-action-buttons test-action-buttons-end">
@@ -1276,7 +1649,7 @@ export default function Learning() {
                                     onClick={() => (
                                       currentSectionTest.result
                                         ? loadSectionTest(activeSection.code, { restart: true })
-                                        : submitSectionTest(activeSection.code)
+                                        : submitSectionTest(activeSection.code, { confirmManual: true })
                                     )}
                                   >
                                     {actionLoading === `test-${activeSection.code}`
@@ -1324,7 +1697,9 @@ export default function Learning() {
                       <p className="test-hero-kicker">Preview Mini Test</p>
                       <h1 className="test-hero-title">{activeSection.name}</h1>
                       <p className="test-hero-description">
-                        Cek dulu ringkasannya. Timer baru berjalan setelah kamu menekan tombol mulai.
+                        {hasOngoingSectionAttempt
+                          ? 'Mini test ini masih berjalan. Buka lagi untuk melanjutkan dari jawaban dan waktu terakhir.'
+                          : 'Cek dulu ringkasannya. Timer baru berjalan setelah kamu menekan tombol mulai.'}
                       </p>
                       <div className="test-hero-pills" aria-label="Ringkasan preview mini test subtest">
                         <span>{packageData.name}</span>
@@ -1351,9 +1726,11 @@ export default function Learning() {
                       </div>
                       <div className="test-hero-stat-card">
                         <span>Status</span>
-                        <strong>{activeSection.progress.subtest_test_completed ? 'Pernah selesai' : 'Belum dimulai'}</strong>
+                        <strong>{hasOngoingSectionAttempt ? 'Sedang berjalan' : activeSection.progress.subtest_test_completed ? 'Pernah selesai' : 'Belum dimulai'}</strong>
                         <small>
-                          {activeSection.progress.subtest_test_completed
+                          {hasOngoingSectionAttempt
+                            ? 'Jawaban dan timer akan dilanjutkan dari attempt yang masih aktif.'
+                            : activeSection.progress.subtest_test_completed
                             ? 'Kamu bisa mulai lagi untuk mengulang mini test ini.'
                             : 'Belum ada timer yang berjalan sebelum tombol mulai ditekan.'}
                         </small>
@@ -1393,9 +1770,9 @@ export default function Learning() {
                       type="button"
                       className="btn btn-primary"
                       disabled={activeSectionMiniTestQuestionCount <= 0}
-                      onClick={() => loadSectionTest(activeSection.code, { restart: Boolean(latestSectionMiniTestResult) })}
+                      onClick={() => loadSectionTest(activeSection.code, { restart: Boolean(latestSectionMiniTestResult && !hasOngoingSectionAttempt) })}
                     >
-                      {latestSectionMiniTestResult ? 'Ulangi Mini Test' : 'Mulai Mini Test'}
+                      {hasOngoingSectionAttempt ? 'Lanjutkan Mini Test' : latestSectionMiniTestResult ? 'Ulangi Mini Test' : 'Mulai Mini Test'}
                     </button>
                   </div>
                 </div>

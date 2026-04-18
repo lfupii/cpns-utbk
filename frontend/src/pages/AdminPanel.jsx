@@ -327,6 +327,18 @@ function truncateText(value, length = 110) {
   return `${normalized.slice(0, length).trim()}...`;
 }
 
+function formatDifficultyLabel(value) {
+  if (value === 'easy') {
+    return 'Mudah';
+  }
+
+  if (value === 'hard') {
+    return 'Sulit';
+  }
+
+  return 'Sedang';
+}
+
 function AdminImagePreview({ src, alt, className = '' }) {
   if (!src) {
     return null;
@@ -528,11 +540,6 @@ export default function AdminPanel() {
       return haystack.includes(needle);
     });
   }, [questionQuery, questionSectionFilter, questions]);
-  const activeQuestionPreview = useMemo(
-    () => questions.find((question) => Number(question.id) === Number(expandedQuestionId)) || null,
-    [expandedQuestionId, questions]
-  );
-
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
   const learningQuestionImagePanelVisible = showLearningQuestionImageTools || Boolean(activeLearningQuestion?.question_image_url);
   const miniTestDurationSeconds = useMemo(
@@ -1364,7 +1371,10 @@ export default function AdminPanel() {
       await apiClient.put('/admin/learning-section-questions', {
         package_id: Number(selectedPackageId),
         section_code: activeLearningSection.code,
-        questions: learningQuestionsForm,
+        questions: learningQuestionsForm.map((question, index) => ({
+          ...question,
+          question_order: index + 1,
+        })),
       });
       await refreshAdminData(Number(selectedPackageId));
       setSuccess('Soal mini test subtest berhasil disimpan.');
@@ -2447,7 +2457,7 @@ export default function AdminPanel() {
                               <span className="admin-preview-eyebrow">{activeLearningSection.name}</span>
                               <h3>Editor Mini Test</h3>
                               <p className="text-muted">
-                                Navigasi soal, preview aktif, dan alur edit sekarang mengikuti editor soal tryout agar lebih fokus.
+                                Preview aktif tampil lebih dulu, lalu daftar soal dan form edit mengikuti alur bank soal tryout.
                               </p>
                             </div>
                             <div className="admin-question-editor-actions">
@@ -2458,23 +2468,6 @@ export default function AdminPanel() {
                                 Tutup Editor
                               </button>
                             </div>
-                          </div>
-
-                          <div className="admin-learning-quiz-nav">
-                            {learningQuestionsForm.map((question, questionIndex) => {
-                              const isActiveQuestion = questionIndex === activeLearningQuestionIndex;
-                              return (
-                                <button
-                                  key={`learning-question-nav-${questionIndex}`}
-                                  type="button"
-                                  className={`admin-learning-quiz-nav-button ${isActiveQuestion ? 'admin-learning-quiz-nav-button-active' : ''}`}
-                                  onClick={() => selectLearningQuestion(questionIndex)}
-                                >
-                                  <span>{`Soal ${questionIndex + 1}`}</span>
-                                  <strong>{truncateText(question.question_text || 'Pertanyaan belum diisi', 54)}</strong>
-                                </button>
-                              );
-                            })}
                           </div>
 
                           {activeLearningQuestion && (
@@ -2489,8 +2482,7 @@ export default function AdminPanel() {
                                     </p>
                                   </div>
                                   <div className="admin-question-preview-actions">
-                                    <span className="admin-question-row-count">{`Urutan ${activeLearningQuestion.question_order}`}</span>
-                                    <span className="admin-question-row-count">{activeLearningQuestion.difficulty}</span>
+                                    <span className="admin-question-row-count">{formatDifficultyLabel(activeLearningQuestion.difficulty)}</span>
                                   </div>
                                 </div>
 
@@ -2527,6 +2519,80 @@ export default function AdminPanel() {
                                       </div>
                                     ))}
                                   </div>
+                                </div>
+                              </section>
+
+                              <section className="account-card admin-panel-card admin-list-card admin-test-bank-shell">
+                                <div className="admin-section-header admin-list-toolbar">
+                                  <div>
+                                    <h3>Daftar Soal Mini Test</h3>
+                                    <p className="text-muted">
+                                      Pilih soal dari daftar ini untuk mengganti preview aktif lalu lanjut edit di form bawah.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="admin-question-table admin-question-table-modern">
+                                  <div className="admin-question-table-head">
+                                    <span />
+                                    <span>Pertanyaan</span>
+                                    <span>Kesulitan</span>
+                                    <span>Opsi</span>
+                                    <span>Aksi</span>
+                                  </div>
+                                  {learningQuestionsForm.map((question, questionIndex) => {
+                                    const isActiveQuestion = questionIndex === activeLearningQuestionIndex;
+                                    return (
+                                      <div
+                                        key={`learning-question-row-${questionIndex}`}
+                                        className={`admin-question-row-wrap admin-question-row-wrap-modern ${isActiveQuestion ? 'admin-question-row-wrap-expanded' : ''}`}
+                                      >
+                                        <div className="admin-question-row">
+                                          <button
+                                            type="button"
+                                            className="admin-question-expand"
+                                            onClick={() => selectLearningQuestion(questionIndex)}
+                                            aria-label={`Pilih soal ${questionIndex + 1}`}
+                                          >
+                                            {questionIndex + 1}
+                                          </button>
+
+                                          <div className="admin-question-row-main">
+                                            <strong>{truncateText(question.question_text || 'Pertanyaan belum diisi')}</strong>
+                                            <p>
+                                              {question.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
+                                            </p>
+                                          </div>
+
+                                          <div className="admin-question-row-meta">
+                                            <span className="account-package-tag">{formatDifficultyLabel(question.difficulty)}</span>
+                                          </div>
+
+                                          <div className="admin-question-row-count">
+                                            {(question.options || []).length} opsi
+                                          </div>
+
+                                          <div className="admin-question-row-actions">
+                                            <button
+                                              type="button"
+                                              className="btn btn-outline"
+                                              onClick={() => selectLearningQuestion(questionIndex)}
+                                            >
+                                              {isActiveQuestion ? 'Aktif' : 'Edit'}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="btn btn-danger"
+                                              onClick={() => removeLearningQuestion(questionIndex)}
+                                              disabled={learningQuestionsForm.length <= 1}
+                                            >
+                                              Hapus
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </section>
 
@@ -2576,16 +2642,6 @@ export default function AdminPanel() {
                                         <option value="medium">Sedang</option>
                                         <option value="hard">Sulit</option>
                                       </select>
-                                    </div>
-                                    <div className="form-group">
-                                      <label>Urutan</label>
-                                      <input
-                                        name={`learning_question_order_active_${activeLearningQuestionIndex}`}
-                                        type="number"
-                                        min="1"
-                                        value={activeLearningQuestion.question_order}
-                                        onChange={(event) => updateLearningQuestion(activeLearningQuestionIndex, 'question_order', event.target.value)}
-                                      />
                                     </div>
                                   </div>
 
@@ -2906,70 +2962,6 @@ export default function AdminPanel() {
                       )}
                     </div>
 
-                    {activeQuestionPreview && (
-                      <section className="admin-question-preview-shell">
-                        <div className="admin-question-preview-head">
-                          <div>
-                            <span className="admin-preview-eyebrow">Preview soal aktif</span>
-                            <h3>{truncateText(activeQuestionPreview.question_text || 'Soal berbasis gambar', 180)}</h3>
-                            <p className="text-muted">
-                              {activeQuestionPreview.section_name || 'Bagian umum'} • {(activeQuestionPreview.options || []).length} opsi
-                            </p>
-                          </div>
-                          <div className="admin-question-preview-actions">
-                            <Link
-                              className="btn btn-primary"
-                              to={`/admin/question-editor/${selectedPackageId}/${activeQuestionPreview.id}`}
-                            >
-                              Edit Soal Lagi
-                            </Link>
-                            <button
-                              type="button"
-                              className="btn btn-outline"
-                              onClick={() => setExpandedQuestionId(null)}
-                            >
-                              Tutup Preview
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="admin-question-row-detail">
-                          <div className="admin-question-row-detail-main">
-                            <div>
-                              <h3>{activeQuestionPreview.question_text || 'Soal berbasis gambar'}</h3>
-                              <p className="text-muted">
-                                {activeQuestionPreview.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
-                              </p>
-                            </div>
-                            <AdminImagePreview
-                              src={activeQuestionPreview.question_image_url}
-                              alt={`Preview soal ${activeQuestionPreview.id}`}
-                              className="admin-question-preview-image"
-                            />
-                          </div>
-
-                          <div className="admin-question-options-preview-grid">
-                            {(activeQuestionPreview.options || []).map((option) => (
-                              <div key={option.id || `${activeQuestionPreview.id}-${option.letter}`} className="admin-option-preview-card">
-                                <div className="admin-option-preview-head">
-                                  <strong>{option.letter}.</strong>
-                                  {Number(option.is_correct) === 1 && (
-                                    <span className="admin-correct-badge">Jawaban Benar</span>
-                                  )}
-                                </div>
-                                <p>{option.text || 'Opsi berbasis gambar'}</p>
-                                <AdminImagePreview
-                                  src={option.image_url}
-                                  alt={`Opsi ${option.letter}`}
-                                  className="admin-option-preview-image"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </section>
-                    )}
-
                     {loadingQuestions ? (
                       <p>Memuat soal...</p>
                     ) : filteredQuestions.length === 0 ? (
@@ -2988,7 +2980,7 @@ export default function AdminPanel() {
                           <span>Opsi</span>
                           <span>Aksi</span>
                         </div>
-                        {filteredQuestions.map((question, index) => {
+                        {filteredQuestions.map((question) => {
                           const isExpanded = Number(expandedQuestionId) === Number(question.id);
                           return (
                             <div key={question.id} className={`admin-question-row-wrap admin-question-row-wrap-modern ${isExpanded ? 'admin-question-row-wrap-expanded' : ''}`}>
@@ -3019,7 +3011,7 @@ export default function AdminPanel() {
 
                                 <div className="admin-question-row-actions">
                                   <button type="button" className="btn btn-outline" onClick={() => handleQuestionEdit(question)}>
-                                    {Number(activeQuestionPreview?.id) === Number(question.id) ? 'Aktif' : 'Edit'}
+                                    {isExpanded ? 'Aktif' : 'Edit'}
                                   </button>
                                   <button type="button" className="btn btn-danger" onClick={() => handleQuestionDelete(question.id)}>
                                     Hapus
@@ -3041,6 +3033,22 @@ export default function AdminPanel() {
                                       alt={`Preview soal ${question.id}`}
                                       className="admin-question-preview-image"
                                     />
+                                  </div>
+
+                                  <div className="admin-question-preview-actions">
+                                    <Link
+                                      className="btn btn-primary"
+                                      to={`/admin/question-editor/${selectedPackageId}/${question.id}`}
+                                    >
+                                      Edit Soal
+                                    </Link>
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline"
+                                      onClick={() => setExpandedQuestionId(null)}
+                                    >
+                                      Tutup Detail
+                                    </button>
                                   </div>
 
                                   <div className="admin-question-options-preview-grid">
@@ -3189,16 +3197,6 @@ export default function AdminPanel() {
                                 <option value="medium">Sedang</option>
                                 <option value="hard">Sulit</option>
                               </select>
-                            </div>
-                            <div className="form-group">
-                              <label>Urutan</label>
-                              <input
-                                name={`learning_question_order_${questionIndex}`}
-                                type="number"
-                                min="1"
-                                value={question.question_order}
-                                onChange={(event) => updateLearningQuestion(questionIndex, 'question_order', event.target.value)}
-                              />
                             </div>
                           </div>
                           <div className="admin-options-editor-list">

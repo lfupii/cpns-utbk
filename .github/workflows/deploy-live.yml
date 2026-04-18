@@ -137,23 +137,20 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          max_attempts=2
+          max_attempts=3
           for attempt in $(seq 1 "${max_attempts}"); do
             echo "::group::Frontend deploy attempt ${attempt}/${max_attempts}"
             echo "Deploy target: frontend/dist -> public_html"
 
-            if timeout 210 lftp -e "
+            if lftp -e "
             set cmd:fail-exit true
-            set net:max-retries 2
-            set net:reconnect-interval-base 3
-            set net:reconnect-interval-max 10
-            set net:timeout 25
+            set net:max-retries 8
+            set net:reconnect-interval-base 5
+            set net:reconnect-interval-max 30
+            set net:timeout 60
             set ftp:passive-mode true
             set ftp:prefer-epsv false
-            debug 3
             open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
-            pwd
-            cls -1
             mirror -R --continue --verbose=2 --parallel=1 frontend/dist .
             bye
             "; then
@@ -171,8 +168,8 @@ jobs:
               exit 1
             fi
 
-            echo "Retrying frontend deploy in 5 seconds..."
-            sleep 5
+            echo "Retrying frontend deploy in 15 seconds..."
+            sleep 15
           done
 
       - name: Deploy backend to public_html/api
@@ -182,23 +179,20 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          max_attempts=2
+          max_attempts=3
           for attempt in $(seq 1 "${max_attempts}"); do
             echo "::group::Backend deploy attempt ${attempt}/${max_attempts}"
             echo "Deploy target: .deploy/backend -> public_html/api"
 
-            if timeout 210 lftp -e "
+            if lftp -e "
             set cmd:fail-exit true
-            set net:max-retries 2
-            set net:reconnect-interval-base 3
-            set net:reconnect-interval-max 10
-            set net:timeout 25
+            set net:max-retries 8
+            set net:reconnect-interval-base 5
+            set net:reconnect-interval-max 30
+            set net:timeout 60
             set ftp:passive-mode true
             set ftp:prefer-epsv false
-            debug 3
             open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
-            pwd
-            cls -1
             mirror -R --continue --verbose=2 --parallel=1 .deploy/backend api
             bye
             "; then
@@ -216,6 +210,6 @@ jobs:
               exit 1
             fi
 
-            echo "Retrying backend deploy in 5 seconds..."
-            sleep 5
+            echo "Retrying backend deploy in 15 seconds..."
+            sleep 15
           done

@@ -581,6 +581,8 @@ export default function Learning() {
         [sectionCode]: {
           ...(current[sectionCode] || {}),
           result,
+          open: false,
+          loading: false,
           autoSubmitting: false,
           error: '',
         },

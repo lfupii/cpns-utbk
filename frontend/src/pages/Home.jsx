@@ -235,7 +235,6 @@ export default function Home() {
       accent: '#7c4dff',
       align: 'top',
       title: 'Pilih paket yang mau dikerjakan',
-      description: 'Mulai dari CPNS Intensif atau UTBK Intensif, lalu masuk ke ruang belajar dari akun yang sama.',
     },
     {
       step: '02',
@@ -244,7 +243,6 @@ export default function Home() {
       accent: '#8a3ffc',
       align: 'bottom',
       title: 'Baca materi per subtest',
-      description: 'Setiap section punya topik dan halaman materi yang bisa dibuka berurutan sebelum lanjut latihan.',
     },
     {
       step: '03',
@@ -253,7 +251,6 @@ export default function Home() {
       accent: '#4f7dff',
       align: 'top',
       title: 'Kerjakan mini test subtest',
-      description: 'Sesudah materi, ada latihan singkat untuk cek pemahaman dan menandai progres belajarmu.',
     },
     {
       step: '04',
@@ -262,7 +259,6 @@ export default function Home() {
       accent: '#7c4dff',
       align: 'bottom',
       title: 'Masuk tryout penuh dengan timer',
-      description: 'Kalau sudah siap, lanjut ke simulasi seluruh soal paket dengan durasi yang sudah ditentukan.',
     },
     {
       step: '05',
@@ -271,7 +267,6 @@ export default function Home() {
       accent: '#7c4dff',
       align: 'top',
       title: 'Lihat hasil, skor, dan riwayat',
-      description: 'Ringkasan hasil, paket aktif, dan histori percobaan tetap kebaca supaya evaluasinya lebih jelas.',
     },
   ];
 
@@ -423,10 +418,6 @@ export default function Home() {
           <div className="container">
             <div className="landing-section-heading">
               <h2>Fitur yang saling nyambung dalam satu flow belajar</h2>
-              <p>
-                Ujiin tidak berhenti di latihan soal. Semuanya dirangkai jadi jalur belajar yang
-                lebih gampang dibaca dari awal sampai skor naik.
-              </p>
             </div>
 
             <div className="landing-mindmap-shell">
@@ -452,7 +443,6 @@ export default function Home() {
                     <div className="landing-mindmap-copy">
                       <span className="landing-mindmap-badge">{item.badge}</span>
                       <h3>{item.title}</h3>
-                      <p>{item.description}</p>
                     </div>
 
                     <div className="landing-mindmap-icon" aria-hidden="true">

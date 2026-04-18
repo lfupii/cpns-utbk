@@ -15,6 +15,7 @@ import TestHistory from './pages/TestHistory';
 import AdminPanel from './pages/AdminPanel';
 import AdminLearningMaterialEditor from './pages/AdminLearningMaterialEditor';
 import AdminQuestionEditor from './pages/AdminQuestionEditor';
+import AdminMiniTestQuestionEditor from './pages/AdminMiniTestQuestionEditor';
 import Contact from './pages/Contact';
 import TermsConditions from './pages/TermsConditions';
 import { ThemeProvider } from './ThemeContext';
@@ -169,6 +170,14 @@ function AppRoutes() {
             element={
               <AdminRoute>
                 <AdminQuestionEditor />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/mini-test-question-editor/:packageId/:sectionCode/:questionId"
+            element={
+              <AdminRoute>
+                <AdminMiniTestQuestionEditor />
               </AdminRoute>
             }
           />

@@ -1829,7 +1829,7 @@ export default function AdminPanel() {
 
   return (
     <AccountShell
-      shellClassName="account-shell-learning admin-workspace-shell account-shell-workspace-offset"
+      shellClassName="account-shell-learning admin-workspace-shell"
       title="Panel Admin"
       subtitle="Kelola paket, soal, gambar, dan import bank soal dari satu workspace yang lebih ringkas."
     >

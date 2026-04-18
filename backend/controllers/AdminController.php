@@ -8,9 +8,300 @@ class AdminController {
     private $mysqli;
     private const ADMIN_MEDIA_UPLOAD_DIR = __DIR__ . '/../uploads/admin-media';
     private const ADMIN_MEDIA_MAX_SIZE = 5242880;
+    private const WORKSPACE_PUBLISHED = 'published';
+    private const WORKSPACE_DRAFT = 'draft';
 
     public function __construct($mysqli) {
         $this->mysqli = $mysqli;
+    }
+
+    private function normalizeWorkspace($value): string {
+        return strtolower(trim((string) $value)) === self::WORKSPACE_DRAFT
+            ? self::WORKSPACE_DRAFT
+            : self::WORKSPACE_PUBLISHED;
+    }
+
+    private function getRequestWorkspace(?array $data = null): string {
+        if (is_array($data) && array_key_exists('workspace', $data)) {
+            return $this->normalizeWorkspace($data['workspace']);
+        }
+
+        if (isset($_GET['workspace'])) {
+            return $this->normalizeWorkspace($_GET['workspace']);
+        }
+
+        if (isset($_POST['workspace'])) {
+            return $this->normalizeWorkspace($_POST['workspace']);
+        }
+
+        return self::WORKSPACE_PUBLISHED;
+    }
+
+    private function getWorkspaceTables(string $workspace): array {
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            return [
+                'packages' => 'test_package_drafts',
+                'questions' => 'question_drafts',
+                'question_options' => 'question_option_drafts',
+                'materials' => 'learning_material_drafts',
+                'learning_questions' => 'learning_section_question_drafts',
+                'learning_question_options' => 'learning_section_question_option_drafts',
+            ];
+        }
+
+        return [
+            'packages' => 'test_packages',
+            'questions' => 'questions',
+            'question_options' => 'question_options',
+            'materials' => 'learning_materials',
+            'learning_questions' => 'learning_section_questions',
+            'learning_question_options' => 'learning_section_question_options',
+        ];
+    }
+
+    private function getDraftPackage(int $packageId): ?array {
+        $query = "SELECT tp.*, tc.name AS category_name
+                  FROM test_package_drafts tp
+                  JOIN test_categories tc ON tc.id = tp.category_id
+                  WHERE tp.package_id = ?
+                  LIMIT 1";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+
+        return $stmt->get_result()->fetch_assoc() ?: null;
+    }
+
+    private function getPackageByWorkspace(int $packageId, string $workspace = self::WORKSPACE_PUBLISHED): array {
+        if ($workspace !== self::WORKSPACE_DRAFT) {
+            return $this->getPackage($packageId);
+        }
+
+        $this->ensurePackageDraftExists($packageId);
+        $package = $this->getDraftPackage($packageId);
+        if (!$package) {
+            sendResponse('error', 'Draft paket tidak ditemukan', null, 404);
+        }
+
+        return $package;
+    }
+
+    private function ensureAllPackageDraftsExist(): void {
+        $result = $this->mysqli->query('SELECT id FROM test_packages ORDER BY id ASC');
+        if (!$result) {
+            return;
+        }
+
+        while ($row = $result->fetch_assoc()) {
+            $packageId = (int) ($row['id'] ?? 0);
+            if ($packageId > 0) {
+                $this->ensurePackageDraftExists($packageId);
+            }
+        }
+    }
+
+    private function copyTryoutQuestionsToDraft(int $packageId): void {
+        $countStmt = $this->mysqli->prepare('SELECT COUNT(*) AS total FROM question_drafts WHERE package_id = ?');
+        $countStmt->bind_param('i', $packageId);
+        $countStmt->execute();
+        $countRow = $countStmt->get_result()->fetch_assoc();
+        if ((int) ($countRow['total'] ?? 0) > 0) {
+            return;
+        }
+
+        $query = "SELECT q.*,
+                    GROUP_CONCAT(
+                      JSON_OBJECT(
+                        'letter', qo.option_letter,
+                        'text', qo.option_text,
+                        'image_url', qo.option_image_url,
+                        'is_correct', qo.is_correct
+                      ) ORDER BY qo.id SEPARATOR ','
+                    ) AS options
+                  FROM questions q
+                  LEFT JOIN question_options qo ON qo.question_id = q.id
+                  WHERE q.package_id = ?
+                  GROUP BY q.id
+                  ORDER BY q.section_order ASC, q.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $payload = [
+                'question_text' => (string) ($row['question_text'] ?? ''),
+                'question_image_url' => $row['question_image_url'] ?: null,
+                'question_image_layout' => (string) ($row['question_image_layout'] ?? 'top'),
+                'question_type' => (string) ($row['question_type'] ?? 'single_choice'),
+                'difficulty' => (string) ($row['difficulty'] ?? 'medium'),
+                'section_code' => (string) ($row['section_code'] ?? ''),
+                'section_name' => (string) ($row['section_name'] ?? ''),
+                'section_order' => (int) ($row['section_order'] ?? 1),
+                'options' => $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [],
+            ];
+            $this->insertQuestionWithOptions($packageId, $payload, self::WORKSPACE_DRAFT);
+        }
+    }
+
+    private function copyLearningMaterialsToDraft(int $packageId): void {
+        $countStmt = $this->mysqli->prepare('SELECT COUNT(*) AS total FROM learning_material_drafts WHERE package_id = ?');
+        $countStmt->bind_param('i', $packageId);
+        $countStmt->execute();
+        $countRow = $countStmt->get_result()->fetch_assoc();
+        if ((int) ($countRow['total'] ?? 0) > 0) {
+            return;
+        }
+
+        $insertDraft = $this->mysqli->prepare(
+            "INSERT INTO learning_material_drafts (package_id, section_code, title, content_json, source_url, review_notes)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                title = VALUES(title),
+                content_json = VALUES(content_json),
+                source_url = VALUES(source_url),
+                review_notes = VALUES(review_notes),
+                updated_at = CURRENT_TIMESTAMP"
+        );
+
+        $query = "SELECT section_code, title, content_json, source_url, review_notes
+                  FROM learning_materials
+                  WHERE package_id = ?
+                  ORDER BY section_code ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $sectionCode = (string) ($row['section_code'] ?? '');
+            $title = (string) ($row['title'] ?? '');
+            $contentJson = (string) ($row['content_json'] ?? '');
+            $sourceUrl = ($row['source_url'] ?? null) ?: null;
+            $reviewNotes = ($row['review_notes'] ?? null) ?: null;
+            $insertDraft->bind_param('isssss', $packageId, $sectionCode, $title, $contentJson, $sourceUrl, $reviewNotes);
+            $insertDraft->execute();
+        }
+    }
+
+    private function copyMiniTestQuestionsToDraft(int $packageId): void {
+        $countStmt = $this->mysqli->prepare('SELECT COUNT(*) AS total FROM learning_section_question_drafts WHERE package_id = ?');
+        $countStmt->bind_param('i', $packageId);
+        $countStmt->execute();
+        $countRow = $countStmt->get_result()->fetch_assoc();
+        if ((int) ($countRow['total'] ?? 0) > 0) {
+            return;
+        }
+
+        $query = "SELECT q.*,
+                    GROUP_CONCAT(
+                      JSON_OBJECT(
+                        'letter', qo.option_letter,
+                        'text', qo.option_text,
+                        'image_url', qo.option_image_url,
+                        'is_correct', qo.is_correct
+                      ) ORDER BY qo.id SEPARATOR ','
+                    ) AS options
+                  FROM learning_section_questions q
+                  LEFT JOIN learning_section_question_options qo ON qo.question_id = q.id
+                  WHERE q.package_id = ?
+                  GROUP BY q.id
+                  ORDER BY q.section_code ASC, q.question_order ASC, q.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $insertQuestion = $this->mysqli->prepare(
+            "INSERT INTO learning_section_question_drafts (package_id, section_code, question_text, question_image_url, difficulty, question_order)
+             VALUES (?, ?, ?, ?, ?, ?)"
+        );
+        $insertOption = $this->mysqli->prepare(
+            "INSERT INTO learning_section_question_option_drafts (question_id, option_letter, option_text, option_image_url, is_correct)
+             VALUES (?, ?, ?, ?, ?)"
+        );
+
+        while ($row = $result->fetch_assoc()) {
+            $sectionCode = (string) ($row['section_code'] ?? '');
+            $questionText = (string) ($row['question_text'] ?? '');
+            $questionImageUrl = ($row['question_image_url'] ?? null) ?: null;
+            $difficulty = (string) ($row['difficulty'] ?? 'medium');
+            $questionOrder = (int) ($row['question_order'] ?? 1);
+            $insertQuestion->bind_param('issssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $difficulty, $questionOrder);
+            $insertQuestion->execute();
+            $draftQuestionId = (int) $insertQuestion->insert_id;
+            $options = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+            foreach ($options as $option) {
+                $letter = (string) ($option['letter'] ?? 'A');
+                $text = (string) ($option['text'] ?? '');
+                $imageUrl = ($option['image_url'] ?? null) ?: null;
+                $isCorrect = !empty($option['is_correct']) ? 1 : 0;
+                $insertOption->bind_param('isssi', $draftQuestionId, $letter, $text, $imageUrl, $isCorrect);
+                $insertOption->execute();
+            }
+        }
+    }
+
+    private function ensurePackageDraftExists(int $packageId): void {
+        $existsStmt = $this->mysqli->prepare('SELECT package_id FROM test_package_drafts WHERE package_id = ? LIMIT 1');
+        $existsStmt->bind_param('i', $packageId);
+        $existsStmt->execute();
+        $exists = $existsStmt->get_result()->fetch_assoc();
+        if (!$exists) {
+            $package = $this->getPackage($packageId);
+            $insertDraft = $this->mysqli->prepare(
+                'INSERT INTO test_package_drafts (
+                    package_id,
+                    category_id,
+                    name,
+                    description,
+                    price,
+                    duration_days,
+                    max_attempts,
+                    question_count,
+                    time_limit,
+                    test_mode,
+                    workflow_config,
+                    last_saved_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+            );
+            $insertDraft->bind_param(
+                'iissiiiisss',
+                $packageId,
+                $package['category_id'],
+                $package['name'],
+                $package['description'],
+                $package['price'],
+                $package['duration_days'],
+                $package['max_attempts'],
+                $package['question_count'],
+                $package['time_limit'],
+                $package['test_mode'],
+                $package['workflow_config']
+            );
+            $insertDraft->execute();
+        }
+
+        $this->copyTryoutQuestionsToDraft($packageId);
+        $this->copyLearningMaterialsToDraft($packageId);
+        $this->copyMiniTestQuestionsToDraft($packageId);
+        $this->syncQuestionCount($packageId, self::WORKSPACE_DRAFT);
+    }
+
+    private function touchDraftPackage(int $packageId, bool $markPublished = false): void {
+        $query = $markPublished
+            ? 'UPDATE test_package_drafts
+               SET last_saved_at = CURRENT_TIMESTAMP,
+                   last_published_at = CURRENT_TIMESTAMP,
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE package_id = ?'
+            : 'UPDATE test_package_drafts
+               SET last_saved_at = CURRENT_TIMESTAMP,
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE package_id = ?';
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
     }
 
     private function buildPublicMediaUrl(string $relativePath): string {
@@ -79,15 +370,17 @@ class AdminController {
         ];
     }
 
-    private function syncQuestionCount(int $packageId): void {
-        $countQuery = 'SELECT COUNT(*) AS total FROM questions WHERE package_id = ?';
+    private function syncQuestionCount(int $packageId, string $workspace = self::WORKSPACE_PUBLISHED): void {
+        $tables = $this->getWorkspaceTables($workspace);
+        $countQuery = sprintf('SELECT COUNT(*) AS total FROM %s WHERE package_id = ?', $tables['questions']);
         $stmt = $this->mysqli->prepare($countQuery);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
         $total = (int) ($result['total'] ?? 0);
 
-        $updateQuery = 'UPDATE test_packages SET question_count = ? WHERE id = ?';
+        $packageIdColumn = $workspace === self::WORKSPACE_DRAFT ? 'package_id' : 'id';
+        $updateQuery = sprintf('UPDATE %s SET question_count = ? WHERE %s = ?', $tables['packages'], $packageIdColumn);
         $stmt = $this->mysqli->prepare($updateQuery);
         $stmt->bind_param('ii', $total, $packageId);
         $stmt->execute();
@@ -149,8 +442,8 @@ class AdminController {
         return in_array($mode, $allowedModes, true) ? $mode : TestWorkflow::MODE_STANDARD;
     }
 
-    private function getWorkflowSection(int $packageId, string $sectionCode): array {
-        $package = $this->getPackage($packageId);
+    private function getWorkflowSection(int $packageId, string $sectionCode, string $workspace = self::WORKSPACE_PUBLISHED): array {
+        $package = $this->getPackageByWorkspace($packageId, $workspace);
         $workflow = TestWorkflow::buildPackageWorkflow($package);
         foreach ($workflow['sections'] as $section) {
             if ((string) ($section['code'] ?? '') === $sectionCode) {
@@ -251,7 +544,14 @@ class AdminController {
         return $normalizedWorkflow;
     }
 
-    private function syncPackageWorkflowData(int $packageId, array $previousWorkflow, array $nextWorkflow): void {
+    private function syncPackageWorkflowData(
+        int $packageId,
+        array $previousWorkflow,
+        array $nextWorkflow,
+        string $workspace = self::WORKSPACE_PUBLISHED
+    ): void {
+        $tables = $this->getWorkspaceTables($workspace);
+
         $previousSections = [];
         foreach ($previousWorkflow['sections'] ?? [] as $section) {
             $previousSections[(string) ($section['code'] ?? '')] = $section;
@@ -267,15 +567,15 @@ class AdminController {
                 continue;
             }
 
-            $deleteQuestions = $this->mysqli->prepare('DELETE FROM questions WHERE package_id = ? AND section_code = ?');
+            $deleteQuestions = $this->mysqli->prepare(sprintf('DELETE FROM %s WHERE package_id = ? AND section_code = ?', $tables['questions']));
             $deleteQuestions->bind_param('is', $packageId, $code);
             $deleteQuestions->execute();
 
-            $deleteMaterials = $this->mysqli->prepare('DELETE FROM learning_materials WHERE package_id = ? AND section_code = ?');
+            $deleteMaterials = $this->mysqli->prepare(sprintf('DELETE FROM %s WHERE package_id = ? AND section_code = ?', $tables['materials']));
             $deleteMaterials->bind_param('is', $packageId, $code);
             $deleteMaterials->execute();
 
-            $deleteLearningQuestions = $this->mysqli->prepare('DELETE FROM learning_section_questions WHERE package_id = ? AND section_code = ?');
+            $deleteLearningQuestions = $this->mysqli->prepare(sprintf('DELETE FROM %s WHERE package_id = ? AND section_code = ?', $tables['learning_questions']));
             $deleteLearningQuestions->bind_param('is', $packageId, $code);
             $deleteLearningQuestions->execute();
         }
@@ -283,9 +583,10 @@ class AdminController {
         foreach ($nextSections as $code => $section) {
             $sectionName = (string) ($section['name'] ?? 'Subtest');
             $sectionOrder = (int) ($section['order'] ?? 1);
-            $updateQuestions = $this->mysqli->prepare(
-                'UPDATE questions SET section_name = ?, section_order = ? WHERE package_id = ? AND section_code = ?'
-            );
+            $updateQuestions = $this->mysqli->prepare(sprintf(
+                'UPDATE %s SET section_name = ?, section_order = ? WHERE package_id = ? AND section_code = ?',
+                $tables['questions']
+            ));
             $updateQuestions->bind_param('siis', $sectionName, $sectionOrder, $packageId, $code);
             $updateQuestions->execute();
 
@@ -293,9 +594,13 @@ class AdminController {
                 $emptyMaterialContent = json_encode([
                     'topics' => [],
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                $insertMaterial = $this->mysqli->prepare(
-                    'INSERT IGNORE INTO learning_materials (package_id, section_code, title, content_json) VALUES (?, ?, ?, ?)'
-                );
+                $insertMaterial = $workspace === self::WORKSPACE_DRAFT
+                    ? $this->mysqli->prepare(
+                        'INSERT IGNORE INTO learning_material_drafts (package_id, section_code, title, content_json, source_url, review_notes) VALUES (?, ?, ?, ?, NULL, NULL)'
+                    )
+                    : $this->mysqli->prepare(
+                        'INSERT IGNORE INTO learning_materials (package_id, section_code, title, content_json) VALUES (?, ?, ?, ?)'
+                    );
                 $insertMaterial->bind_param('isss', $packageId, $code, $sectionName, $emptyMaterialContent);
                 $insertMaterial->execute();
             }
@@ -578,7 +883,7 @@ class AdminController {
         return substr($normalized, 0, 1000);
     }
 
-    private function normalizeQuestionPayload(int $packageId, array $data): array {
+    private function normalizeQuestionPayload(int $packageId, array $data, string $workspace = self::WORKSPACE_PUBLISHED): array {
         $questionText = trim((string) ($data['question_text'] ?? ''));
         $questionImageUrl = $this->normalizeMediaUrl($data['question_image_url'] ?? null);
         $questionImageLayout = strtolower(trim((string) ($data['question_image_layout'] ?? 'top')));
@@ -605,7 +910,7 @@ class AdminController {
             $questionImageLayout = 'top';
         }
 
-        $package = $this->getPackage($packageId);
+        $package = $this->getPackageByWorkspace($packageId, $workspace);
         $workflow = TestWorkflow::buildPackageWorkflow($package);
         $sections = $workflow['sections'];
         $sectionLookup = [];
@@ -671,9 +976,11 @@ class AdminController {
         ];
     }
 
-    private function insertQuestionWithOptions(int $packageId, array $payload): int {
+    private function insertQuestionWithOptions(int $packageId, array $payload, string $workspace = self::WORKSPACE_PUBLISHED): int {
+        $tables = $this->getWorkspaceTables($workspace);
         $insertQuestion = $this->mysqli->prepare(
-            'INSERT INTO questions (
+            sprintf(
+                'INSERT INTO %s (
                 package_id,
                 question_text,
                 question_image_url,
@@ -683,7 +990,9 @@ class AdminController {
                 section_code,
                 section_name,
                 section_order
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                $tables['questions']
+            )
         );
         $insertQuestion->bind_param(
             'isssssssi',
@@ -700,9 +1009,10 @@ class AdminController {
         $insertQuestion->execute();
         $questionId = (int) $insertQuestion->insert_id;
 
-        $insertOption = $this->mysqli->prepare(
-            'INSERT INTO question_options (question_id, option_letter, option_text, option_image_url, is_correct) VALUES (?, ?, ?, ?, ?)'
-        );
+        $insertOption = $this->mysqli->prepare(sprintf(
+            'INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct) VALUES (?, ?, ?, ?, ?)',
+            $tables['question_options']
+        ));
         foreach ($payload['options'] as $option) {
             $insertOption->bind_param(
                 'isssi',
@@ -720,6 +1030,24 @@ class AdminController {
 
     public function getPackages() {
         verifyAdmin();
+        $workspace = $this->getRequestWorkspace();
+
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->ensureAllPackageDraftsExist();
+            $query = "SELECT tp.*, tc.name AS category_name
+                      FROM test_package_drafts tp
+                      JOIN test_categories tc ON tc.id = tp.category_id
+                      ORDER BY tp.package_id ASC";
+            $result = $this->mysqli->query($query);
+
+            $packages = [];
+            while ($row = $result->fetch_assoc()) {
+                $row['id'] = (int) ($row['package_id'] ?? 0);
+                $packages[] = $this->enrichPackage($row);
+            }
+
+            sendResponse('success', 'Data draft paket admin berhasil diambil', $packages);
+        }
 
         $query = "SELECT tp.*, tc.name AS category_name
                   FROM test_packages tp
@@ -839,6 +1167,7 @@ class AdminController {
     public function updatePackage() {
         verifyAdmin();
         $data = json_decode(file_get_contents('php://input'), true);
+        $workspace = $this->getRequestWorkspace($data);
 
         $packageId = (int) ($data['package_id'] ?? 0);
         $categoryId = (int) ($data['category_id'] ?? 0);
@@ -848,7 +1177,7 @@ class AdminController {
         $durationDays = (int) ($data['duration_days'] ?? 30);
         $maxAttempts = (int) ($data['max_attempts'] ?? 1);
         $timeLimit = (int) ($data['time_limit'] ?? 90);
-        $package = $this->getPackage($packageId);
+        $package = $this->getPackageByWorkspace($packageId, $workspace);
         $categoryId = $categoryId > 0 ? $categoryId : (int) ($package['category_id'] ?? 0);
         $testMode = $this->normalizeTestMode($data['test_mode'] ?? ($package['test_mode'] ?? ''));
         $workflowContext = array_merge($package, [
@@ -873,9 +1202,13 @@ class AdminController {
             sendResponse('error', 'Data paket tidak lengkap atau tidak valid', null, 422);
         }
 
-        $query = "UPDATE test_packages
-                  SET category_id = ?, name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, test_mode = ?, workflow_config = ?
-                  WHERE id = ?";
+        $query = $workspace === self::WORKSPACE_DRAFT
+            ? "UPDATE test_package_drafts
+               SET category_id = ?, name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, test_mode = ?, workflow_config = ?, last_saved_at = CURRENT_TIMESTAMP
+               WHERE package_id = ?"
+            : "UPDATE test_packages
+               SET category_id = ?, name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, test_mode = ?, workflow_config = ?
+               WHERE id = ?";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('issiiiissi', $categoryId, $name, $description, $price, $durationDays, $maxAttempts, $timeLimit, $testMode, $workflowConfig, $packageId);
 
@@ -883,9 +1216,12 @@ class AdminController {
             sendResponse('error', 'Gagal memperbarui paket', null, 500);
         }
 
-        $this->syncPackageWorkflowData($packageId, $previousWorkflow, $nextWorkflow);
-        $this->syncQuestionCount($packageId);
-        sendResponse('success', 'Paket berhasil diperbarui');
+        $this->syncPackageWorkflowData($packageId, $previousWorkflow, $nextWorkflow, $workspace);
+        $this->syncQuestionCount($packageId, $workspace);
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->touchDraftPackage($packageId);
+        }
+        sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Draft paket berhasil disimpan' : 'Paket berhasil diperbarui');
     }
 
     public function createPackage() {
@@ -992,13 +1328,20 @@ class AdminController {
 
     public function getQuestions() {
         verifyAdmin();
+        $workspace = $this->getRequestWorkspace();
 
         $packageId = (int) ($_GET['package_id'] ?? 0);
         if ($packageId <= 0) {
             sendResponse('error', 'Package ID harus diisi', null, 400);
         }
 
-        $query = "SELECT q.*, GROUP_CONCAT(
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->ensurePackageDraftExists($packageId);
+        }
+
+        $tables = $this->getWorkspaceTables($workspace);
+
+        $query = sprintf("SELECT q.*, GROUP_CONCAT(
                       JSON_OBJECT(
                         'id', qo.id,
                         'letter', qo.option_letter,
@@ -1007,11 +1350,11 @@ class AdminController {
                         'is_correct', qo.is_correct
                       ) ORDER BY qo.id SEPARATOR ','
                   ) AS options
-                  FROM questions q
-                  LEFT JOIN question_options qo ON qo.question_id = q.id
+                  FROM %s q
+                  LEFT JOIN %s qo ON qo.question_id = q.id
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.section_order ASC, q.id ASC";
+                  ORDER BY q.section_order ASC, q.id ASC", $tables['questions'], $tables['question_options']);
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -1023,12 +1366,13 @@ class AdminController {
             $questions[] = $row;
         }
 
-        sendResponse('success', 'Data soal admin berhasil diambil', $questions);
+        sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Data draft soal admin berhasil diambil' : 'Data soal admin berhasil diambil', $questions);
     }
 
     public function createQuestion() {
         verifyAdmin();
         $data = json_decode(file_get_contents('php://input'), true);
+        $workspace = $this->getRequestWorkspace($data);
 
         $packageId = (int) ($data['package_id'] ?? 0);
         if ($packageId <= 0) {
@@ -1037,14 +1381,20 @@ class AdminController {
 
         $transactionStarted = false;
         try {
-            $payload = $this->normalizeQuestionPayload($packageId, $data);
+            if ($workspace === self::WORKSPACE_DRAFT) {
+                $this->ensurePackageDraftExists($packageId);
+            }
+            $payload = $this->normalizeQuestionPayload($packageId, $data, $workspace);
             $this->mysqli->begin_transaction();
             $transactionStarted = true;
-            $questionId = $this->insertQuestionWithOptions($packageId, $payload);
+            $questionId = $this->insertQuestionWithOptions($packageId, $payload, $workspace);
 
-            $this->syncQuestionCount($packageId);
+            $this->syncQuestionCount($packageId, $workspace);
             $this->mysqli->commit();
-            sendResponse('success', 'Soal berhasil ditambahkan', ['question_id' => $questionId], 201);
+            if ($workspace === self::WORKSPACE_DRAFT) {
+                $this->touchDraftPackage($packageId);
+            }
+            sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Soal draft berhasil ditambahkan' : 'Soal berhasil ditambahkan', ['question_id' => $questionId], 201);
         } catch (RuntimeException $error) {
             if ($transactionStarted) {
                 $this->mysqli->rollback();
@@ -1061,6 +1411,7 @@ class AdminController {
     public function updateQuestion() {
         verifyAdmin();
         $data = json_decode(file_get_contents('php://input'), true);
+        $workspace = $this->getRequestWorkspace($data);
 
         $questionId = (int) ($data['question_id'] ?? 0);
         $packageId = (int) ($data['package_id'] ?? 0);
@@ -1070,11 +1421,15 @@ class AdminController {
 
         $transactionStarted = false;
         try {
-            $payload = $this->normalizeQuestionPayload($packageId, $data);
+            if ($workspace === self::WORKSPACE_DRAFT) {
+                $this->ensurePackageDraftExists($packageId);
+            }
+            $payload = $this->normalizeQuestionPayload($packageId, $data, $workspace);
             $this->mysqli->begin_transaction();
             $transactionStarted = true;
+            $tables = $this->getWorkspaceTables($workspace);
             $updateQuestion = $this->mysqli->prepare(
-                'UPDATE questions
+                sprintf('UPDATE %s
                  SET question_text = ?,
                      question_image_url = ?,
                      question_image_layout = ?,
@@ -1083,7 +1438,7 @@ class AdminController {
                      section_code = ?,
                      section_name = ?,
                      section_order = ?
-                 WHERE id = ? AND package_id = ?'
+                 WHERE id = ? AND package_id = ?', $tables['questions'])
             );
             $updateQuestion->bind_param(
                 'sssssssiii',
@@ -1100,12 +1455,12 @@ class AdminController {
             );
             $updateQuestion->execute();
 
-            $deleteOptions = $this->mysqli->prepare('DELETE FROM question_options WHERE question_id = ?');
+            $deleteOptions = $this->mysqli->prepare(sprintf('DELETE FROM %s WHERE question_id = ?', $tables['question_options']));
             $deleteOptions->bind_param('i', $questionId);
             $deleteOptions->execute();
 
             $insertOption = $this->mysqli->prepare(
-                'INSERT INTO question_options (question_id, option_letter, option_text, option_image_url, is_correct) VALUES (?, ?, ?, ?, ?)'
+                sprintf('INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct) VALUES (?, ?, ?, ?, ?)', $tables['question_options'])
             );
             foreach ($payload['options'] as $option) {
                 $insertOption->bind_param(
@@ -1119,9 +1474,12 @@ class AdminController {
                 $insertOption->execute();
             }
 
-            $this->syncQuestionCount($packageId);
+            $this->syncQuestionCount($packageId, $workspace);
             $this->mysqli->commit();
-            sendResponse('success', 'Soal berhasil diperbarui');
+            if ($workspace === self::WORKSPACE_DRAFT) {
+                $this->touchDraftPackage($packageId);
+            }
+            sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Soal draft berhasil diperbarui' : 'Soal berhasil diperbarui');
         } catch (RuntimeException $error) {
             if ($transactionStarted) {
                 $this->mysqli->rollback();
@@ -1138,6 +1496,7 @@ class AdminController {
     public function importQuestions() {
         verifyAdmin();
         $data = json_decode(file_get_contents('php://input'), true);
+        $workspace = $this->getRequestWorkspace($data);
 
         $packageId = (int) ($data['package_id'] ?? 0);
         $rows = $data['rows'] ?? [];
@@ -1156,13 +1515,16 @@ class AdminController {
 
         $transactionStarted = false;
         try {
+            if ($workspace === self::WORKSPACE_DRAFT) {
+                $this->ensurePackageDraftExists($packageId);
+            }
             $payloads = [];
             foreach ($rows as $row) {
                 if (!is_array($row)) {
                     throw new RuntimeException('Format baris import tidak valid', 422);
                 }
 
-                $payloads[] = $this->normalizeQuestionPayload($packageId, $row);
+                $payloads[] = $this->normalizeQuestionPayload($packageId, $row, $workspace);
             }
 
             $this->mysqli->begin_transaction();
@@ -1170,13 +1532,16 @@ class AdminController {
 
             $imported = 0;
             foreach ($payloads as $payload) {
-                $this->insertQuestionWithOptions($packageId, $payload);
+                $this->insertQuestionWithOptions($packageId, $payload, $workspace);
                 $imported++;
             }
 
-            $this->syncQuestionCount($packageId);
+            $this->syncQuestionCount($packageId, $workspace);
             $this->mysqli->commit();
-            sendResponse('success', 'Import soal berhasil', [
+            if ($workspace === self::WORKSPACE_DRAFT) {
+                $this->touchDraftPackage($packageId);
+            }
+            sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Import soal draft berhasil' : 'Import soal berhasil', [
                 'imported_count' => $imported,
             ], 201);
         } catch (RuntimeException $error) {
@@ -1194,13 +1559,15 @@ class AdminController {
 
     public function deleteQuestion() {
         verifyAdmin();
+        $workspace = $this->getRequestWorkspace();
 
         $questionId = (int) ($_GET['id'] ?? 0);
         if ($questionId <= 0) {
             sendResponse('error', 'Question ID harus diisi', null, 400);
         }
 
-        $findQuery = 'SELECT package_id FROM questions WHERE id = ? LIMIT 1';
+        $tables = $this->getWorkspaceTables($workspace);
+        $findQuery = sprintf('SELECT package_id FROM %s WHERE id = ? LIMIT 1', $tables['questions']);
         $stmt = $this->mysqli->prepare($findQuery);
         $stmt->bind_param('i', $questionId);
         $stmt->execute();
@@ -1210,13 +1577,17 @@ class AdminController {
             sendResponse('error', 'Soal tidak ditemukan', null, 404);
         }
 
-        $deleteQuery = 'DELETE FROM questions WHERE id = ?';
+        $deleteQuery = sprintf('DELETE FROM %s WHERE id = ?', $tables['questions']);
         $stmt = $this->mysqli->prepare($deleteQuery);
         $stmt->bind_param('i', $questionId);
         $stmt->execute();
 
-        $this->syncQuestionCount((int) $question['package_id']);
-        sendResponse('success', 'Soal berhasil dihapus');
+        $packageId = (int) $question['package_id'];
+        $this->syncQuestionCount($packageId, $workspace);
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->touchDraftPackage($packageId);
+        }
+        sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Soal draft berhasil dihapus' : 'Soal berhasil dihapus');
     }
 
     public function uploadMedia() {
@@ -1240,15 +1611,22 @@ class AdminController {
 
     public function getLearningContent() {
         verifyAdmin();
+        $workspace = $this->getRequestWorkspace();
         $packageId = (int) ($_GET['package_id'] ?? 0);
         if ($packageId <= 0) {
             sendResponse('error', 'Package ID harus diisi', null, 400);
         }
 
-        $package = $this->getPackage($packageId);
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->ensurePackageDraftExists($packageId);
+        }
+
+        $package = $this->getPackageByWorkspace($packageId, $workspace);
         $workflow = TestWorkflow::buildPackageWorkflow($package);
 
-        $materialQuery = 'SELECT section_code, title, content_json, status, source_url, review_notes, published_at FROM learning_materials WHERE package_id = ?';
+        $materialQuery = $workspace === self::WORKSPACE_DRAFT
+            ? 'SELECT section_code, title, content_json, source_url, review_notes, NULL AS published_at FROM learning_material_drafts WHERE package_id = ?'
+            : 'SELECT section_code, title, content_json, source_url, review_notes, published_at FROM learning_materials WHERE package_id = ?';
         $stmt = $this->mysqli->prepare($materialQuery);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -1261,14 +1639,14 @@ class AdminController {
                 'title' => $row['title'],
                 'topics' => $topics,
                 'pages' => $this->flattenMaterialTopics($topics),
-                'status' => $this->normalizeMaterialStatus($row['status'] ?? 'published'),
+                'status' => $workspace === self::WORKSPACE_DRAFT ? 'draft' : 'published',
                 'source_url' => $row['source_url'] ?: null,
                 'review_notes' => (string) ($row['review_notes'] ?? ''),
                 'published_at' => $row['published_at'] ?? null,
             ];
         }
 
-        $questionQuery = "SELECT q.*,
+        $questionQuery = sprintf("SELECT q.*,
                             GROUP_CONCAT(
                               JSON_OBJECT(
                                 'id', qo.id,
@@ -1278,11 +1656,14 @@ class AdminController {
                                 'is_correct', qo.is_correct
                               ) ORDER BY qo.id SEPARATOR ','
                             ) AS options
-                          FROM learning_section_questions q
-                          LEFT JOIN learning_section_question_options qo ON qo.question_id = q.id
+                          FROM %s q
+                          LEFT JOIN %s qo ON qo.question_id = q.id
                           WHERE q.package_id = ?
                           GROUP BY q.id
-                          ORDER BY q.section_code ASC, q.question_order ASC, q.id ASC";
+                          ORDER BY q.section_code ASC, q.question_order ASC, q.id ASC",
+            $workspace === self::WORKSPACE_DRAFT ? 'learning_section_question_drafts' : 'learning_section_questions',
+            $workspace === self::WORKSPACE_DRAFT ? 'learning_section_question_option_drafts' : 'learning_section_question_options'
+        );
         $stmt = $this->mysqli->prepare($questionQuery);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -1323,7 +1704,7 @@ class AdminController {
             ];
         }
 
-        sendResponse('success', 'Konten belajar berhasil diambil', [
+        sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Konten draft belajar berhasil diambil' : 'Konten belajar berhasil diambil', [
             'package_id' => $packageId,
             'sections' => $sections,
         ]);
@@ -1332,17 +1713,21 @@ class AdminController {
     public function updateLearningMaterial() {
         verifyAdmin();
         $data = json_decode(file_get_contents('php://input'), true);
+        $workspace = $this->getRequestWorkspace($data);
         $packageId = (int) ($data['package_id'] ?? 0);
         $sectionCode = trim((string) ($data['section_code'] ?? ''));
         $topics = $data['topics'] ?? null;
         $pages = $data['pages'] ?? [];
-        $requestedStatus = $data['status'] ?? null;
 
         if ($packageId <= 0 || $sectionCode === '') {
             sendResponse('error', 'Package ID dan section harus diisi', null, 400);
         }
 
-        [, , $section] = $this->getWorkflowSection($packageId, $sectionCode);
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->ensurePackageDraftExists($packageId);
+        }
+
+        [, , $section] = $this->getWorkflowSection($packageId, $sectionCode, $workspace);
         if (is_array($topics) && count($topics) > 0) {
             $normalizedTopics = $this->normalizeMaterialTopics($topics);
         } else {
@@ -1353,15 +1738,15 @@ class AdminController {
             $title = (string) $section['name'];
         }
 
-        $existingStmt = $this->mysqli->prepare(
-            'SELECT status, source_url, review_notes, published_at FROM learning_materials WHERE package_id = ? AND section_code = ? LIMIT 1'
-        );
+        $materialTable = $workspace === self::WORKSPACE_DRAFT ? 'learning_material_drafts' : 'learning_materials';
+        $existingQuery = $workspace === self::WORKSPACE_DRAFT
+            ? 'SELECT source_url, review_notes, NULL AS published_at FROM learning_material_drafts WHERE package_id = ? AND section_code = ? LIMIT 1'
+            : 'SELECT source_url, review_notes, published_at FROM learning_materials WHERE package_id = ? AND section_code = ? LIMIT 1';
+        $existingStmt = $this->mysqli->prepare($existingQuery);
         $existingStmt->bind_param('is', $packageId, $sectionCode);
         $existingStmt->execute();
         $existingMaterial = $existingStmt->get_result()->fetch_assoc() ?: null;
 
-        $statusFallback = $this->normalizeMaterialStatus($existingMaterial['status'] ?? 'published');
-        $status = $this->normalizeMaterialStatus($requestedStatus, $statusFallback);
         $sourceUrl = array_key_exists('source_url', $data)
             ? trim((string) ($data['source_url'] ?? ''))
             : trim((string) ($existingMaterial['source_url'] ?? ''));
@@ -1370,36 +1755,50 @@ class AdminController {
             : trim((string) ($existingMaterial['review_notes'] ?? ''));
         $sourceUrl = $sourceUrl !== '' ? $sourceUrl : null;
         $reviewNotes = $reviewNotes !== '' ? $reviewNotes : null;
-        $publishedAt = null;
-        if ($status === 'published') {
-            $publishedAt = !empty($existingMaterial['published_at']) && ($existingMaterial['status'] ?? '') === 'published'
-                ? (string) $existingMaterial['published_at']
-                : date('Y-m-d H:i:s');
-        }
+        $publishedAt = $workspace === self::WORKSPACE_DRAFT
+            ? null
+            : (!empty($existingMaterial['published_at']) ? (string) $existingMaterial['published_at'] : date('Y-m-d H:i:s'));
 
         $contentJson = json_encode([
             'topics' => $normalizedTopics,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $query = "INSERT INTO learning_materials (package_id, section_code, title, content_json, status, source_url, review_notes, published_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                  ON DUPLICATE KEY UPDATE
-                    title = VALUES(title),
-                    content_json = VALUES(content_json),
-                    status = VALUES(status),
-                    source_url = VALUES(source_url),
-                    review_notes = VALUES(review_notes),
-                    published_at = VALUES(published_at),
-                    updated_at = CURRENT_TIMESTAMP";
+        $query = $workspace === self::WORKSPACE_DRAFT
+            ? "INSERT INTO learning_material_drafts (package_id, section_code, title, content_json, source_url, review_notes)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON DUPLICATE KEY UPDATE
+                 title = VALUES(title),
+                 content_json = VALUES(content_json),
+                 source_url = VALUES(source_url),
+                 review_notes = VALUES(review_notes),
+                 updated_at = CURRENT_TIMESTAMP"
+            : "INSERT INTO learning_materials (package_id, section_code, title, content_json, status, source_url, review_notes, published_at)
+               VALUES (?, ?, ?, ?, 'published', ?, ?, ?)
+               ON DUPLICATE KEY UPDATE
+                 title = VALUES(title),
+                 content_json = VALUES(content_json),
+                 status = 'published',
+                 source_url = VALUES(source_url),
+                 review_notes = VALUES(review_notes),
+                 published_at = VALUES(published_at),
+                 updated_at = CURRENT_TIMESTAMP";
         $stmt = $this->mysqli->prepare($query);
-        $stmt->bind_param('isssssss', $packageId, $sectionCode, $title, $contentJson, $status, $sourceUrl, $reviewNotes, $publishedAt);
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $stmt->bind_param('isssss', $packageId, $sectionCode, $title, $contentJson, $sourceUrl, $reviewNotes);
+        } else {
+            $stmt->bind_param('issssss', $packageId, $sectionCode, $title, $contentJson, $sourceUrl, $reviewNotes, $publishedAt);
+        }
         $stmt->execute();
 
-        sendResponse('success', $status === 'published' ? 'Materi subtest berhasil dipublish' : 'Draft materi subtest berhasil disimpan', [
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->touchDraftPackage($packageId);
+        }
+
+        sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Draft materi subtest berhasil disimpan' : 'Materi subtest berhasil diperbarui', [
             'material' => [
                 'title' => $title,
                 'topics' => $normalizedTopics,
                 'pages' => $this->flattenMaterialTopics($normalizedTopics),
-                'status' => $status,
+                'status' => $workspace === self::WORKSPACE_DRAFT ? 'draft' : 'published',
                 'source_url' => $sourceUrl,
                 'review_notes' => $reviewNotes ?? '',
                 'published_at' => $publishedAt,
@@ -1410,6 +1809,7 @@ class AdminController {
     public function updateLearningSectionQuestions() {
         verifyAdmin();
         $data = json_decode(file_get_contents('php://input'), true);
+        $workspace = $this->getRequestWorkspace($data);
         $packageId = (int) ($data['package_id'] ?? 0);
         $sectionCode = trim((string) ($data['section_code'] ?? ''));
         $questions = $data['questions'] ?? [];
@@ -1418,7 +1818,11 @@ class AdminController {
             sendResponse('error', 'Package ID dan section harus diisi', null, 400);
         }
 
-        $this->getWorkflowSection($packageId, $sectionCode);
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->ensurePackageDraftExists($packageId);
+        }
+
+        $this->getWorkflowSection($packageId, $sectionCode, $workspace);
         if (!is_array($questions) || count($questions) < 1) {
             sendResponse('error', 'Minimal isi 1 soal mini test', null, 422);
         }
@@ -1434,13 +1838,14 @@ class AdminController {
 
         $this->mysqli->begin_transaction();
         try {
+            $tables = $this->getWorkspaceTables($workspace);
             $fetchExisting = $this->mysqli->prepare(
-                'SELECT id FROM learning_section_questions WHERE package_id = ? AND section_code = ?'
+                sprintf('SELECT id FROM %s WHERE package_id = ? AND section_code = ?', $tables['learning_questions'])
             );
             $fetchExisting->bind_param('is', $packageId, $sectionCode);
             $fetchExisting->execute();
             $existingResult = $fetchExisting->get_result();
-            $deleteOptions = $this->mysqli->prepare('DELETE FROM learning_section_question_options WHERE question_id = ?');
+            $deleteOptions = $this->mysqli->prepare(sprintf('DELETE FROM %s WHERE question_id = ?', $tables['learning_question_options']));
             while ($row = $existingResult->fetch_assoc()) {
                 $questionId = (int) $row['id'];
                 $deleteOptions->bind_param('i', $questionId);
@@ -1448,18 +1853,24 @@ class AdminController {
             }
 
             $deleteQuestions = $this->mysqli->prepare(
-                'DELETE FROM learning_section_questions WHERE package_id = ? AND section_code = ?'
+                sprintf('DELETE FROM %s WHERE package_id = ? AND section_code = ?', $tables['learning_questions'])
             );
             $deleteQuestions->bind_param('is', $packageId, $sectionCode);
             $deleteQuestions->execute();
 
             $insertQuestion = $this->mysqli->prepare(
-                'INSERT INTO learning_section_questions (package_id, section_code, question_text, question_image_url, difficulty, question_order)
-                 VALUES (?, ?, ?, ?, ?, ?)'
+                sprintf(
+                    'INSERT INTO %s (package_id, section_code, question_text, question_image_url, difficulty, question_order)
+                     VALUES (?, ?, ?, ?, ?, ?)',
+                    $tables['learning_questions']
+                )
             );
             $insertOption = $this->mysqli->prepare(
-                'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, option_image_url, is_correct)
-                 VALUES (?, ?, ?, ?, ?)'
+                sprintf(
+                    'INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct)
+                     VALUES (?, ?, ?, ?, ?)',
+                    $tables['learning_question_options']
+                )
             );
 
             $savedQuestions = [];
@@ -1500,13 +1911,222 @@ class AdminController {
             }
 
             $this->mysqli->commit();
-            sendResponse('success', 'Soal mini test subtest berhasil disimpan', [
+            if ($workspace === self::WORKSPACE_DRAFT) {
+                $this->touchDraftPackage($packageId);
+            }
+            sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Soal mini test draft berhasil disimpan' : 'Soal mini test subtest berhasil disimpan', [
                 'section_code' => $sectionCode,
                 'questions' => $savedQuestions,
             ]);
         } catch (Throwable $error) {
             $this->mysqli->rollback();
             sendResponse('error', 'Gagal menyimpan soal mini test', ['details' => $error->getMessage()], 500);
+        }
+    }
+
+    private function replacePublishedQuestionsFromDraft(int $packageId): void {
+        $deleteQuestions = $this->mysqli->prepare('DELETE FROM questions WHERE package_id = ?');
+        $deleteQuestions->bind_param('i', $packageId);
+        $deleteQuestions->execute();
+
+        $query = "SELECT q.*,
+                    GROUP_CONCAT(
+                      JSON_OBJECT(
+                        'letter', qo.option_letter,
+                        'text', qo.option_text,
+                        'image_url', qo.option_image_url,
+                        'is_correct', qo.is_correct
+                      ) ORDER BY qo.id SEPARATOR ','
+                    ) AS options
+                  FROM question_drafts q
+                  LEFT JOIN question_option_drafts qo ON qo.question_id = q.id
+                  WHERE q.package_id = ?
+                  GROUP BY q.id
+                  ORDER BY q.section_order ASC, q.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $this->insertQuestionWithOptions($packageId, [
+                'question_text' => (string) ($row['question_text'] ?? ''),
+                'question_image_url' => $row['question_image_url'] ?: null,
+                'question_image_layout' => (string) ($row['question_image_layout'] ?? 'top'),
+                'question_type' => (string) ($row['question_type'] ?? 'single_choice'),
+                'difficulty' => (string) ($row['difficulty'] ?? 'medium'),
+                'section_code' => (string) ($row['section_code'] ?? ''),
+                'section_name' => (string) ($row['section_name'] ?? ''),
+                'section_order' => (int) ($row['section_order'] ?? 1),
+                'options' => $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [],
+            ], self::WORKSPACE_PUBLISHED);
+        }
+    }
+
+    private function replacePublishedMaterialsFromDraft(int $packageId): void {
+        $deleteMaterials = $this->mysqli->prepare('DELETE FROM learning_materials WHERE package_id = ?');
+        $deleteMaterials->bind_param('i', $packageId);
+        $deleteMaterials->execute();
+
+        $query = 'SELECT section_code, title, content_json, source_url, review_notes FROM learning_material_drafts WHERE package_id = ? ORDER BY section_code ASC';
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $insertMaterial = $this->mysqli->prepare(
+            "INSERT INTO learning_materials (package_id, section_code, title, content_json, status, source_url, review_notes, published_at)
+             VALUES (?, ?, ?, ?, 'published', ?, ?, CURRENT_TIMESTAMP)"
+        );
+
+        while ($row = $result->fetch_assoc()) {
+            $sectionCode = (string) ($row['section_code'] ?? '');
+            $title = (string) ($row['title'] ?? '');
+            $contentJson = (string) ($row['content_json'] ?? '');
+            $sourceUrl = ($row['source_url'] ?? null) ?: null;
+            $reviewNotes = ($row['review_notes'] ?? null) ?: null;
+            $insertMaterial->bind_param('isssss', $packageId, $sectionCode, $title, $contentJson, $sourceUrl, $reviewNotes);
+            $insertMaterial->execute();
+        }
+    }
+
+    private function replacePublishedMiniTestsFromDraft(int $packageId): void {
+        $deleteQuestions = $this->mysqli->prepare('DELETE FROM learning_section_questions WHERE package_id = ?');
+        $deleteQuestions->bind_param('i', $packageId);
+        $deleteQuestions->execute();
+
+        $query = "SELECT q.*,
+                    GROUP_CONCAT(
+                      JSON_OBJECT(
+                        'letter', qo.option_letter,
+                        'text', qo.option_text,
+                        'image_url', qo.option_image_url,
+                        'is_correct', qo.is_correct
+                      ) ORDER BY qo.id SEPARATOR ','
+                    ) AS options
+                  FROM learning_section_question_drafts q
+                  LEFT JOIN learning_section_question_option_drafts qo ON qo.question_id = q.id
+                  WHERE q.package_id = ?
+                  GROUP BY q.id
+                  ORDER BY q.section_code ASC, q.question_order ASC, q.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $insertQuestion = $this->mysqli->prepare(
+            'INSERT INTO learning_section_questions (package_id, section_code, question_text, question_image_url, difficulty, question_order)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        $insertOption = $this->mysqli->prepare(
+            'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, option_image_url, is_correct)
+             VALUES (?, ?, ?, ?, ?)'
+        );
+
+        while ($row = $result->fetch_assoc()) {
+            $sectionCode = (string) ($row['section_code'] ?? '');
+            $questionText = (string) ($row['question_text'] ?? '');
+            $questionImageUrl = ($row['question_image_url'] ?? null) ?: null;
+            $difficulty = (string) ($row['difficulty'] ?? 'medium');
+            $questionOrder = (int) ($row['question_order'] ?? 1);
+            $insertQuestion->bind_param('issssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $difficulty, $questionOrder);
+            $insertQuestion->execute();
+            $publishedQuestionId = (int) $insertQuestion->insert_id;
+            $options = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+            foreach ($options as $option) {
+                $letter = (string) ($option['letter'] ?? 'A');
+                $text = (string) ($option['text'] ?? '');
+                $imageUrl = ($option['image_url'] ?? null) ?: null;
+                $isCorrect = !empty($option['is_correct']) ? 1 : 0;
+                $insertOption->bind_param('isssi', $publishedQuestionId, $letter, $text, $imageUrl, $isCorrect);
+                $insertOption->execute();
+            }
+        }
+    }
+
+    public function savePackageDraft() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        $packageId = (int) ($data['package_id'] ?? 0);
+        if ($packageId <= 0) {
+            sendResponse('error', 'Package ID harus diisi', null, 400);
+        }
+
+        $this->ensurePackageDraftExists($packageId);
+        $this->syncQuestionCount($packageId, self::WORKSPACE_DRAFT);
+        $this->touchDraftPackage($packageId);
+
+        $draftPackage = $this->getDraftPackage($packageId);
+        sendResponse('success', 'Draft paket berhasil disimpan', [
+            'package_id' => $packageId,
+            'last_saved_at' => $draftPackage['last_saved_at'] ?? null,
+        ]);
+    }
+
+    public function publishPackageDraft() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        $packageId = (int) ($data['package_id'] ?? 0);
+        if ($packageId <= 0) {
+            sendResponse('error', 'Package ID harus diisi', null, 400);
+        }
+
+        $this->ensurePackageDraftExists($packageId);
+        $draftPackage = $this->getPackageByWorkspace($packageId, self::WORKSPACE_DRAFT);
+        $publishedPackage = $this->getPackage($packageId);
+        $transactionStarted = false;
+
+        try {
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
+
+            $updatePackage = $this->mysqli->prepare(
+                'UPDATE test_packages
+                 SET category_id = ?,
+                     name = ?,
+                     description = ?,
+                     price = ?,
+                     duration_days = ?,
+                     max_attempts = ?,
+                     time_limit = ?,
+                     test_mode = ?,
+                     workflow_config = ?
+                 WHERE id = ?'
+            );
+            $updatePackage->bind_param(
+                'issiiiissi',
+                $draftPackage['category_id'],
+                $draftPackage['name'],
+                $draftPackage['description'],
+                $draftPackage['price'],
+                $draftPackage['duration_days'],
+                $draftPackage['max_attempts'],
+                $draftPackage['time_limit'],
+                $draftPackage['test_mode'],
+                $draftPackage['workflow_config'],
+                $packageId
+            );
+            $updatePackage->execute();
+
+            $this->replacePublishedQuestionsFromDraft($packageId);
+            $this->replacePublishedMaterialsFromDraft($packageId);
+            $this->replacePublishedMiniTestsFromDraft($packageId);
+
+            $previousWorkflow = TestWorkflow::buildPackageWorkflow($publishedPackage);
+            $nextWorkflow = TestWorkflow::buildPackageWorkflow($draftPackage);
+            $this->syncPackageWorkflowData($packageId, $previousWorkflow, $nextWorkflow, self::WORKSPACE_PUBLISHED);
+            $this->syncQuestionCount($packageId, self::WORKSPACE_PUBLISHED);
+            $this->touchDraftPackage($packageId, true);
+
+            $this->mysqli->commit();
+            sendResponse('success', 'Draft paket berhasil dipublish ke peserta', [
+                'package_id' => $packageId,
+            ]);
+        } catch (Throwable $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', 'Gagal mempublish draft paket', ['details' => $error->getMessage()], 500);
         }
     }
 }
@@ -1550,6 +2170,10 @@ if (strpos($requestPath, '/api/admin/package-types') !== false && $requestMethod
     $controller->updateLearningMaterial();
 } elseif (strpos($requestPath, '/api/admin/learning-section-questions') !== false && $requestMethod === 'PUT') {
     $controller->updateLearningSectionQuestions();
+} elseif (strpos($requestPath, '/api/admin/package-drafts/save') !== false && $requestMethod === 'POST') {
+    $controller->savePackageDraft();
+} elseif (strpos($requestPath, '/api/admin/package-drafts/publish') !== false && $requestMethod === 'POST') {
+    $controller->publishPackageDraft();
 } else {
     sendResponse('error', 'Endpoint admin tidak ditemukan', null, 404);
 }

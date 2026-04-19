@@ -190,6 +190,15 @@ function getMaterialStatusLabel(status) {
   return normalizeMaterialStatus(status) === 'draft' ? 'Draft' : 'Published';
 }
 
+function getTopicStatus(material, topicIndex) {
+  const statuses = material?.topic_statuses;
+  if (Array.isArray(statuses)) {
+    return normalizeMaterialStatus(statuses[topicIndex]);
+  }
+
+  return normalizeMaterialStatus(material?.status);
+}
+
 function formatSubtestSidebarLabel(topicCount) {
   return `${topicCount} topik dan 1 mini test`;
 }
@@ -520,9 +529,13 @@ export default function AdminPanel() {
   const sectionStats = useMemo(() => {
     const counts = questions.reduce((accumulator, question) => {
       const code = String(question.section_code || 'general');
+      const status = normalizeMaterialStatus(question.status);
       return {
         ...accumulator,
-        [code]: (accumulator[code] || 0) + 1,
+        [code]: {
+          count: (accumulator[code]?.count || 0) + 1,
+          draftCount: (accumulator[code]?.draftCount || 0) + (status === 'draft' ? 1 : 0),
+        },
       };
     }, {});
 
@@ -530,21 +543,30 @@ export default function AdminPanel() {
       code: String(section.code),
       name: section.name,
       sessionName: section.session_name || '',
-      count: counts[String(section.code)] || 0,
+      count: counts[String(section.code)]?.count || 0,
+      draftCount: counts[String(section.code)]?.draftCount || 0,
+      status: (counts[String(section.code)]?.draftCount || 0) > 0 ? 'draft' : 'published',
     }));
 
     const knownCodes = new Set(mappedSections.map((section) => section.code));
     const uncategorizedSections = Object.entries(counts)
       .filter(([code]) => !knownCodes.has(code))
-      .map(([code, count]) => ({
+      .map(([code, stats]) => ({
         code,
         name: questions.find((question) => String(question.section_code || 'general') === code)?.section_name || 'Bagian umum',
         sessionName: '',
-        count,
+        count: stats?.count || 0,
+        draftCount: stats?.draftCount || 0,
+        status: (stats?.draftCount || 0) > 0 ? 'draft' : 'published',
       }));
 
     return [...mappedSections, ...uncategorizedSections];
   }, [packageSections, questions]);
+  const draftTryoutQuestionCount = useMemo(
+    () => questions.filter((question) => normalizeMaterialStatus(question.status) === 'draft').length,
+    [questions]
+  );
+  const tryoutStatus = draftTryoutQuestionCount > 0 ? 'draft' : 'published';
 
   const filteredQuestions = useMemo(() => {
     const needle = questionQuery.trim().toLowerCase();
@@ -2158,7 +2180,8 @@ export default function AdminPanel() {
                       const topics = getMaterialTopics(section.material);
                       const isSectionActive = section.code === activeLearningSection?.code;
                       const isMiniTestActive = isSectionActive && learningEditorMode === 'quiz';
-                      const materialStatus = normalizeMaterialStatus(section.material?.status);
+                      const materialStatus = normalizeMaterialStatus(section.status || section.material?.status);
+                      const miniTestStatus = normalizeMaterialStatus(section.mini_test_status || 'published');
 
                       return (
                         <div key={section.code} className="admin-section-sidebar-entry">
@@ -2241,7 +2264,9 @@ export default function AdminPanel() {
 
                           {expandedMaterialSections[section.code] && (
                             <div className="admin-section-sidebar-children">
-                              {topics.map((topic, index) => (
+                              {topics.map((topic, index) => {
+                                const topicStatus = getTopicStatus(section.material, index);
+                                return (
                                 <div key={`${section.code}-topic-${index}`} className="admin-section-sidebar-child-row">
                                   <button
                                     type="button"
@@ -2255,6 +2280,9 @@ export default function AdminPanel() {
                                   >
                                     <span>{index + 1}</span>
                                     <strong>{topic.title || `Topik ${index + 1}`}</strong>
+                                    <small className={`admin-inline-status admin-inline-status-${topicStatus}`}>
+                                      {getMaterialStatusLabel(topicStatus)}
+                                    </small>
                                   </button>
                                   {isDraftWorkspace && (
                                     <div className="admin-section-sidebar-child-actions">
@@ -2279,7 +2307,8 @@ export default function AdminPanel() {
                                     </div>
                                   )}
                                 </div>
-                              ))}
+                                );
+                              })}
                               <div className="admin-section-sidebar-child-row admin-section-sidebar-child-row-mini-test">
                                 <button
                                   type="button"
@@ -2292,6 +2321,9 @@ export default function AdminPanel() {
                                 >
                                   <span>MT</span>
                                   <strong>Mini Test Subtest</strong>
+                                  <small className={`admin-inline-status admin-inline-status-${miniTestStatus}`}>
+                                    {getMaterialStatusLabel(miniTestStatus)}
+                                  </small>
                                 </button>
                                 {isDraftWorkspace && (
                                   <div className="admin-section-sidebar-child-actions">
@@ -2320,7 +2352,17 @@ export default function AdminPanel() {
                   className={adminView === 'soal' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
                   onClick={openQuestionView}
                 >
-                  Bank Soal
+                  <span className="admin-sidebar-link-copy">
+                    <strong>Bank Soal</strong>
+                    <small>
+                      {draftTryoutQuestionCount > 0
+                        ? `${draftTryoutQuestionCount} soal belum dipublish`
+                        : `${questions.length} soal sudah sinkron`}
+                    </small>
+                  </span>
+                  <span className={`admin-material-status-badge admin-material-status-badge-${tryoutStatus}`}>
+                    {getMaterialStatusLabel(tryoutStatus)}
+                  </span>
                 </button>
               </div>
             </aside>
@@ -2737,6 +2779,7 @@ export default function AdminPanel() {
                                 const isExpanded = expandedLearningQuestionKey === rowKey;
                                 const editorTargetId = Number(question.id || 0) > 0 ? String(question.id) : 'new';
                                 const editorOptions = Number(question.id || 0) > 0 ? {} : { draftIndex: questionIndex };
+                                const learningQuestionStatus = normalizeMaterialStatus(question.status);
 
                                 return (
                                   <div
@@ -2762,6 +2805,9 @@ export default function AdminPanel() {
 
                                       <div className="admin-question-row-meta">
                                         <span className="account-package-tag">{formatDifficultyLabel(question.difficulty)}</span>
+                                        <span className={`admin-material-status-badge admin-material-status-badge-${learningQuestionStatus}`}>
+                                          {getMaterialStatusLabel(learningQuestionStatus)}
+                                        </span>
                                       </div>
 
                                       <div className="admin-question-row-count">
@@ -2870,6 +2916,11 @@ export default function AdminPanel() {
                               <section className="learning-page">
                                 <span>Topik materi aktif</span>
                                 <h3>{activeMaterialTopic.title || `Topik ${Number(activeMaterialTopicIndex) + 1}`}</h3>
+                                <div className="admin-inline-status-row">
+                                  <span className={`admin-material-status-badge admin-material-status-badge-${getTopicStatus(activeLearningSection.material, activeMaterialTopicIndex || 0)}`}>
+                                    {getMaterialStatusLabel(getTopicStatus(activeLearningSection.material, activeMaterialTopicIndex || 0))}
+                                  </span>
+                                </div>
                                 <p>
                                   {(activeMaterialTopic.pages || []).length > 0
                                     ? `${(activeMaterialTopic.pages || []).length} halaman siap ditinjau.`
@@ -2935,6 +2986,18 @@ export default function AdminPanel() {
                         <p className="text-muted">
                           {selectedPackage ? `${selectedPackage.name} • ${filteredQuestions.length}/${questions.length} soal tampil` : 'Pilih paket terlebih dahulu'}
                         </p>
+                        {selectedPackage && (
+                          <div className="admin-inline-status-row">
+                            <span className={`admin-material-status-badge admin-material-status-badge-${tryoutStatus}`}>
+                              {getMaterialStatusLabel(tryoutStatus)}
+                            </span>
+                            <span className="admin-inline-status-note">
+                              {draftTryoutQuestionCount > 0
+                                ? `${draftTryoutQuestionCount} soal punya update terbaru yang belum dipublish.`
+                                : 'Semua soal tryout sudah sinkron dengan versi published.'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="admin-list-toolbar-actions">
                         <select
@@ -2975,7 +3038,12 @@ export default function AdminPanel() {
                           onClick={() => setQuestionSectionFilter('')}
                         >
                           <span>Semua Subtes</span>
-                          <strong>{questions.length}</strong>
+                          <div className="admin-section-summary-chip-footer">
+                            <strong>{questions.length}</strong>
+                            <small className={`admin-inline-status admin-inline-status-${tryoutStatus}`}>
+                              {getMaterialStatusLabel(tryoutStatus)}
+                            </small>
+                          </div>
                         </button>
                         {sectionStats.map((section) => (
                           <button
@@ -2985,7 +3053,12 @@ export default function AdminPanel() {
                             onClick={() => setQuestionSectionFilter(section.code)}
                           >
                             <span>{section.name}</span>
-                            <strong>{section.count}</strong>
+                            <div className="admin-section-summary-chip-footer">
+                              <strong>{section.count}</strong>
+                              <small className={`admin-inline-status admin-inline-status-${section.status}`}>
+                                {section.draftCount > 0 ? `${section.draftCount} draft` : 'Published'}
+                              </small>
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -3046,6 +3119,7 @@ export default function AdminPanel() {
                         </div>
                         {filteredQuestions.map((question) => {
                           const isExpanded = Number(expandedQuestionId) === Number(question.id);
+                          const tryoutQuestionStatus = normalizeMaterialStatus(question.status);
                           return (
                             <div key={question.id} className={`admin-question-row-wrap admin-question-row-wrap-modern ${isExpanded ? 'admin-question-row-wrap-expanded' : ''}`}>
                               <div className="admin-question-row">
@@ -3067,6 +3141,9 @@ export default function AdminPanel() {
 
                                 <div className="admin-question-row-meta">
                                   <span className="account-package-tag">{question.section_name || 'Bagian umum'}</span>
+                                  <span className={`admin-material-status-badge admin-material-status-badge-${tryoutQuestionStatus}`}>
+                                    {getMaterialStatusLabel(tryoutQuestionStatus)}
+                                  </span>
                                 </div>
 
                                 <div className="admin-question-row-count">

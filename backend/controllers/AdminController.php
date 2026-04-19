@@ -1908,8 +1908,9 @@ class AdminController {
         $sections = [];
         foreach ($workflow['sections'] as $section) {
             $sectionCode = (string) $section['code'];
-            $defaultPages = LearningContent::defaultMaterialPages($section, (string) $workflow['mode']);
-            $defaultTopics = $this->buildTopicsFromPages($defaultPages);
+            $defaultMaterialPayload = LearningContent::defaultMaterialContent($section, (string) $workflow['mode']);
+            $defaultTopics = $this->hydrateMaterialTopics($defaultMaterialPayload, []);
+            $defaultPages = $this->flattenMaterialTopics($defaultTopics);
             $publishedMaterial = $publishedMaterialMap[$sectionCode] ?? [
                 'title' => (string) $section['name'],
                 'topics' => $defaultTopics,

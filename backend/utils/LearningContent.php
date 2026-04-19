@@ -9,38 +9,114 @@ class LearningContent {
         ];
     }
 
-    public static function defaultMaterialPages(array $section, string $mode = ''): array {
+    private static function topic(string $title, array $pages): array {
+        return [
+            'title' => $title,
+            'pages' => $pages,
+        ];
+    }
+
+    private static function wrapPagesAsTopics(array $pages): array {
+        return [
+            'topics' => array_map(static function (array $page, int $index): array {
+                return [
+                    'title' => trim((string) ($page['title'] ?? '')) ?: 'Topik ' . ($index + 1),
+                    'pages' => [$page],
+                ];
+            }, $pages, array_keys($pages)),
+        ];
+    }
+
+    private static function flattenTopics(array $topics): array {
+        $pages = [];
+        foreach ($topics as $topic) {
+            foreach (($topic['pages'] ?? []) as $page) {
+                if (is_array($page)) {
+                    $pages[] = $page;
+                }
+            }
+        }
+
+        return $pages;
+    }
+
+    public static function defaultMaterialContent(array $section, string $mode = ''): array {
         $code = (string) ($section['code'] ?? 'general');
         $name = (string) ($section['name'] ?? 'Materi');
         $haystack = strtolower($code . ' ' . $name . ' ' . $mode);
 
         if ($code === 'twk') {
             return [
-                self::page('Pancasila', [
-                    'Pancasila dipahami sebagai dasar nilai bangsa dan sumber arah bersikap dalam kehidupan bermasyarakat, berbangsa, dan bernegara.',
-                    'Setiap sila perlu dibaca dari makna intinya, lalu dihubungkan dengan contoh perilaku seperti musyawarah, keadilan, toleransi, dan tanggung jawab.',
-                    'Dalam soal TWK, opsi yang kuat biasanya mencerminkan keseimbangan antara kemanusiaan, persatuan, dan kepentingan umum.',
-                ], 'Pegangan utama topik ini adalah memahami isi tiap sila dan penerapannya dalam kasus sehari-hari.'),
-                self::page('Undang-Undang Dasar 1945', [
-                    'UUD 1945 menjadi landasan konstitusional yang mengatur hak dan kewajiban warga negara, bentuk negara, serta susunan lembaga negara.',
-                    'Fokus belajar sebaiknya diarahkan pada pembukaan, pokok-pokok pasal, dan hubungan antara kewenangan lembaga dengan prinsip negara hukum.',
-                    'Saat mengerjakan soal, bedakan antara nilai dasar, aturan konstitusi, dan praktik penyelenggaraan negara.',
-                ], 'Topik ini akan lebih mudah dikuasai jika pasal penting dibaca bersama konteks fungsi dan tujuannya.'),
-                self::page('Bhinneka Tunggal Ika', [
-                    'Bhinneka Tunggal Ika menekankan persatuan dalam keberagaman, sehingga toleransi dan penghormatan terhadap perbedaan menjadi inti pembahasan.',
-                    'Soal biasanya menguji sikap terhadap perbedaan suku, agama, budaya, bahasa, dan pandangan, terutama dalam kerja sama sosial.',
-                    'Jawaban yang baik menghindari diskriminasi, menjaga persatuan, dan tetap menghormati identitas tiap kelompok.',
-                ], 'Inti topik ini adalah melihat keberagaman sebagai kekuatan yang dijaga dengan sikap inklusif.'),
-                self::page('NKRI', [
-                    'NKRI menegaskan Indonesia sebagai negara kesatuan yang menjaga kedaulatan wilayah, persatuan nasional, dan kepentingan bangsa.',
-                    'Pembahasan sering terkait ancaman disintegrasi, bela negara, wawasan nusantara, dan peran warga dalam menjaga keutuhan negara.',
-                    'Pada soal TWK, pilihan yang tepat biasanya berpihak pada hukum, ketahanan nasional, dan semangat menjaga kesatuan Indonesia.',
-                ], 'Saat membaca soal NKRI, arahkan pilihan pada kepentingan nasional, persatuan, dan stabilitas negara.'),
+                'topics' => [
+                    self::topic('Pancasila', [
+                        self::page('Pancasila sebagai Dasar Negara', [
+                            'Pancasila menjadi dasar negara sekaligus panduan nilai dalam kehidupan berbangsa dan bernegara. Kedudukannya terlihat pada Pembukaan UUD 1945 yang memuat lima sila sebagai landasan penyelenggaraan negara.',
+                            'Dalam TWK, Pancasila tidak cukup dipahami sebagai hafalan urutan sila. Peserta perlu melihat fungsi Pancasila sebagai sumber orientasi moral, arah kebijakan, dan tolok ukur perilaku warga negara maupun aparatur.',
+                            'Karena itu, soal Pancasila sering menempatkan peserta pada situasi konkret. Jawaban yang paling kuat biasanya tidak hanya benar secara pribadi, tetapi juga selaras dengan kepentingan umum, persatuan, dan keadilan.',
+                        ], 'Fokus halaman ini adalah memahami bahwa Pancasila menjadi fondasi nilai, bukan sekadar simbol atau slogan kebangsaan.'),
+                        self::page('Makna Tiap Sila', [
+                            'Sila pertama menekankan penghormatan terhadap ketuhanan dan kebebasan menjalankan ibadah. Sila kedua mengarahkan manusia Indonesia untuk bersikap adil, beradab, dan menghormati martabat sesama.',
+                            'Sila ketiga menegaskan bahwa keberagaman harus diarahkan pada persatuan Indonesia. Sila keempat mengutamakan musyawarah, kebijaksanaan, dan keterwakilan dalam mengambil keputusan bersama.',
+                            'Sila kelima menuntut keadilan sosial yang dirasakan seluruh rakyat. Dalam soal, pilihan yang baik umumnya menunjukkan keseimbangan antara hak, kewajiban, kepentingan masyarakat, dan keadilan yang tidak diskriminatif.',
+                        ], 'Saat membaca opsi jawaban, hubungkan kasus dengan sila yang paling dominan, lalu cek apakah solusi yang dipilih tetap menjaga sila lainnya.'),
+                        self::page('Penerapan Pancasila dalam Kehidupan', [
+                            'Penerapan Pancasila tampak dalam sikap toleran, mau bermusyawarah, mendahulukan kepentingan bangsa, taat hukum, dan menjaga pelayanan yang adil. Nilai-nilai ini menjadi pola perilaku, bukan hanya teori kebangsaan.',
+                            'Dalam konteks pekerjaan, implementasi Pancasila terlihat saat seseorang menolak penyalahgunaan wewenang, tidak memihak secara tidak adil, dan tetap menjaga kepentingan publik. Dalam konteks sosial, penerapannya terlihat dari kerja sama lintas kelompok dan penghormatan terhadap perbedaan.',
+                            'Karena TWK sering memakai soal situasional, peserta perlu membiasakan diri memilih tindakan yang etis, tidak ekstrem, dan tidak hanya menguntungkan diri sendiri. Opsi yang terlalu keras, diskriminatif, atau mengabaikan musyawarah biasanya lemah.',
+                        ], 'Kesimpulan utamanya: implementasi Pancasila selalu mengarah pada sikap yang manusiawi, inklusif, dan berpihak pada kepentingan bersama.'),
+                    ]),
+                    self::topic('Undang-Undang Dasar 1945', [
+                        self::page('Kedudukan UUD NRI 1945', [
+                            'Undang-Undang Dasar Negara Republik Indonesia Tahun 1945 merupakan konstitusi negara. Fungsinya adalah menjadi dasar hukum tertinggi yang mengatur bentuk negara, hubungan lembaga negara, serta hak dan kewajiban warga negara.',
+                            'Dalam belajar TWK, UUD 1945 perlu dipahami sebagai kerangka besar penyelenggaraan negara. Artinya, ketika muncul soal tentang lembaga negara, hak warga, atau prinsip pemerintahan, acuannya tetap kembali pada konstitusi.',
+                            'Pemahaman yang baik tidak berhenti pada nomor pasal. Yang lebih penting adalah mengetahui mengapa suatu aturan ada, siapa yang diatur, dan nilai apa yang dilindungi oleh ketentuan tersebut.',
+                        ], 'Halaman ini menekankan bahwa UUD 1945 adalah acuan tertinggi dalam tata negara Indonesia.'),
+                        self::page('Pembukaan UUD 1945', [
+                            'Pembukaan UUD 1945 memuat pokok pikiran yang sangat penting: alasan kemerdekaan, tujuan negara, dan dasar negara. Di dalamnya tercermin cita-cita untuk melindungi segenap bangsa, memajukan kesejahteraan umum, mencerdaskan kehidupan bangsa, dan ikut melaksanakan ketertiban dunia.',
+                            'Pembukaan juga memuat rumusan Pancasila yang menjadi dasar negara. Karena itu, dalam soal TWK, pembahasan Pancasila dan UUD 1945 sering beririsan. Satu berbicara tentang nilai dasar, yang lain memberi bentuk konstitusionalnya.',
+                            'Peserta perlu melihat bahwa Pembukaan bukan sekadar teks sejarah. Ia menjadi sumber arah penyelenggaraan negara dan sering dipakai untuk menilai apakah kebijakan atau tindakan sejalan dengan tujuan bernegara.',
+                        ], 'Jika soal menyentuh tujuan negara atau dasar filosofis penyelenggaraan pemerintahan, fokus utama biasanya berada pada Pembukaan UUD 1945.'),
+                        self::page('Pasal-Pasal Penting dan Prinsip Negara Hukum', [
+                            'UUD 1945 menegaskan bahwa Indonesia adalah negara kesatuan berbentuk republik dan juga negara hukum. Artinya, kekuasaan dijalankan menurut aturan, bukan semata-mata kehendak penguasa atau kelompok tertentu.',
+                            'Konstitusi juga menegaskan bahwa kedaulatan berada di tangan rakyat dan dilaksanakan menurut undang-undang dasar. Dari sini lahir pengaturan mengenai lembaga negara, pembagian kewenangan, mekanisme pengawasan, dan proses pembentukan peraturan.',
+                            'Dalam TWK, prinsip negara hukum biasanya terlihat pada pilihan jawaban yang menekankan prosedur, akuntabilitas, dan penghormatan terhadap hak warga. Pilihan yang melompati hukum demi kepentingan sesaat cenderung tidak tepat.',
+                        ], 'Pegangan utamanya adalah membedakan tindakan yang konstitusional dari tindakan yang tampak cepat tetapi mengabaikan hukum.'),
+                        self::page('Hak dan Kewajiban Warga Negara', [
+                            'UUD 1945 tidak hanya mengatur hak warga negara, tetapi juga kewajiban. Keduanya harus dipahami secara seimbang agar kehidupan bernegara berjalan tertib dan adil.',
+                            'Hak mencakup perlindungan hukum, kesempatan memperoleh pendidikan, kebebasan beragama, dan berbagai jaminan konstitusional lainnya. Di sisi lain, warga negara juga berkewajiban menaati hukum, menghormati hak orang lain, serta ikut menjaga kehidupan kebangsaan.',
+                            'Dalam soal TWK, jawaban yang baik biasanya tidak memisahkan hak dari tanggung jawab. Opsi yang menuntut hak tanpa memperhatikan aturan, kewajiban, atau kepentingan umum sering kali kurang tepat.',
+                        ], 'Pahami hak dan kewajiban sebagai pasangan yang saling melengkapi dalam kehidupan demokratis dan negara hukum.'),
+                    ]),
+                    self::topic('Bhinneka Tunggal Ika', [
+                        self::page('Asal Usul dan Makna Bhinneka Tunggal Ika', [
+                            'Bhinneka Tunggal Ika merupakan semboyan negara yang tertulis pada lambang Garuda Pancasila. Maknanya menegaskan bahwa Indonesia terdiri atas banyak perbedaan, tetapi tetap dipersatukan dalam satu kebangsaan.',
+                            'Secara historis, frasa ini berasal dari Kakawin Sutasoma karya Mpu Tantular. Dalam konteks kebangsaan modern, semboyan ini dipahami sebagai semangat menjaga persatuan di tengah kemajemukan suku, agama, budaya, bahasa, dan pandangan sosial.',
+                            'TWK sering menguji pemahaman ini melalui situasi yang melibatkan perbedaan latar belakang. Opsi yang baik biasanya menjaga rasa hormat, menolak diskriminasi, dan tetap mendorong kerja sama untuk tujuan bersama.',
+                        ], 'Inti halaman ini adalah memahami Bhinneka Tunggal Ika sebagai perekat kebangsaan, bukan sekadar semboyan formal.'),
+                        self::page('Implementasi dalam Kehidupan Berbangsa', [
+                            'Penerapan Bhinneka Tunggal Ika terlihat ketika masyarakat mampu bekerja sama tanpa mempersoalkan identitas asal, agama, bahasa, atau budaya. Semangat ini menolak sikap eksklusif yang memecah belah kehidupan sosial.',
+                            'Dalam lingkungan sekolah, kampus, kantor, atau masyarakat, implementasinya tampak pada komunikasi yang saling menghormati, penyelesaian konflik tanpa prasangka, dan kemauan membangun tujuan bersama. Nilai ini juga sejalan dengan semangat persatuan Indonesia dalam Pancasila.',
+                            'Pada soal TWK, pilihan yang terlalu memihak kelompok sendiri, menutup ruang dialog, atau membiarkan diskriminasi biasanya tidak sesuai. Yang dicari adalah sikap inklusif, proporsional, dan tetap menjaga ketertiban bersama.',
+                        ], 'Bhinneka Tunggal Ika mengajarkan bahwa keragaman perlu dikelola melalui toleransi aktif dan komitmen pada persatuan nasional.'),
+                    ]),
+                    self::topic('NKRI', [
+                        self::page('Pengertian NKRI', [
+                            'NKRI adalah Negara Kesatuan Republik Indonesia. UUD 1945 menegaskan bahwa Indonesia berbentuk negara kesatuan, sehingga seluruh wilayah nusantara berada dalam satu kedaulatan, satu pemerintahan nasional, dan satu konstitusi.',
+                            'Makna negara kesatuan penting dipahami untuk membedakannya dari bentuk negara federal. Daerah memang memiliki kewenangan otonomi, tetapi tetap berada dalam kerangka nasional yang sama dan tidak berdiri sebagai negara tersendiri.',
+                            'Dalam TWK, NKRI biasanya dikaitkan dengan persatuan wilayah, semangat kebangsaan, dan kepentingan nasional. Karena itu, jawaban yang tepat umumnya mendukung integrasi, hukum nasional, dan stabilitas negara.',
+                        ], 'Halaman ini menekankan bahwa NKRI adalah bentuk negara yang menjaga kesatuan wilayah dan arah kebijakan nasional.'),
+                        self::page('Menjaga Keutuhan NKRI', [
+                            'Menjaga keutuhan NKRI bukan hanya tugas aparat, tetapi juga tanggung jawab seluruh warga negara. Bentuk nyatanya antara lain menaati hukum, menjaga kerukunan, tidak mudah terprovokasi, dan ikut memperkuat persatuan dalam ruang sosial maupun digital.',
+                            'Ancaman terhadap NKRI dapat muncul dalam bentuk disintegrasi, konflik horizontal, penyebaran kebencian, atau tindakan yang melemahkan kepercayaan terhadap negara. Karena itu, sikap bela negara tidak selalu berbentuk militer, tetapi juga mencakup disiplin, tanggung jawab, dan kontribusi positif bagi bangsa.',
+                            'Dalam soal TWK, pilihan yang baik biasanya menunjukkan ketegasan menjaga persatuan, namun tetap konstitusional dan tidak melanggar hak warga. Keutuhan negara harus dijaga melalui hukum, pendidikan kebangsaan, dan partisipasi yang sehat.',
+                        ], 'Pegangan akhirnya: menjaga NKRI berarti menjaga persatuan, kedaulatan, dan ketertiban nasional secara konstitusional.'),
+                    ]),
+                ],
             ];
         }
 
         if ($code === 'tiu') {
-            return [
+            return self::wrapPagesAsTopics([
                 self::page('Peta TIU', [
                     'TIU mengukur kemampuan verbal, numerik, logika, dan analitis.',
                     'Kelompokkan tipe soal: sinonim, antonim, analogi, silogisme, deret, aritmetika, dan figural.',
@@ -61,11 +137,11 @@ class LearningContent {
                     'Tandai soal panjang untuk kembali setelah poin mudah aman.',
                     'Gunakan mini test TIU untuk mengecek akurasi saat waktu dibatasi.',
                 ], 'Milestone TIU selesai setelah materi dibaca dan mini test subtest dikerjakan.'),
-            ];
+            ]);
         }
 
         if ($code === 'tkp') {
-            return [
+            return self::wrapPagesAsTopics([
                 self::page('Peta TKP', [
                     'TKP mengukur pelayanan publik, jejaring kerja, sosial budaya, profesionalisme, dan teknologi informasi.',
                     'Jawaban terbaik biasanya aktif, etis, komunikatif, dan tetap mengikuti prosedur.',
@@ -86,11 +162,11 @@ class LearningContent {
                     'Bandingkan dua opsi terbaik dari sisi dampak, aturan, dan komunikasi.',
                     'Gunakan mini test TKP untuk membiasakan diri membaca nuansa pilihan jawaban.',
                 ], 'Selesaikan materi lalu mini test agar milestone TKP tercentang.'),
-            ];
+            ]);
         }
 
         if (strpos($haystack, 'literasi') !== false || strpos($haystack, 'ppu') !== false || strpos($haystack, 'pbm') !== false) {
-            return [
+            return self::wrapPagesAsTopics([
                 self::page('Peta ' . $name, [
                     'Literasi menguji gagasan utama, detail, inferensi, sikap penulis, dan hubungan antarparagraf.',
                     'Baca pertanyaan dulu jika teks panjang agar perhatian tertuju pada informasi yang dicari.',
@@ -111,11 +187,11 @@ class LearningContent {
                     'Coret opsi yang terlalu umum, terlalu sempit, atau tidak didukung teks.',
                     'Gunakan mini test untuk melatih stamina membaca dan akurasi pilihan.',
                 ], 'Milestone literasi selesai setelah materi dan mini test beres.'),
-            ];
+            ]);
         }
 
         if (strpos($haystack, 'matematika') !== false || strpos($haystack, 'kuantitatif') !== false || strpos($haystack, 'pk') !== false) {
-            return [
+            return self::wrapPagesAsTopics([
                 self::page('Peta ' . $name, [
                     'Materi ini menekankan aljabar dasar, rasio, statistika, pola bilangan, dan interpretasi data.',
                     'Tuliskan apa yang diketahui dan yang ditanya sebelum memilih rumus.',
@@ -136,10 +212,10 @@ class LearningContent {
                     'Kembalikan semua jawaban ke konteks: satuan, rentang, dan logika hasil.',
                     'Akhiri dengan mini test subtest untuk menutup milestone.',
                 ], 'Milestone selesai saat materi dibaca dan mini test subtest dikerjakan.'),
-            ];
+            ]);
         }
 
-        return [
+        return self::wrapPagesAsTopics([
             self::page('Peta ' . $name, [
                 'Subtest ini mengukur kemampuan melihat pola, hubungan informasi, dan konsistensi kesimpulan.',
                 'Pisahkan fakta, asumsi, dan inferensi sebelum memilih jawaban.',
@@ -160,7 +236,59 @@ class LearningContent {
                 'Baca ulang premis jika dua opsi terlihat sama kuat.',
                 'Akhiri dengan mini test subtest untuk mengunci ritme pengerjaan.',
             ], 'Milestone subtest selesai setelah bacaan dan mini test selesai.'),
+        ]);
+    }
+
+    public static function defaultMaterialPages(array $section, string $mode = ''): array {
+        $payload = self::defaultMaterialContent($section, $mode);
+        return self::flattenTopics(is_array($payload['topics'] ?? null) ? $payload['topics'] : []);
+    }
+
+    public static function isLegacySimpleTwkContent($payload): bool {
+        if (!is_array($payload)) {
+            return false;
+        }
+
+        $topics = [];
+        if (array_key_exists('topics', $payload) && is_array($payload['topics'])) {
+            $topics = $payload['topics'];
+        } elseif (array_values($payload) === $payload) {
+            foreach ($payload as $page) {
+                if (!is_array($page)) {
+                    continue;
+                }
+                $topics[] = [
+                    'title' => (string) ($page['title'] ?? ''),
+                    'pages' => [$page],
+                ];
+            }
+        }
+
+        if (count($topics) !== 4) {
+            return false;
+        }
+
+        $expectedTitles = [
+            'Pancasila',
+            'Undang-Undang Dasar 1945',
+            'Bhinneka Tunggal Ika',
+            'NKRI',
         ];
+        $actualTitles = array_map(static function (array $topic): string {
+            return trim((string) ($topic['title'] ?? ''));
+        }, $topics);
+
+        if ($actualTitles !== $expectedTitles) {
+            return false;
+        }
+
+        foreach ($topics as $topic) {
+            if (count($topic['pages'] ?? []) !== 1) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static function defaultSectionQuestions(array $section, string $mode = ''): array {

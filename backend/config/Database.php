@@ -603,6 +603,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
 
     seedDefaultLearningContent($mysqli);
     migrateLegacyLearningMaterialDrafts($mysqli);
+    refreshTwkDraftMaterials($mysqli);
 }
 
 function seedDefaultLearningContent(mysqli $mysqli): void {
@@ -658,8 +659,8 @@ function seedDefaultLearningContent(mysqli $mysqli): void {
             $materialExists = (bool) $materialResult->fetch_assoc();
             $materialResult->free();
             if (!$materialExists) {
-                $pages = LearningContent::defaultMaterialPages($section, $mode);
-                $contentJson = json_encode($pages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $materialPayload = LearningContent::defaultMaterialContent($section, $mode);
+                $contentJson = json_encode($materialPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 $materialStatus = 'published';
                 $publishedAt = date('Y-m-d H:i:s');
                 $insertMaterial->bind_param('isssss', $packageId, $sectionCode, $sectionName, $contentJson, $materialStatus, $publishedAt);
@@ -783,15 +784,10 @@ function migrateLegacyLearningMaterialDrafts(mysqli $mysqli): void {
             $upsertDraftMaterial->bind_param('isssss', $packageId, $sectionCode, $title, $contentJson, $sourceUrl, $reviewNotes);
             $upsertDraftMaterial->execute();
 
-            $defaultPages = LearningContent::defaultMaterialPages($section, $mode);
-            $publishedContentJson = json_encode([
-                'topics' => array_map(static function (array $page): array {
-                    return [
-                        'title' => (string) ($page['title'] ?? 'Topik'),
-                        'pages' => [$page],
-                    ];
-                }, $defaultPages),
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $publishedContentJson = json_encode(
+                LearningContent::defaultMaterialContent($section, $mode),
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
             $publishedTitle = (string) ($section['name'] ?? $title);
             $updatePublishedMaterial->bind_param('ssis', $publishedTitle, $publishedContentJson, $packageId, $sectionCode);
             $updatePublishedMaterial->execute();
@@ -799,6 +795,104 @@ function migrateLegacyLearningMaterialDrafts(mysqli $mysqli): void {
     }
 
     setSystemSetting($mysqli, 'workspace_draft_migration_version', $schemaVersion);
+}
+
+function refreshTwkDraftMaterials(mysqli $mysqli): void {
+    if (
+        !databaseTableExists($mysqli, 'test_packages')
+        || !databaseTableExists($mysqli, 'learning_materials')
+        || !databaseTableExists($mysqli, 'learning_material_drafts')
+    ) {
+        return;
+    }
+
+    $schemaVersion = '20260419_twk_complex_draft_v1';
+    if (getSystemSetting($mysqli, 'twk_complex_draft_version') === $schemaVersion) {
+        return;
+    }
+
+    $packageResult = $mysqli->query(
+        "SELECT tp.*, tc.name AS category_name
+         FROM test_packages tp
+         LEFT JOIN test_categories tc ON tc.id = tp.category_id
+         ORDER BY tp.id ASC"
+    );
+    if (!$packageResult) {
+        return;
+    }
+
+    $findMaterial = $mysqli->prepare(
+        'SELECT title, content_json
+         FROM learning_materials
+         WHERE package_id = ? AND section_code = ?
+         LIMIT 1'
+    );
+    $findDraft = $mysqli->prepare(
+        'SELECT title, content_json
+         FROM learning_material_drafts
+         WHERE package_id = ? AND section_code = ?
+         LIMIT 1'
+    );
+    $upsertDraft = $mysqli->prepare(
+        "INSERT INTO learning_material_drafts (package_id, section_code, title, content_json, source_url, review_notes)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            title = VALUES(title),
+            content_json = VALUES(content_json),
+            source_url = VALUES(source_url),
+            review_notes = VALUES(review_notes),
+            updated_at = CURRENT_TIMESTAMP"
+    );
+
+    while ($package = $packageResult->fetch_assoc()) {
+        $workflow = TestWorkflow::buildPackageWorkflow($package);
+        $mode = (string) ($workflow['mode'] ?? '');
+
+        foreach ($workflow['sections'] as $section) {
+            $sectionCode = (string) ($section['code'] ?? '');
+            if ($sectionCode !== 'twk') {
+                continue;
+            }
+
+            $packageId = (int) ($package['id'] ?? 0);
+            if ($packageId <= 0) {
+                continue;
+            }
+
+            $findMaterial->bind_param('is', $packageId, $sectionCode);
+            $findMaterial->execute();
+            $publishedMaterial = $findMaterial->get_result()->fetch_assoc() ?: null;
+
+            $findDraft->bind_param('is', $packageId, $sectionCode);
+            $findDraft->execute();
+            $draftMaterial = $findDraft->get_result()->fetch_assoc() ?: null;
+
+            $draftPayload = json_decode((string) ($draftMaterial['content_json'] ?? ''), true);
+            $publishedPayload = json_decode((string) ($publishedMaterial['content_json'] ?? ''), true);
+            $draftLooksLegacy = !$draftMaterial || LearningContent::isLegacySimpleTwkContent($draftPayload);
+            $publishedLooksLegacy = !$publishedMaterial || LearningContent::isLegacySimpleTwkContent($publishedPayload);
+
+            if (!$draftLooksLegacy) {
+                continue;
+            }
+
+            if (!$draftMaterial && !$publishedLooksLegacy) {
+                continue;
+            }
+
+            $contentJson = json_encode(
+                LearningContent::defaultMaterialContent($section, $mode),
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
+            $title = (string) ($section['name'] ?? 'TWK');
+            $sourceUrl = 'https://jdih.mpr.go.id/dokumen/view?id=46';
+            $reviewNotes = 'Draft awal disusun dari sumber resmi: UUD NRI 1945 (JDIH MPR), UU No. 24 Tahun 2009 (JDIH BPK), dan artikel Indonesia.go.id tentang Bhinneka Tunggal Ika. Silakan edit dan parafrase lanjutan sebelum publish.';
+            $upsertDraft->bind_param('isssss', $packageId, $sectionCode, $title, $contentJson, $sourceUrl, $reviewNotes);
+            $upsertDraft->execute();
+        }
+    }
+
+    setSystemSetting($mysqli, 'twk_complex_draft_version', $schemaVersion);
 }
 
 function backfillTestWorkflowData(mysqli $mysqli): void {

@@ -1996,6 +1996,26 @@ export default function AdminPanel() {
       shellClassName="account-shell-learning admin-workspace-shell"
       title="Panel Admin"
       subtitle="Kelola paket, soal, gambar, dan import bank soal dari satu workspace yang lebih ringkas."
+      navContent={(
+        <div className="admin-workspace-topnav" role="tablist" aria-label="Navigasi workspace admin">
+          <button
+            type="button"
+            className={`admin-workspace-topnav-link ${adminWorkspace === 'published' ? 'admin-workspace-topnav-link-active' : ''}`}
+            onClick={() => handleWorkspaceChange('published')}
+            aria-pressed={adminWorkspace === 'published'}
+          >
+            Published
+          </button>
+          <button
+            type="button"
+            className={`admin-workspace-topnav-link ${adminWorkspace === 'draft' ? 'admin-workspace-topnav-link-active' : ''}`}
+            onClick={() => handleWorkspaceChange('draft')}
+            aria-pressed={adminWorkspace === 'draft'}
+          >
+            Draft
+          </button>
+        </div>
+      )}
     >
       {loadingPackages ? (
         <div className="account-card">
@@ -2010,52 +2030,40 @@ export default function AdminPanel() {
             </div>
           )}
 
-          <div className="account-card admin-message-card">
-            <div className="admin-list-toolbar">
-              <div>
-                <h3>Workspace Admin</h3>
+          <div className="account-card admin-message-card admin-workspace-switcher-card">
+            <div className="admin-workspace-switcher-layout">
+              <div className="admin-workspace-switcher-copy">
+                <span className={`admin-workspace-mode-pill admin-workspace-mode-pill-${adminWorkspace}`}>
+                  {isDraftWorkspace ? 'Draft Workspace' : 'Published Workspace'}
+                </span>
+                <h3>{isDraftWorkspace ? 'Draft Paket Aktif' : 'Published Paket Aktif'}</h3>
                 <p className="text-muted">
                   {isDraftWorkspace
-                    ? 'Mode Draft aktif. Semua perubahan paket, materi, mini test, dan tryout disimpan ke draft sampai Anda publish.'
-                    : 'Mode Published aktif. Tampilan ini menunjukkan data live yang sedang dilihat oleh user.'}
+                    ? 'Gunakan area ini untuk menyimpan perubahan keseluruhan paket sebagai draft sebelum dipublish ke user.'
+                    : 'Area ini menampilkan isi paket yang sedang live. Untuk mengedit, pindah ke tab Draft di navigasi atas.'}
                 </p>
               </div>
-              <div className="admin-list-toolbar-actions">
-                <button
-                  type="button"
-                  className={adminWorkspace === 'published' ? 'btn btn-primary' : 'btn btn-outline'}
-                  onClick={() => handleWorkspaceChange('published')}
-                >
-                  Published
-                </button>
-                <button
-                  type="button"
-                  className={adminWorkspace === 'draft' ? 'btn btn-primary' : 'btn btn-outline'}
-                  onClick={() => handleWorkspaceChange('draft')}
-                >
-                  Draft
-                </button>
-                {isDraftWorkspace && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      onClick={handleSaveWorkspaceDraft}
-                      disabled={savingWorkspaceDraft || !selectedPackageId}
-                    >
-                      {savingWorkspaceDraft ? 'Menyimpan Draft...' : 'Simpan Draft'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handlePublishWorkspaceDraft}
-                      disabled={publishingWorkspaceDraft || !selectedPackageId}
-                    >
-                      {publishingWorkspaceDraft ? 'Publish Draft...' : 'Publish Draft'}
-                    </button>
-                  </>
-                )}
-              </div>
+
+              {isDraftWorkspace && (
+                <div className="admin-workspace-publish-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={handleSaveWorkspaceDraft}
+                    disabled={savingWorkspaceDraft || !selectedPackageId}
+                  >
+                    {savingWorkspaceDraft ? 'Menyimpan Draft...' : 'Simpan Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handlePublishWorkspaceDraft}
+                    disabled={publishingWorkspaceDraft || !selectedPackageId}
+                  >
+                    {publishingWorkspaceDraft ? 'Publish Draft...' : 'Publish Draft'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

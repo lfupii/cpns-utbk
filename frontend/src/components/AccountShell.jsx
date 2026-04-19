@@ -4,7 +4,7 @@ import { useAuth } from '../AuthContext';
 import BrandLogo from './BrandLogo';
 import ProfileDropdown from './ProfileDropdown';
 
-export default function AccountShell({ title, subtitle, children, shellClassName = '' }) {
+export default function AccountShell({ title, subtitle, children, shellClassName = '', navContent = null }) {
   const { user, logout, isAdmin } = useAuth();
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
 
@@ -13,6 +13,14 @@ export default function AccountShell({ title, subtitle, children, shellClassName
       <nav className="landing-navbar">
         <div className="container landing-navbar-inner account-shell-nav-container">
           <BrandLogo />
+
+          {navContent && (
+            <div className="landing-navbar-panel account-shell-nav-panel">
+              <div className="landing-nav-menu-slot">
+                {navContent}
+              </div>
+            </div>
+          )}
 
           <div className="landing-nav-actions landing-nav-actions-authenticated">
             {user ? (

@@ -530,8 +530,9 @@ class LearningController {
     private function getMaterialContent(array $package, array $workflow, array $section): array {
         $packageId = (int) ($package['id'] ?? 0);
         $sectionCode = (string) ($section['code'] ?? '');
+        $defaultMaterialPayload = LearningContent::defaultMaterialContent($section, (string) ($workflow['mode'] ?? ''));
         $defaultPages = LearningContent::defaultMaterialPages($section, (string) ($workflow['mode'] ?? ''));
-        $defaultTopics = $this->buildTopicsFromPages($defaultPages);
+        $defaultTopics = $this->hydrateMaterialTopics($defaultMaterialPayload, []);
 
         if ($packageId > 0 && $sectionCode !== '') {
             $query = "SELECT title, content_json

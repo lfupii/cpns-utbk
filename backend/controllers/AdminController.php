@@ -728,6 +728,171 @@ class AdminController {
         return $pages;
     }
 
+    private function encodeComparisonPayload(array $payload): string {
+        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    private function buildTopicComparisonPayload(array $topic): array {
+        $pages = [];
+        foreach (($topic['pages'] ?? []) as $index => $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+
+            $points = $page['points'] ?? [];
+            if (!is_array($points)) {
+                $points = explode("\n", (string) $points);
+            }
+
+            $pages[] = [
+                'title' => trim((string) ($page['title'] ?? '')) ?: 'Halaman ' . ($index + 1),
+                'points' => array_values(array_filter(array_map(static fn($point): string => trim((string) $point), $points))),
+                'closing' => trim((string) ($page['closing'] ?? '')),
+                'content_html' => trim((string) ($page['content_html'] ?? '')),
+            ];
+        }
+
+        return [
+            'title' => trim((string) ($topic['title'] ?? '')),
+            'pages' => $pages,
+        ];
+    }
+
+    private function buildMaterialComparisonPayload(array $material): array {
+        $topics = [];
+        foreach (($material['topics'] ?? []) as $topic) {
+            if (!is_array($topic)) {
+                continue;
+            }
+            $topics[] = $this->buildTopicComparisonPayload($topic);
+        }
+
+        return [
+            'title' => trim((string) ($material['title'] ?? '')),
+            'topics' => $topics,
+            'source_url' => trim((string) ($material['source_url'] ?? '')),
+            'review_notes' => trim((string) ($material['review_notes'] ?? '')),
+        ];
+    }
+
+    private function buildLearningQuestionComparisonPayload(array $question): array {
+        $options = [];
+        foreach (($question['options'] ?? []) as $index => $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+
+            $letter = trim((string) ($option['letter'] ?? chr(65 + $index)));
+            $options[] = [
+                'letter' => strtoupper(substr($letter, 0, 5)),
+                'text' => trim((string) ($option['text'] ?? '')),
+                'image_url' => trim((string) ($option['image_url'] ?? '')),
+                'is_correct' => !empty($option['is_correct']) ? 1 : 0,
+            ];
+        }
+
+        return [
+            'question_text' => trim((string) ($question['question_text'] ?? '')),
+            'question_image_url' => trim((string) ($question['question_image_url'] ?? '')),
+            'difficulty' => trim((string) ($question['difficulty'] ?? 'medium')),
+            'question_order' => (int) ($question['question_order'] ?? 0),
+            'options' => $options,
+        ];
+    }
+
+    private function buildTryoutQuestionComparisonPayload(array $question): array {
+        $options = [];
+        foreach (($question['options'] ?? []) as $index => $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+
+            $letter = trim((string) ($option['letter'] ?? chr(65 + $index)));
+            $options[] = [
+                'letter' => strtoupper(substr($letter, 0, 5)),
+                'text' => trim((string) ($option['text'] ?? '')),
+                'image_url' => trim((string) ($option['image_url'] ?? '')),
+                'is_correct' => !empty($option['is_correct']) ? 1 : 0,
+            ];
+        }
+
+        return [
+            'question_text' => trim((string) ($question['question_text'] ?? '')),
+            'question_image_url' => trim((string) ($question['question_image_url'] ?? '')),
+            'question_image_layout' => trim((string) ($question['question_image_layout'] ?? 'top')),
+            'question_type' => trim((string) ($question['question_type'] ?? 'single_choice')),
+            'difficulty' => trim((string) ($question['difficulty'] ?? 'medium')),
+            'section_code' => trim((string) ($question['section_code'] ?? '')),
+            'section_name' => trim((string) ($question['section_name'] ?? '')),
+            'section_order' => (int) ($question['section_order'] ?? 0),
+            'options' => $options,
+        ];
+    }
+
+    private function annotateMaterialStatus(
+        array $currentMaterial,
+        ?array $draftMaterial,
+        ?array $publishedMaterial,
+        bool $currentIsDraft = true
+    ): array {
+        $draftPayload = $this->buildMaterialComparisonPayload($draftMaterial ?? $publishedMaterial ?? $currentMaterial);
+        $publishedPayload = $this->buildMaterialComparisonPayload($publishedMaterial ?? $draftMaterial ?? $currentMaterial);
+        $materialStatus = $this->encodeComparisonPayload($draftPayload) === $this->encodeComparisonPayload($publishedPayload)
+            ? 'published'
+            : 'draft';
+
+        $comparisonTopics = $currentIsDraft ? ($publishedPayload['topics'] ?? []) : ($draftPayload['topics'] ?? []);
+        $comparisonTopicSignatures = [];
+        foreach ($comparisonTopics as $topicPayload) {
+            $signature = $this->encodeComparisonPayload($topicPayload);
+            $comparisonTopicSignatures[$signature] = ($comparisonTopicSignatures[$signature] ?? 0) + 1;
+        }
+
+        $topicStatuses = [];
+        foreach (($currentMaterial['topics'] ?? []) as $index => $topic) {
+            $signature = $this->encodeComparisonPayload($this->buildTopicComparisonPayload(is_array($topic) ? $topic : []));
+            $isPublishedTopic = ($comparisonTopicSignatures[$signature] ?? 0) > 0;
+            if ($isPublishedTopic) {
+                $comparisonTopicSignatures[$signature]--;
+            }
+            $topicStatuses[$index] = $isPublishedTopic ? 'published' : 'draft';
+        }
+
+        $currentMaterial['status'] = $materialStatus;
+        $currentMaterial['topic_statuses'] = $topicStatuses;
+
+        return $currentMaterial;
+    }
+
+    private function annotateQuestionStatuses(array $currentQuestions, array $publishedQuestions, string $type = 'learning'): array {
+        $signatureBuilder = $type === 'tryout'
+            ? fn(array $question): string => $this->encodeComparisonPayload($this->buildTryoutQuestionComparisonPayload($question))
+            : fn(array $question): string => $this->encodeComparisonPayload($this->buildLearningQuestionComparisonPayload($question));
+
+        $publishedSignatures = [];
+        foreach ($publishedQuestions as $question) {
+            if (!is_array($question)) {
+                continue;
+            }
+            $signature = $signatureBuilder($question);
+            $publishedSignatures[$signature] = ($publishedSignatures[$signature] ?? 0) + 1;
+        }
+
+        return array_map(function ($question) use (&$publishedSignatures, $signatureBuilder) {
+            $signature = $signatureBuilder(is_array($question) ? $question : []);
+            $isPublished = ($publishedSignatures[$signature] ?? 0) > 0;
+            if ($isPublished) {
+                $publishedSignatures[$signature]--;
+            }
+
+            if (is_array($question)) {
+                $question['status'] = $isPublished ? 'published' : 'draft';
+            }
+
+            return $question;
+        }, $currentQuestions);
+    }
+
     private function normalizeMaterialStatus($value, string $fallback = 'published'): string {
         $status = strtolower(trim((string) $value));
         if (in_array($status, ['draft', 'published'], true)) {
@@ -1335,9 +1500,7 @@ class AdminController {
             sendResponse('error', 'Package ID harus diisi', null, 400);
         }
 
-        if ($workspace === self::WORKSPACE_DRAFT) {
-            $this->ensurePackageDraftExists($packageId);
-        }
+        $this->ensurePackageDraftExists($packageId);
 
         $tables = $this->getWorkspaceTables($workspace);
 
@@ -1365,6 +1528,57 @@ class AdminController {
             $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
             $questions[] = $row;
         }
+
+        $publishedQuestions = [];
+        $publishedQuery = "SELECT q.*, GROUP_CONCAT(
+                      JSON_OBJECT(
+                        'id', qo.id,
+                        'letter', qo.option_letter,
+                        'text', qo.option_text,
+                        'image_url', qo.option_image_url,
+                        'is_correct', qo.is_correct
+                      ) ORDER BY qo.id SEPARATOR ','
+                  ) AS options
+                  FROM questions q
+                  LEFT JOIN question_options qo ON qo.question_id = q.id
+                  WHERE q.package_id = ?
+                  GROUP BY q.id
+                  ORDER BY q.section_order ASC, q.id ASC";
+        $publishedStmt = $this->mysqli->prepare($publishedQuery);
+        $publishedStmt->bind_param('i', $packageId);
+        $publishedStmt->execute();
+        $publishedResult = $publishedStmt->get_result();
+        while ($row = $publishedResult->fetch_assoc()) {
+            $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+            $publishedQuestions[] = $row;
+        }
+
+        $draftQuestions = [];
+        $draftQuery = "SELECT q.*, GROUP_CONCAT(
+                      JSON_OBJECT(
+                        'id', qo.id,
+                        'letter', qo.option_letter,
+                        'text', qo.option_text,
+                        'image_url', qo.option_image_url,
+                        'is_correct', qo.is_correct
+                      ) ORDER BY qo.id SEPARATOR ','
+                  ) AS options
+                  FROM question_drafts q
+                  LEFT JOIN question_option_drafts qo ON qo.question_id = q.id
+                  WHERE q.package_id = ?
+                  GROUP BY q.id
+                  ORDER BY q.section_order ASC, q.id ASC";
+        $draftStmt = $this->mysqli->prepare($draftQuery);
+        $draftStmt->bind_param('i', $packageId);
+        $draftStmt->execute();
+        $draftResult = $draftStmt->get_result();
+        while ($row = $draftResult->fetch_assoc()) {
+            $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+            $draftQuestions[] = $row;
+        }
+
+        $comparisonQuestions = $workspace === self::WORKSPACE_DRAFT ? $publishedQuestions : $draftQuestions;
+        $questions = $this->annotateQuestionStatuses($questions, $comparisonQuestions, 'tryout');
 
         sendResponse('success', $workspace === self::WORKSPACE_DRAFT ? 'Data draft soal admin berhasil diambil' : 'Data soal admin berhasil diambil', $questions);
     }
@@ -1617,90 +1831,119 @@ class AdminController {
             sendResponse('error', 'Package ID harus diisi', null, 400);
         }
 
-        if ($workspace === self::WORKSPACE_DRAFT) {
-            $this->ensurePackageDraftExists($packageId);
-        }
+        $this->ensurePackageDraftExists($packageId);
 
         $package = $this->getPackageByWorkspace($packageId, $workspace);
         $workflow = TestWorkflow::buildPackageWorkflow($package);
-
-        $materialQuery = $workspace === self::WORKSPACE_DRAFT
-            ? 'SELECT section_code, title, content_json, source_url, review_notes, NULL AS published_at FROM learning_material_drafts WHERE package_id = ?'
-            : 'SELECT section_code, title, content_json, source_url, review_notes, published_at FROM learning_materials WHERE package_id = ?';
-        $stmt = $this->mysqli->prepare($materialQuery);
-        $stmt->bind_param('i', $packageId);
-        $stmt->execute();
-        $materialResult = $stmt->get_result();
-        $materialMap = [];
-        while ($row = $materialResult->fetch_assoc()) {
-            $materialPayload = json_decode((string) ($row['content_json'] ?? ''), true);
-            $topics = $this->hydrateMaterialTopics($materialPayload, []);
-            $materialMap[(string) $row['section_code']] = [
-                'title' => $row['title'],
-                'topics' => $topics,
-                'pages' => $this->flattenMaterialTopics($topics),
-                'status' => $workspace === self::WORKSPACE_DRAFT ? 'draft' : 'published',
-                'source_url' => $row['source_url'] ?: null,
-                'review_notes' => (string) ($row['review_notes'] ?? ''),
-                'published_at' => $row['published_at'] ?? null,
-            ];
-        }
-
-        $questionQuery = sprintf("SELECT q.*,
-                            GROUP_CONCAT(
-                              JSON_OBJECT(
-                                'id', qo.id,
-                                'letter', qo.option_letter,
-                                'text', qo.option_text,
-                                'image_url', qo.option_image_url,
-                                'is_correct', qo.is_correct
-                              ) ORDER BY qo.id SEPARATOR ','
-                            ) AS options
-                          FROM %s q
-                          LEFT JOIN %s qo ON qo.question_id = q.id
-                          WHERE q.package_id = ?
-                          GROUP BY q.id
-                          ORDER BY q.section_code ASC, q.question_order ASC, q.id ASC",
-            $workspace === self::WORKSPACE_DRAFT ? 'learning_section_question_drafts' : 'learning_section_questions',
-            $workspace === self::WORKSPACE_DRAFT ? 'learning_section_question_option_drafts' : 'learning_section_question_options'
-        );
-        $stmt = $this->mysqli->prepare($questionQuery);
-        $stmt->bind_param('i', $packageId);
-        $stmt->execute();
-        $questionResult = $stmt->get_result();
-        $questionMap = [];
-        while ($row = $questionResult->fetch_assoc()) {
-            $sectionCode = (string) $row['section_code'];
-            if (!isset($questionMap[$sectionCode])) {
-                $questionMap[$sectionCode] = [];
+        $loadMaterialMap = function (string $table, bool $includePublishedAt = false) use ($packageId): array {
+            $query = $includePublishedAt
+                ? "SELECT section_code, title, content_json, source_url, review_notes, published_at FROM {$table} WHERE package_id = ?"
+                : "SELECT section_code, title, content_json, source_url, review_notes, NULL AS published_at FROM {$table} WHERE package_id = ?";
+            $stmt = $this->mysqli->prepare($query);
+            $stmt->bind_param('i', $packageId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $map = [];
+            while ($row = $result->fetch_assoc()) {
+                $materialPayload = json_decode((string) ($row['content_json'] ?? ''), true);
+                $topics = $this->hydrateMaterialTopics($materialPayload, []);
+                $map[(string) $row['section_code']] = [
+                    'title' => $row['title'],
+                    'topics' => $topics,
+                    'pages' => $this->flattenMaterialTopics($topics),
+                    'status' => 'published',
+                    'source_url' => $row['source_url'] ?: null,
+                    'review_notes' => (string) ($row['review_notes'] ?? ''),
+                    'published_at' => $row['published_at'] ?? null,
+                ];
             }
 
-            $row['id'] = (int) $row['id'];
-            $row['question_order'] = (int) $row['question_order'];
-            $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
-            $questionMap[$sectionCode][] = $row;
-        }
+            return $map;
+        };
+
+        $loadQuestionMap = function (string $questionTable, string $optionTable) use ($packageId): array {
+            $query = "SELECT q.*,
+                        GROUP_CONCAT(
+                          JSON_OBJECT(
+                            'id', qo.id,
+                            'letter', qo.option_letter,
+                            'text', qo.option_text,
+                            'image_url', qo.option_image_url,
+                            'is_correct', qo.is_correct
+                          ) ORDER BY qo.id SEPARATOR ','
+                        ) AS options
+                      FROM {$questionTable} q
+                      LEFT JOIN {$optionTable} qo ON qo.question_id = q.id
+                      WHERE q.package_id = ?
+                      GROUP BY q.id
+                      ORDER BY q.section_code ASC, q.question_order ASC, q.id ASC";
+            $stmt = $this->mysqli->prepare($query);
+            $stmt->bind_param('i', $packageId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $map = [];
+            while ($row = $result->fetch_assoc()) {
+                $sectionCode = (string) $row['section_code'];
+                if (!isset($map[$sectionCode])) {
+                    $map[$sectionCode] = [];
+                }
+
+                $row['id'] = (int) $row['id'];
+                $row['question_order'] = (int) $row['question_order'];
+                $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+                $map[$sectionCode][] = $row;
+            }
+
+            return $map;
+        };
+
+        $publishedMaterialMap = $loadMaterialMap('learning_materials', true);
+        $draftMaterialMap = $loadMaterialMap('learning_material_drafts');
+        $currentMaterialMap = $workspace === self::WORKSPACE_DRAFT ? $draftMaterialMap : $publishedMaterialMap;
+
+        $publishedQuestionMap = $loadQuestionMap('learning_section_questions', 'learning_section_question_options');
+        $draftQuestionMap = $loadQuestionMap('learning_section_question_drafts', 'learning_section_question_option_drafts');
+        $currentQuestionMap = $workspace === self::WORKSPACE_DRAFT ? $draftQuestionMap : $publishedQuestionMap;
 
         $sections = [];
         foreach ($workflow['sections'] as $section) {
             $sectionCode = (string) $section['code'];
             $defaultPages = LearningContent::defaultMaterialPages($section, (string) $workflow['mode']);
             $defaultTopics = $this->buildTopicsFromPages($defaultPages);
+            $publishedMaterial = $publishedMaterialMap[$sectionCode] ?? [
+                'title' => (string) $section['name'],
+                'topics' => $defaultTopics,
+                'pages' => $defaultPages,
+                'status' => 'published',
+                'source_url' => null,
+                'review_notes' => '',
+                'published_at' => null,
+            ];
+            $draftMaterial = $draftMaterialMap[$sectionCode] ?? $publishedMaterial;
+            $material = $currentMaterialMap[$sectionCode] ?? ($workspace === self::WORKSPACE_DRAFT ? $draftMaterial : $publishedMaterial);
+            $material = $this->annotateMaterialStatus($material, $draftMaterial, $publishedMaterial, $workspace === self::WORKSPACE_DRAFT);
+
+            $publishedQuestions = $publishedQuestionMap[$sectionCode] ?? LearningContent::defaultSectionQuestions($section, (string) $workflow['mode']);
+            $draftQuestions = $draftQuestionMap[$sectionCode] ?? $publishedQuestions;
+            $currentQuestions = $currentQuestionMap[$sectionCode] ?? ($workspace === self::WORKSPACE_DRAFT ? $draftQuestions : $publishedQuestions);
+            $comparisonQuestions = $workspace === self::WORKSPACE_DRAFT ? $publishedQuestions : $draftQuestions;
+            $annotatedQuestions = $this->annotateQuestionStatuses($currentQuestions, $comparisonQuestions, 'learning');
+            $miniTestStatus = count(array_filter($annotatedQuestions, static fn($question): bool => ($question['status'] ?? '') === 'draft')) > 0
+                ? 'draft'
+                : 'published';
+            $sectionStatus = $material['status'] === 'draft' || $miniTestStatus === 'draft'
+                ? 'draft'
+                : 'published';
+
             $sections[] = [
                 'code' => $sectionCode,
                 'name' => $section['name'],
                 'session_name' => $section['session_name'] ?? null,
                 'order' => $section['order'],
-                'material' => $materialMap[$sectionCode] ?? [
-                    'title' => (string) $section['name'],
-                    'topics' => $defaultTopics,
-                    'pages' => $defaultPages,
-                    'status' => 'published',
-                    'source_url' => null,
-                    'review_notes' => '',
-                    'published_at' => null,
-                ],
-                'questions' => $questionMap[$sectionCode] ?? LearningContent::defaultSectionQuestions($section, (string) $workflow['mode']),
+                'status' => $sectionStatus,
+                'mini_test_status' => $miniTestStatus,
+                'material' => $material,
+                'questions' => $annotatedQuestions,
             ];
         }
 

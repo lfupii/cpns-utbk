@@ -3112,6 +3112,25 @@ html[data-theme='dark'] .theme-toggle-thumb {
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
+.learning-sidebar-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-sidebar-link-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.admin-sidebar-link-copy small {
+  color: #708198;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .learning-sidebar-link:hover,
 .learning-sidebar-item:hover,
 .learning-sidebar-toggle:hover {
@@ -5356,6 +5375,44 @@ html[data-theme='dark'] .theme-toggle-thumb {
   color: #047857;
 }
 
+.admin-inline-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
+.admin-inline-status-note {
+  color: #607089;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.admin-inline-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 1.45rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.admin-inline-status-draft {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.admin-inline-status-published {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
 .admin-doc-page {
   display: flex;
   flex-direction: column;
@@ -7044,6 +7101,13 @@ html[data-theme='dark'] .theme-toggle-thumb {
   color: #132038;
 }
 
+.admin-section-summary-chip-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
 .admin-section-summary-chip-active {
   border-color: rgba(20, 184, 166, 0.42);
   background: linear-gradient(180deg, rgba(240, 253, 250, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
@@ -7274,6 +7338,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-question-row-meta {
   min-width: 0;
+  display: grid;
+  gap: 0.4rem;
+  align-content: center;
 }
 
 .admin-question-row-count {
@@ -9941,6 +10008,21 @@ html[data-theme='dark'] .admin-material-status-badge-draft {
 }
 
 html[data-theme='dark'] .admin-material-status-badge-published {
+  background: rgba(52, 211, 153, 0.14);
+  color: #8ef0c4;
+}
+
+html[data-theme='dark'] .admin-inline-status-note,
+html[data-theme='dark'] .admin-sidebar-link-copy small {
+  color: #93a4bb;
+}
+
+html[data-theme='dark'] .admin-inline-status-draft {
+  background: rgba(251, 191, 36, 0.16);
+  color: #ffd27a;
+}
+
+html[data-theme='dark'] .admin-inline-status-published {
   background: rgba(52, 211, 153, 0.14);
   color: #8ef0c4;
 }

@@ -4443,6 +4443,51 @@ html[data-theme='dark'] .theme-toggle-thumb {
   gap: 0.55rem;
 }
 
+.admin-learning-ruler-dock {
+  margin-top: 0.85rem;
+}
+
+.admin-learning-ruler-shell {
+  width: min(100%, 210mm);
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0.8rem 16mm 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 14px 30px rgba(31, 63, 109, 0.08);
+  transform: scale(var(--doc-page-zoom, 1));
+  transform-origin: top center;
+}
+
+.admin-learning-ruler-shell-landscape {
+  width: min(100%, 297mm);
+  padding-left: 18mm;
+  padding-right: 18mm;
+}
+
+.admin-learning-ruler-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.45rem;
+}
+
+.admin-learning-ruler-meta span {
+  color: #607089;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-learning-ruler-meta strong {
+  color: #1d4ed8;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
 .admin-learning-topic-actions {
   margin-top: 0.9rem;
   display: flex;
@@ -5644,6 +5689,97 @@ html[data-theme='dark'] .theme-toggle-thumb {
   padding: 0 0.7rem;
 }
 
+.admin-ribbon-icon-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.admin-ribbon-inline-select {
+  max-width: 8rem;
+}
+
+.admin-toolbar-icon {
+  display: grid;
+  align-items: center;
+  gap: 0.2rem 0.28rem;
+  width: 1.15rem;
+  min-width: 1.15rem;
+}
+
+.admin-toolbar-icon-bullet,
+.admin-toolbar-icon-ordered,
+.admin-toolbar-icon-multilevel {
+  grid-template-columns: auto 1fr;
+}
+
+.admin-toolbar-icon-alignLeft,
+.admin-toolbar-icon-alignCenter,
+.admin-toolbar-icon-alignRight,
+.admin-toolbar-icon-alignJustify {
+  grid-template-columns: 1fr;
+}
+
+.admin-toolbar-icon-dot {
+  width: 0.24rem;
+  height: 0.24rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.admin-toolbar-icon-order {
+  font-size: 0.52rem;
+  font-weight: 800;
+  line-height: 1;
+  color: currentColor;
+}
+
+.admin-toolbar-icon-order-nested {
+  margin-left: 0.16rem;
+}
+
+.admin-toolbar-icon-order-deep {
+  margin-left: 0.32rem;
+}
+
+.admin-toolbar-icon-line {
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.admin-toolbar-icon-line-wide,
+.admin-toolbar-icon-line-center-wide,
+.admin-toolbar-icon-line-right-wide {
+  width: 100%;
+}
+
+.admin-toolbar-icon-line-medium,
+.admin-toolbar-icon-line-center-medium,
+.admin-toolbar-icon-line-right-medium {
+  width: 82%;
+}
+
+.admin-toolbar-icon-line-narrow,
+.admin-toolbar-icon-line-center-narrow,
+.admin-toolbar-icon-line-right-narrow {
+  width: 64%;
+}
+
+.admin-toolbar-icon-line-center-wide,
+.admin-toolbar-icon-line-center-medium,
+.admin-toolbar-icon-line-center-narrow {
+  justify-self: center;
+}
+
+.admin-toolbar-icon-line-right-wide,
+.admin-toolbar-icon-line-right-medium,
+.admin-toolbar-icon-line-right-narrow {
+  justify-self: end;
+}
+
 .admin-word-ribbon button:hover {
   border-color: rgba(20, 184, 166, 0.38);
   background: #ecfdf5;
@@ -5817,7 +5953,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-word-editable:focus {
-  box-shadow: inset 4px 0 0 rgba(20, 184, 166, 0.28);
+  box-shadow: none;
 }
 
 .admin-word-editable :is(p, ul, ol, blockquote, h2, h3) {
@@ -5831,6 +5967,45 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .admin-word-editable ul,
 .admin-word-editable ol {
   padding-left: 1.35rem;
+}
+
+.admin-word-editable .material-list-preset-decimal-alpha-roman,
+.admin-word-editable .material-list-preset-decimal-decimal-decimal,
+.admin-word-editable .material-list-preset-disc-circle-square {
+  list-style-position: outside;
+}
+
+.admin-word-editable .material-list-preset-decimal-alpha-roman {
+  list-style-type: decimal;
+}
+
+.admin-word-editable .material-list-preset-decimal-alpha-roman ol {
+  list-style-type: lower-alpha;
+}
+
+.admin-word-editable .material-list-preset-decimal-alpha-roman ol ol {
+  list-style-type: lower-roman;
+}
+
+.admin-word-editable .material-list-preset-decimal-decimal-decimal {
+  list-style-type: decimal;
+}
+
+.admin-word-editable .material-list-preset-decimal-decimal-decimal ol,
+.admin-word-editable .material-list-preset-decimal-decimal-decimal ol ol {
+  list-style-type: decimal;
+}
+
+.admin-word-editable .material-list-preset-disc-circle-square {
+  list-style-type: disc;
+}
+
+.admin-word-editable .material-list-preset-disc-circle-square ul {
+  list-style-type: circle;
+}
+
+.admin-word-editable .material-list-preset-disc-circle-square ul ul {
+  list-style-type: square;
 }
 
 .admin-word-editable img {
@@ -9856,6 +10031,7 @@ html[data-theme='dark'] .admin-doc-cover,
 html[data-theme='dark'] .admin-doc-page,
 html[data-theme='dark'] .admin-ribbon-tabs,
 html[data-theme='dark'] .admin-word-ribbon,
+html[data-theme='dark'] .admin-learning-ruler-shell,
 html[data-theme='dark'] .test-hero,
 html[data-theme='dark'] .test-hero-stat-card,
 html[data-theme='dark'] .test-question-card,
@@ -9937,6 +10113,7 @@ html[data-theme='dark'] .admin-doc-outline,
 html[data-theme='dark'] .admin-doc-outline span,
 html[data-theme='dark'] .admin-doc-outline button,
 html[data-theme='dark'] .admin-doc-cover label,
+html[data-theme='dark'] .admin-learning-ruler-meta span,
 html[data-theme='dark'] .admin-word-editable,
 html[data-theme='dark'] .test-hero-pills span,
 html[data-theme='dark'] .test-hero-description,
@@ -10010,6 +10187,10 @@ html[data-theme='dark'] .admin-material-status-badge-draft {
 html[data-theme='dark'] .admin-material-status-badge-published {
   background: rgba(52, 211, 153, 0.14);
   color: #8ef0c4;
+}
+
+html[data-theme='dark'] .admin-learning-ruler-meta strong {
+  color: #8fc2ff;
 }
 
 html[data-theme='dark'] .admin-inline-status-note,

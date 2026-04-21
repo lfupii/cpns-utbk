@@ -17,6 +17,22 @@ const WORD_RULER_MARKS = {
   portrait: ['0', '2', '4', '6', '8', '10', '12', '14', '16', '18'],
   landscape: ['0', '3', '6', '9', '12', '15', '18', '21', '24', '27'],
 };
+const BULLET_LIST_STYLE_OPTIONS = [
+  { value: 'disc', label: 'Bullet' },
+  { value: 'circle', label: 'Lingkaran' },
+  { value: 'square', label: 'Kotak' },
+];
+const ORDERED_LIST_STYLE_OPTIONS = [
+  { value: 'decimal', label: '1. 2. 3.' },
+  { value: 'lower-alpha', label: 'a. b. c.' },
+  { value: 'upper-alpha', label: 'A. B. C.' },
+  { value: 'upper-roman', label: 'I. II. III.' },
+];
+const MULTILEVEL_LIST_STYLE_OPTIONS = [
+  { value: 'decimal-alpha-roman', label: '1. a. i.' },
+  { value: 'decimal-decimal-decimal', label: '1.1.1.' },
+  { value: 'disc-circle-square', label: 'Bullet Bertingkat' },
+];
 
 const FONT_SIZE_COMMANDS = {
   '12': '2',
@@ -46,6 +62,80 @@ const IMAGE_WRAP_OPTIONS = [
   ['center', 'Tengah'],
   ['full', 'Lebar Penuh'],
 ];
+const MATERIAL_LIST_PRESET_CLASSES = [
+  'material-list-preset-decimal-alpha-roman',
+  'material-list-preset-decimal-decimal-decimal',
+  'material-list-preset-disc-circle-square',
+];
+
+function RibbonIcon({ type }) {
+  const icons = {
+    bullet: (
+      <>
+        <span className="admin-toolbar-icon-dot" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-dot" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-dot" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+      </>
+    ),
+    ordered: (
+      <>
+        <span className="admin-toolbar-icon-order">1</span>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-order">2</span>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-order">3</span>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+      </>
+    ),
+    multilevel: (
+      <>
+        <span className="admin-toolbar-icon-order">1</span>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-order admin-toolbar-icon-order-nested">a</span>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-medium" />
+        <span className="admin-toolbar-icon-order admin-toolbar-icon-order-deep">i</span>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-narrow" />
+      </>
+    ),
+    alignLeft: (
+      <>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-medium" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-narrow" />
+      </>
+    ),
+    alignCenter: (
+      <>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-center-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-center-medium" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-center-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-center-narrow" />
+      </>
+    ),
+    alignRight: (
+      <>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-right-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-right-medium" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-right-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-right-narrow" />
+      </>
+    ),
+    alignJustify: (
+      <>
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+        <span className="admin-toolbar-icon-line admin-toolbar-icon-line-wide" />
+      </>
+    ),
+  };
+
+  return <span className={`admin-toolbar-icon admin-toolbar-icon-${type}`}>{icons[type] || null}</span>;
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -230,7 +320,7 @@ function extractPdfTextFromItems(items = []) {
   });
 
   return String(buffer)
-    .replace(/\u0000/g, '')
+    .replaceAll('\u0000', '')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/[ \t]{2,}/g, ' ')
@@ -280,12 +370,31 @@ function parseIndentValue(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getEditorPageIndexFromNode(node) {
+  if (!node) {
+    return null;
+  }
+
+  const elementNode = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  if (!(elementNode instanceof Element)) {
+    return null;
+  }
+
+  const editorNode = elementNode.closest('.admin-word-editable');
+  if (!(editorNode instanceof HTMLElement)) {
+    return null;
+  }
+
+  const parsed = Number(editorNode.dataset.pageIndex || 0);
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : null;
+}
+
 export default function AdminLearningMaterialEditor() {
   const { packageId, sectionCode } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const editorRefs = useRef({});
-  const rulerScaleRefs = useRef({});
+  const rulerScaleRef = useRef(null);
   const imageUploadInputRef = useRef(null);
   const pdfImportInputRef = useRef(null);
   const pdfOcrWorkerRef = useRef(null);
@@ -302,7 +411,6 @@ export default function AdminLearningMaterialEditor() {
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingAction, setSavingAction] = useState('');
   const [imageUploading, setImageUploading] = useState(false);
   const [pdfImporting, setPdfImporting] = useState(false);
   const [pdfImportProgress, setPdfImportProgress] = useState('');
@@ -327,6 +435,8 @@ export default function AdminLearningMaterialEditor() {
   const paragraphRulerDragRef = useRef(null);
   const [pendingPaginationStart, setPendingPaginationStart] = useState(null);
   const pendingEnterPageFocusRef = useRef(null);
+  const savedSelectionRangeRef = useRef(null);
+  const savedSelectionPageIndexRef = useRef(null);
 
   const numericPackageId = Number(packageId);
   const workspace = searchParams.get('workspace') === 'draft' ? 'draft' : 'published';
@@ -463,7 +573,7 @@ export default function AdminLearningMaterialEditor() {
     } finally {
       setLoading(false);
     }
-  }, [numericPackageId, sectionCode, shouldCreateTopic, workspace]);
+  }, [numericPackageId, requestedPageIndex, requestedTopicIndex, sectionCode, shouldCreateTopic, syncSelectionInUrl, workspace]);
 
   useEffect(() => {
     fetchLearningContent();
@@ -579,6 +689,51 @@ export default function AdminLearningMaterialEditor() {
     selection.addRange(range);
     return true;
   }, []);
+
+  const rememberCurrentSelection = useCallback((preferredPageIndex = activePageIndex) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return null;
+    }
+
+    const pageIndex = getEditorPageIndexFromNode(selection.anchorNode) ?? preferredPageIndex;
+    const editorNode = editorRefs.current[pageIndex];
+    if (!editorNode || !editorNode.contains(selection.anchorNode)) {
+      return null;
+    }
+
+    savedSelectionRangeRef.current = selection.getRangeAt(0).cloneRange();
+    savedSelectionPageIndexRef.current = pageIndex;
+    return pageIndex;
+  }, [activePageIndex]);
+
+  const restoreSavedSelection = useCallback((preferredPageIndex = activePageIndex) => {
+    const currentSelection = window.getSelection();
+    const currentPageIndex = getEditorPageIndexFromNode(currentSelection?.anchorNode);
+    if (currentSelection && currentSelection.rangeCount > 0 && currentPageIndex !== null) {
+      return {
+        pageIndex: currentPageIndex,
+        editorNode: editorRefs.current[currentPageIndex] || null,
+      };
+    }
+
+    const savedRange = savedSelectionRangeRef.current;
+    const savedPageIndex = savedSelectionPageIndexRef.current ?? preferredPageIndex;
+    const editorNode = editorRefs.current[savedPageIndex] || null;
+    if (!savedRange || !editorNode) {
+      return {
+        pageIndex: preferredPageIndex,
+        editorNode: editorRefs.current[preferredPageIndex] || null,
+      };
+    }
+
+    editorNode.focus();
+    setSelectionRange(savedRange.cloneRange());
+    return {
+      pageIndex: savedPageIndex,
+      editorNode,
+    };
+  }, [activePageIndex, setSelectionRange]);
 
   const placeCaretInsideNode = useCallback((node, collapseToStart = false) => {
     if (!node) {
@@ -830,42 +985,53 @@ export default function AdminLearningMaterialEditor() {
     firstLineIndent: parseIndentValue(blockNode?.style?.textIndent),
   }), []);
 
-  const updateActiveParagraphMetrics = useCallback((pageIndex = activePageIndex) => {
-    const editorNode = getEditorNode(pageIndex);
-    if (!editorNode) {
-      return;
+  const getSelectionEditorContext = useCallback((preferredPageIndex = activePageIndex) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return null;
     }
 
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || !editorNode.contains(selection.anchorNode)) {
-      return;
+    const selectionPageIndex = getEditorPageIndexFromNode(selection.anchorNode);
+    const resolvedPageIndex = selectionPageIndex ?? preferredPageIndex;
+    const editorNode = getEditorNode(resolvedPageIndex);
+    if (!editorNode || !editorNode.contains(selection.anchorNode)) {
+      return null;
     }
 
     const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
     if (!blockNode) {
+      return null;
+    }
+
+    return {
+      selection,
+      editorNode,
+      blockNode,
+      pageIndex: resolvedPageIndex,
+    };
+  }, [activePageIndex, getEditorNode]);
+
+  const updateActiveParagraphMetrics = useCallback((pageIndex = activePageIndex) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context) {
       return;
     }
 
-    const metrics = getParagraphIndentMetrics(blockNode);
+    const metrics = getParagraphIndentMetrics(context.blockNode);
     setActiveParagraphMetrics({
-      pageIndex,
+      pageIndex: context.pageIndex,
       leftIndent: metrics.leftIndent,
       firstLineIndent: metrics.firstLineIndent,
     });
-  }, [activePageIndex, getEditorNode, getParagraphIndentMetrics]);
+  }, [activePageIndex, getParagraphIndentMetrics, getSelectionEditorContext]);
 
   const applyParagraphMetrics = useCallback((pageIndex, { leftIndent, firstLineIndent }) => {
-    const editorNode = getEditorNode(pageIndex);
-    if (!editorNode) {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context) {
       return false;
     }
 
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      return false;
-    }
-
-    const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
+    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
     if (!blockNode || blockNode.tagName === 'LI') {
       return false;
     }
@@ -876,17 +1042,17 @@ export default function AdminLearningMaterialEditor() {
     blockNode.style.marginLeft = safeLeftIndent > 0 ? `${safeLeftIndent}px` : '';
     blockNode.style.textIndent = safeFirstLineIndent !== 0 ? `${safeFirstLineIndent}px` : '';
 
-    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex);
     setActiveParagraphMetrics({
-      pageIndex,
+      pageIndex: resolvedPageIndex,
       leftIndent: safeLeftIndent,
       firstLineIndent: safeFirstLineIndent,
     });
-    schedulePaginationRebalance(pageIndex);
+    schedulePaginationRebalance(resolvedPageIndex);
     return true;
-  }, [getEditorNode, persistActivePageContent, schedulePaginationRebalance]);
+  }, [getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance]);
 
-  const readTopicsFromEditor = () => materialForm.topics.map((topic, topicIndex) => ({
+  const readTopicsFromEditor = useCallback(() => materialForm.topics.map((topic, topicIndex) => ({
     ...topic,
     pages: topic.pages.map((page, pageIndex) => {
       const editorNode = topicIndex === activeTopicIndex ? editorRefs.current[pageIndex] : null;
@@ -899,9 +1065,9 @@ export default function AdminLearningMaterialEditor() {
         content_html: contentHtml,
       };
     }),
-  }));
+  })), [activeTopicIndex, materialForm.topics]);
 
-  function persistActivePageContent(rawHtml = null, pageIndex = activePageIndex) {
+  const persistActivePageContent = useCallback((rawHtml = null, pageIndex = activePageIndex) => {
     const contentHtml = sanitizeEditorHtml(rawHtml ?? (getEditorNode(pageIndex)?.innerHTML || ''));
     setMaterialForm((current) => ({
       ...current,
@@ -922,7 +1088,7 @@ export default function AdminLearningMaterialEditor() {
           : topic
       )),
     }));
-  }
+  }, [activePageIndex, activeTopicIndex, getEditorNode]);
 
   const updateTopicTitle = (topicIndex, title) => {
     setMaterialForm((current) => ({
@@ -956,16 +1122,6 @@ export default function AdminLearningMaterialEditor() {
     persistActivePageContent();
   };
 
-  const selectTopic = (topicIndex) => {
-    setMaterialForm((current) => ({
-      ...current,
-      topics: readTopicsFromEditor(),
-    }));
-    setActiveTopicIndex(topicIndex);
-    setActivePageIndex(0);
-    syncSelectionInUrl(topicIndex, 0);
-  };
-
   const selectPage = (pageIndex) => {
     setMaterialForm((current) => ({
       ...current,
@@ -973,18 +1129,6 @@ export default function AdminLearningMaterialEditor() {
     }));
     activatePage(pageIndex);
     focusEditorAtEnd(pageIndex);
-  };
-
-  const addTopic = () => {
-    const nextTopics = [...readTopicsFromEditor(), createEmptyMaterialTopic(materialForm.topics.length + 1)];
-    const nextTopicIndex = nextTopics.length - 1;
-    setMaterialForm((current) => ({
-      ...current,
-      topics: nextTopics,
-    }));
-    setActiveTopicIndex(nextTopicIndex);
-    setActivePageIndex(0);
-    syncSelectionInUrl(nextTopicIndex, 0);
   };
 
   const removeMaterialPage = (pageIndex) => {
@@ -1019,17 +1163,12 @@ export default function AdminLearningMaterialEditor() {
   }, [getMovableEditorNodes]);
 
   const applyParagraphIndent = useCallback((pageIndex, direction = 1) => {
-    const editorNode = getEditorNode(pageIndex);
-    if (!editorNode) {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context) {
       return false;
     }
 
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      return false;
-    }
-
-    const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
+    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
     if (!blockNode) {
       return false;
     }
@@ -1042,19 +1181,96 @@ export default function AdminLearningMaterialEditor() {
       blockNode.style.marginLeft = nextMarginLeft > 0 ? `${nextMarginLeft}px` : '';
     }
 
-    persistActivePageContent(editorNode.innerHTML, pageIndex);
-    updateActiveParagraphMetrics(pageIndex);
-    schedulePaginationRebalance(pageIndex);
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex);
+    updateActiveParagraphMetrics(resolvedPageIndex);
+    schedulePaginationRebalance(resolvedPageIndex);
     return true;
-  }, [getEditorNode, persistActivePageContent, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+  }, [getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+
+  const applyKeyboardTabIndent = useCallback((pageIndex, direction = 1) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context) {
+      return false;
+    }
+
+    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
+    if (!blockNode) {
+      return false;
+    }
+
+    if (blockNode.tagName === 'LI') {
+      document.execCommand(direction > 0 ? 'indent' : 'outdent', false, null);
+    } else {
+      const currentMetrics = getParagraphIndentMetrics(blockNode);
+      let nextLeftIndent = currentMetrics.leftIndent;
+      let nextFirstLineIndent = currentMetrics.firstLineIndent;
+
+      if (direction > 0) {
+        nextFirstLineIndent = Math.min(FIRST_LINE_INDENT_LIMIT, currentMetrics.firstLineIndent + PARAGRAPH_INDENT_STEP);
+      } else if (currentMetrics.firstLineIndent > 0) {
+        nextFirstLineIndent = Math.max(0, currentMetrics.firstLineIndent - PARAGRAPH_INDENT_STEP);
+      } else if (currentMetrics.firstLineIndent < 0) {
+        nextFirstLineIndent = Math.min(0, currentMetrics.firstLineIndent + PARAGRAPH_INDENT_STEP);
+      } else if (currentMetrics.leftIndent > 0) {
+        nextLeftIndent = Math.max(0, currentMetrics.leftIndent - PARAGRAPH_INDENT_STEP);
+      } else {
+        return false;
+      }
+
+      blockNode.style.marginLeft = nextLeftIndent > 0 ? `${nextLeftIndent}px` : '';
+      blockNode.style.textIndent = nextFirstLineIndent !== 0 ? `${nextFirstLineIndent}px` : '';
+    }
+
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex);
+    updateActiveParagraphMetrics(resolvedPageIndex);
+    schedulePaginationRebalance(resolvedPageIndex);
+    return true;
+  }, [getParagraphIndentMetrics, getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+
+  const outdentAtCaretStart = useCallback((pageIndex) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context || !context.selection.isCollapsed) {
+      return false;
+    }
+
+    const { blockNode, pageIndex: resolvedPageIndex } = context;
+    if (!blockNode) {
+      return false;
+    }
+
+    const range = context.selection.getRangeAt(0).cloneRange();
+    const leadingRange = document.createRange();
+    leadingRange.selectNodeContents(blockNode);
+    leadingRange.setEnd(range.startContainer, range.startOffset);
+    const leadingText = leadingRange.toString().replace(/\u200B/g, '').replace(/\n/g, '').trim();
+    if (leadingText !== '') {
+      return false;
+    }
+
+    if (blockNode.tagName !== 'LI') {
+      const metrics = getParagraphIndentMetrics(blockNode);
+      if (metrics.firstLineIndent === 0 && metrics.leftIndent === 0) {
+        return false;
+      }
+    }
+
+    return applyKeyboardTabIndent(resolvedPageIndex, -1);
+  }, [applyKeyboardTabIndent, getParagraphIndentMetrics, getSelectionEditorContext]);
+
+  const isSelectionInsideListItem = useCallback((pageIndex = activePageIndex) => {
+    const context = getSelectionEditorContext(pageIndex);
+    return context?.blockNode?.tagName === 'LI';
+  }, [activePageIndex, getSelectionEditorContext]);
 
   const adjustParagraphIndent = useCallback((direction = 1, pageIndex = activePageIndex) => {
-    activatePage(pageIndex);
-    const applied = applyParagraphIndent(pageIndex, direction);
+    const restoredSelection = restoreSavedSelection(pageIndex);
+    const resolvedPageIndex = restoredSelection?.pageIndex ?? pageIndex;
+    activatePage(resolvedPageIndex);
+    const applied = applyParagraphIndent(resolvedPageIndex, direction);
     if (!applied) {
       runCommand(direction > 0 ? 'indent' : 'outdent');
     }
-  }, [activatePage, activePageIndex, applyParagraphIndent]);
+  }, [activatePage, activePageIndex, applyParagraphIndent, restoreSavedSelection, runCommand]);
 
   const pageNeedsPaginationRebalance = useCallback((pageIndex) => {
     const editorNode = editorRefs.current[pageIndex];
@@ -1183,16 +1399,29 @@ export default function AdminLearningMaterialEditor() {
   const handleEditorKeyDown = useCallback((event, pageIndex) => {
     if (event.key === 'Tab') {
       event.preventDefault();
-      adjustParagraphIndent(event.shiftKey ? -1 : 1, pageIndex);
+      applyKeyboardTabIndent(pageIndex, event.shiftKey ? -1 : 1);
       return;
     }
 
     if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (isSelectionInsideListItem(pageIndex)) {
+        requestAnimationFrame(() => {
+          rememberCurrentSelection(pageIndex);
+          handlePageInput(pageIndex);
+        });
+        return;
+      }
+
       if (isCaretNearPageBottom(pageIndex, 36)) {
         event.preventDefault();
         openNextEditorPageFromBoundary(pageIndex);
         return;
       }
+    }
+
+    if (event.key === 'Backspace' && outdentAtCaretStart(pageIndex)) {
+      event.preventDefault();
+      return;
     }
 
     if (event.key !== 'Backspace' && event.key !== 'Delete') {
@@ -1230,13 +1459,17 @@ export default function AdminLearningMaterialEditor() {
   }, [
     activatePage,
     activeTopicIndex,
-    adjustParagraphIndent,
+    applyKeyboardTabIndent,
     focusEditorAtEnd,
+    handlePageInput,
+    isSelectionInsideListItem,
     isCaretNearPageBottom,
     isEditorPageEmpty,
     materialForm.topics,
     openNextEditorPageFromBoundary,
+    outdentAtCaretStart,
     readTopicsFromEditor,
+    rememberCurrentSelection,
   ]);
 
   const rebalancePaginatedEditors = useCallback((startIndex = 0) => {
@@ -1349,7 +1582,7 @@ export default function AdminLearningMaterialEditor() {
     serializeActiveTopicPagesFromDom,
   ]);
 
-  function schedulePaginationRebalance(startIndex = 0) {
+  const schedulePaginationRebalance = useCallback((startIndex = 0) => {
     if (paginationFrameRef.current) {
       cancelAnimationFrame(paginationFrameRef.current);
     }
@@ -1358,7 +1591,7 @@ export default function AdminLearningMaterialEditor() {
       rebalancePaginatedEditors(startIndex);
       paginationFrameRef.current = null;
     });
-  }
+  }, [rebalancePaginatedEditors]);
 
   const handlePageInput = useCallback((pageIndex) => {
     activatePage(pageIndex);
@@ -1367,14 +1600,20 @@ export default function AdminLearningMaterialEditor() {
     }
   }, [activatePage, pageNeedsPaginationRebalance, schedulePaginationRebalance]);
 
-  function runCommand(command, value = null) {
-    const editorNode = getEditorNode();
+  const runCommand = useCallback((command, value = null) => {
+    const restoredSelection = restoreSavedSelection(activePageIndex);
+    const resolvedPageIndex = restoredSelection?.pageIndex ?? activePageIndex;
+    const editorNode = restoredSelection?.editorNode || getEditorNode(resolvedPageIndex);
     if (editorNode) {
       editorNode.focus();
     }
     document.execCommand(command, false, value);
-    schedulePaginationRebalance(activePageIndex);
-  }
+    if (editorNode) {
+      persistActivePageContent(editorNode.innerHTML, resolvedPageIndex);
+    }
+    updateActiveParagraphMetrics(resolvedPageIndex);
+    schedulePaginationRebalance(resolvedPageIndex);
+  }, [activePageIndex, getEditorNode, persistActivePageContent, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
 
   const applyFontSize = (size) => {
     runCommand('fontSize', FONT_SIZE_COMMANDS[size] || '3');
@@ -1383,6 +1622,129 @@ export default function AdminLearningMaterialEditor() {
   const insertImage = () => {
     imageUploadInputRef.current?.click();
   };
+
+  const getCurrentListNode = useCallback((pageIndex = activePageIndex) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context) {
+      return null;
+    }
+
+    const listNode = context.blockNode.closest?.('ul, ol');
+    return listNode instanceof HTMLElement ? listNode : null;
+  }, [activePageIndex, getSelectionEditorContext]);
+
+  const replaceListTag = useCallback((listNode, nextTagName) => {
+    if (!listNode || listNode.tagName.toLowerCase() === nextTagName) {
+      return listNode;
+    }
+
+    const replacement = document.createElement(nextTagName);
+    replacement.innerHTML = listNode.innerHTML;
+    replacement.style.cssText = listNode.style.cssText;
+    [...listNode.attributes].forEach((attribute) => {
+      if (attribute.name !== 'style') {
+        replacement.setAttribute(attribute.name, attribute.value);
+      }
+    });
+    listNode.parentNode?.replaceChild(replacement, listNode);
+    return replacement;
+  }, []);
+
+  const clearListPresetClasses = useCallback((listNode) => {
+    if (!listNode) {
+      return;
+    }
+
+    MATERIAL_LIST_PRESET_CLASSES.forEach((className) => {
+      listNode.classList.remove(className);
+    });
+  }, []);
+
+  const applyListStyle = useCallback((kind, styleValue) => {
+    const desiredTagName = kind === 'unordered' ? 'ul' : 'ol';
+    const restoredSelection = restoreSavedSelection(activePageIndex);
+    const pageIndex = restoredSelection?.pageIndex ?? activePageIndex;
+    const editorNode = restoredSelection?.editorNode || getEditorNode(pageIndex);
+    if (!editorNode) {
+      return;
+    }
+
+    editorNode.focus();
+    let listNode = getCurrentListNode(pageIndex);
+    if (!listNode) {
+      document.execCommand(kind === 'unordered' ? 'insertUnorderedList' : 'insertOrderedList', false, null);
+      listNode = getCurrentListNode(pageIndex);
+    }
+
+    if (!listNode) {
+      return;
+    }
+
+    const normalizedListNode = replaceListTag(listNode, desiredTagName);
+    clearListPresetClasses(normalizedListNode);
+    normalizedListNode.style.listStyleType = styleValue;
+    if (desiredTagName === 'ol') {
+      const orderedTypeMap = {
+        decimal: '1',
+        'lower-alpha': 'a',
+        'upper-alpha': 'A',
+        'upper-roman': 'I',
+      };
+      normalizedListNode.type = orderedTypeMap[styleValue] || '1';
+    } else {
+      normalizedListNode.removeAttribute('type');
+    }
+
+    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    updateActiveParagraphMetrics(pageIndex);
+    schedulePaginationRebalance(pageIndex);
+  }, [activePageIndex, clearListPresetClasses, getCurrentListNode, getEditorNode, persistActivePageContent, replaceListTag, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+
+  const applyMultilevelListStyle = useCallback((presetValue) => {
+    const presetClassMap = {
+      'decimal-alpha-roman': 'material-list-preset-decimal-alpha-roman',
+      'decimal-decimal-decimal': 'material-list-preset-decimal-decimal-decimal',
+      'disc-circle-square': 'material-list-preset-disc-circle-square',
+    };
+    const presetClassName = presetClassMap[presetValue];
+    if (!presetClassName) {
+      return;
+    }
+
+    const kind = presetValue === 'disc-circle-square' ? 'unordered' : 'ordered';
+    const desiredTagName = kind === 'unordered' ? 'ul' : 'ol';
+    const restoredSelection = restoreSavedSelection(activePageIndex);
+    const pageIndex = restoredSelection?.pageIndex ?? activePageIndex;
+    const editorNode = restoredSelection?.editorNode || getEditorNode(pageIndex);
+    if (!editorNode) {
+      return;
+    }
+
+    editorNode.focus();
+    let listNode = getCurrentListNode(pageIndex);
+    if (!listNode) {
+      document.execCommand(kind === 'unordered' ? 'insertUnorderedList' : 'insertOrderedList', false, null);
+      listNode = getCurrentListNode(pageIndex);
+    }
+
+    if (!listNode) {
+      return;
+    }
+
+    const normalizedListNode = replaceListTag(listNode, desiredTagName);
+    clearListPresetClasses(normalizedListNode);
+    normalizedListNode.classList.add(presetClassName);
+    normalizedListNode.style.listStyleType = desiredTagName === 'ol' ? 'decimal' : 'disc';
+    if (desiredTagName === 'ol') {
+      normalizedListNode.type = '1';
+    } else {
+      normalizedListNode.removeAttribute('type');
+    }
+
+    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    updateActiveParagraphMetrics(pageIndex);
+    schedulePaginationRebalance(pageIndex);
+  }, [activePageIndex, clearListPresetClasses, getCurrentListNode, getEditorNode, persistActivePageContent, replaceListTag, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
 
   const openPdfImportOptions = () => {
     const suggestedStartPage = String(Math.max(1, (activeTopic?.pages?.length || 0) + 1));
@@ -1393,20 +1755,20 @@ export default function AdminLearningMaterialEditor() {
     }));
   };
 
-  const closePdfImportOptions = () => {
+  const closePdfImportOptions = useCallback(() => {
     setPdfImportOptions((current) => ({
       ...current,
       visible: false,
     }));
     setSelectedPdfImportFile(null);
     setSelectedPdfImportPageCount(0);
-  };
+  }, []);
 
   const openPdfImport = () => {
     pdfImportInputRef.current?.click();
   };
 
-  const uploadAdminMedia = async (file, { trackImageUpload = true } = {}) => {
+  const uploadAdminMedia = useCallback(async (file, { trackImageUpload = true } = {}) => {
     if (!file) {
       return null;
     }
@@ -1431,7 +1793,7 @@ export default function AdminLearningMaterialEditor() {
         setImageUploading(false);
       }
     }
-  };
+  }, []);
 
   const handleImageFileSelection = async (event) => {
     const file = event.target.files?.[0];
@@ -1817,8 +2179,11 @@ export default function AdminLearningMaterialEditor() {
 
     clearSelectedImageFigure();
     closeImageContextMenu();
-    requestAnimationFrame(() => updateActiveParagraphMetrics());
-  }, [clearSelectedImageFigure, closeImageContextMenu, ensureImageFigure, normalizeImageFigureSize, persistActivePageContent, selectImageFigure, updateActiveParagraphMetrics]);
+    requestAnimationFrame(() => {
+      rememberCurrentSelection();
+      updateActiveParagraphMetrics();
+    });
+  }, [clearSelectedImageFigure, closeImageContextMenu, ensureImageFigure, normalizeImageFigureSize, persistActivePageContent, rememberCurrentSelection, selectImageFigure, updateActiveParagraphMetrics]);
 
   const handleEditorContextMenu = useCallback((event) => {
     const imageNode = event.target.closest?.('img');
@@ -1878,7 +2243,10 @@ export default function AdminLearningMaterialEditor() {
     const pageIndex = Number(editorNode.dataset.pageIndex || 0);
     activatePage(pageIndex);
     placeCaretFromEditorPoint(editorNode, pageIndex, event.clientX, event.clientY);
-    requestAnimationFrame(() => updateActiveParagraphMetrics(pageIndex));
+    requestAnimationFrame(() => {
+      rememberCurrentSelection(pageIndex);
+      updateActiveParagraphMetrics(pageIndex);
+    });
   }, [
     activatePage,
     clearSelectedImageFigure,
@@ -1886,13 +2254,15 @@ export default function AdminLearningMaterialEditor() {
     getImageFigureMetrics,
     normalizeImageFigureSize,
     placeCaretFromEditorPoint,
+    rememberCurrentSelection,
     selectImageFigure,
     updateActiveParagraphMetrics,
   ]);
 
   const handleEditorKeyUp = useCallback((pageIndex) => {
+    rememberCurrentSelection(pageIndex);
     updateActiveParagraphMetrics(pageIndex);
-  }, [updateActiveParagraphMetrics]);
+  }, [rememberCurrentSelection, updateActiveParagraphMetrics]);
 
   useEffect(() => {
     clearSelectedImageFigure();
@@ -1901,17 +2271,22 @@ export default function AdminLearningMaterialEditor() {
 
   useEffect(() => {
     const handleSelectionChange = () => {
-      const editorNode = getEditorNode();
       const selection = window.getSelection();
-      if (!editorNode || !selection || selection.rangeCount === 0 || !editorNode.contains(selection.anchorNode)) {
+      const selectionPageIndex = getEditorPageIndexFromNode(selection?.anchorNode);
+      if (selectionPageIndex === null) {
         return;
       }
-      updateActiveParagraphMetrics(activePageIndex);
+
+      if (selectionPageIndex !== activePageIndex) {
+        activatePage(selectionPageIndex);
+      }
+      rememberCurrentSelection(selectionPageIndex);
+      updateActiveParagraphMetrics(selectionPageIndex);
     };
 
     document.addEventListener('selectionchange', handleSelectionChange);
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
-  }, [activePageIndex, getEditorNode, updateActiveParagraphMetrics]);
+  }, [activatePage, activePageIndex, rememberCurrentSelection, updateActiveParagraphMetrics]);
 
   useEffect(() => {
     const handlePointerMove = (event) => {
@@ -1920,7 +2295,7 @@ export default function AdminLearningMaterialEditor() {
         return;
       }
 
-      const rulerNode = rulerScaleRefs.current[dragState.pageIndex];
+      const rulerNode = rulerScaleRef.current;
       if (!rulerNode) {
         return;
       }
@@ -2143,6 +2518,10 @@ export default function AdminLearningMaterialEditor() {
   const currentRulerMarks = WORD_RULER_MARKS[pageOrientation] || WORD_RULER_MARKS.portrait;
   const activeRulerLeftPercent = `${Math.max(0, Math.min(100, (activeParagraphMetrics.leftIndent / PARAGRAPH_INDENT_LIMIT) * 100))}%`;
   const activeRulerFirstLinePercent = `${Math.max(0, Math.min(100, ((activeParagraphMetrics.leftIndent + activeParagraphMetrics.firstLineIndent) / PARAGRAPH_INDENT_LIMIT) * 100))}%`;
+  const rulerShellClassName = [
+    'admin-learning-ruler-shell',
+    pageOrientation === 'landscape' ? 'admin-learning-ruler-shell-landscape' : 'admin-learning-ruler-shell-portrait',
+  ].join(' ');
 
   const handleSave = async () => {
     if (!activeSection) {
@@ -2152,7 +2531,6 @@ export default function AdminLearningMaterialEditor() {
     rebalancePaginatedEditors(0);
     const topics = readTopicsFromEditor();
     setSaving(true);
-    setSavingAction('draft');
     setError('');
     setSuccess('');
 
@@ -2187,7 +2565,6 @@ export default function AdminLearningMaterialEditor() {
       setError(err.response?.data?.message || 'Gagal menyimpan materi');
     } finally {
       setSaving(false);
-      setSavingAction('');
     }
   };
 
@@ -2266,6 +2643,7 @@ export default function AdminLearningMaterialEditor() {
               className="admin-word-ribbon admin-ribbon-panel"
               aria-label="Toolbar format materi"
               onMouseDown={(event) => {
+                rememberCurrentSelection();
                 if (event.target.closest?.('button')) {
                   event.preventDefault();
                 }
@@ -2310,14 +2688,102 @@ export default function AdminLearningMaterialEditor() {
                   <div className="admin-ribbon-group">
                     <span className="admin-ribbon-group-label">Paragraf</span>
                     <div className="admin-ribbon-control-row">
-                      <button type="button" onClick={() => runCommand('insertUnorderedList')}>Bullet</button>
-                      <button type="button" onClick={() => runCommand('insertOrderedList')}>Nomor</button>
+                      <button
+                        type="button"
+                        className="admin-ribbon-icon-button"
+                        aria-label="Buat bullet list"
+                        onClick={() => applyListStyle('unordered', 'disc')}
+                      >
+                        <RibbonIcon type="bullet" />
+                        <span>Bullet</span>
+                      </button>
+                      <select
+                        className="admin-ribbon-inline-select"
+                        name="editor_bullet_list_style"
+                        defaultValue=""
+                        onChange={(event) => {
+                          if (!event.target.value) {
+                            return;
+                          }
+                          applyListStyle('unordered', event.target.value);
+                          event.target.value = '';
+                        }}
+                      >
+                        <option value="" disabled>Bullet</option>
+                        {BULLET_LIST_STYLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="admin-ribbon-icon-button"
+                        aria-label="Buat numbered list"
+                        onClick={() => applyListStyle('ordered', 'decimal')}
+                      >
+                        <RibbonIcon type="ordered" />
+                        <span>Nomor</span>
+                      </button>
+                      <select
+                        className="admin-ribbon-inline-select"
+                        name="editor_ordered_list_style"
+                        defaultValue=""
+                        onChange={(event) => {
+                          if (!event.target.value) {
+                            return;
+                          }
+                          applyListStyle('ordered', event.target.value);
+                          event.target.value = '';
+                        }}
+                      >
+                        <option value="" disabled>Nomor</option>
+                        {ORDERED_LIST_STYLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="admin-ribbon-icon-button"
+                        aria-label="Buat multilevel list"
+                        onClick={() => applyMultilevelListStyle('decimal-alpha-roman')}
+                      >
+                        <RibbonIcon type="multilevel" />
+                        <span>Bertingkat</span>
+                      </button>
+                      <select
+                        className="admin-ribbon-inline-select"
+                        name="editor_multilevel_list_style"
+                        defaultValue=""
+                        onChange={(event) => {
+                          if (!event.target.value) {
+                            return;
+                          }
+                          applyMultilevelListStyle(event.target.value);
+                          event.target.value = '';
+                        }}
+                      >
+                        <option value="" disabled>Bertingkat</option>
+                        {MULTILEVEL_LIST_STYLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
                       <button type="button" onClick={() => adjustParagraphIndent(-1)}>Outdent</button>
                       <button type="button" onClick={() => adjustParagraphIndent(1)}>Indent</button>
-                      <button type="button" onClick={() => runCommand('justifyLeft')}>Kiri</button>
-                      <button type="button" onClick={() => runCommand('justifyCenter')}>Tengah</button>
-                      <button type="button" onClick={() => runCommand('justifyRight')}>Kanan</button>
-                      <button type="button" onClick={() => runCommand('justifyFull')}>Justify</button>
+                      <button type="button" className="admin-ribbon-icon-button" aria-label="Rata kiri" onClick={() => runCommand('justifyLeft')}>
+                        <RibbonIcon type="alignLeft" />
+                        <span>Kiri</span>
+                      </button>
+                      <button type="button" className="admin-ribbon-icon-button" aria-label="Rata tengah" onClick={() => runCommand('justifyCenter')}>
+                        <RibbonIcon type="alignCenter" />
+                        <span>Tengah</span>
+                      </button>
+                      <button type="button" className="admin-ribbon-icon-button" aria-label="Rata kanan" onClick={() => runCommand('justifyRight')}>
+                        <RibbonIcon type="alignRight" />
+                        <span>Kanan</span>
+                      </button>
+                      <button type="button" className="admin-ribbon-icon-button" aria-label="Rata kiri kanan" onClick={() => runCommand('justifyFull')}>
+                        <RibbonIcon type="alignJustify" />
+                        <span>Justify</span>
+                      </button>
                     </div>
                   </div>
                 </>
@@ -2421,6 +2887,65 @@ export default function AdminLearningMaterialEditor() {
                 </>
               )}
             </div>
+          {activeTopic && (
+            <div className="admin-learning-ruler-dock">
+              <div
+                className={rulerShellClassName}
+                style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
+              >
+                <div className="admin-learning-ruler-meta">
+                  <span>Ruler Aktif</span>
+                  <strong>{`Halaman ${Math.max(1, activeParagraphMetrics.pageIndex + 1)}`}</strong>
+                </div>
+                <div className="admin-word-ruler" aria-hidden="true">
+                  <div
+                    className="admin-word-ruler-scale"
+                    ref={rulerScaleRef}
+                  >
+                    {currentRulerMarks.map((mark) => (
+                      <span key={`global-ruler-${mark}`}>{mark}</span>
+                    ))}
+                    {activePage && (
+                      <div className="admin-word-ruler-markers">
+                        <button
+                          type="button"
+                          className="admin-word-ruler-marker admin-word-ruler-marker-left"
+                          style={{ left: activeRulerLeftPercent }}
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            activatePage(activeParagraphMetrics.pageIndex);
+                            paragraphRulerDragRef.current = {
+                              marker: 'left',
+                              pageIndex: activeParagraphMetrics.pageIndex,
+                              startLeftIndent: activeParagraphMetrics.leftIndent,
+                              startFirstLineIndent: activeParagraphMetrics.firstLineIndent,
+                            };
+                          }}
+                          aria-label="Geser indent kiri paragraf"
+                        />
+                        <button
+                          type="button"
+                          className="admin-word-ruler-marker admin-word-ruler-marker-first-line"
+                          style={{ left: activeRulerFirstLinePercent }}
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            activatePage(activeParagraphMetrics.pageIndex);
+                            paragraphRulerDragRef.current = {
+                              marker: 'first-line',
+                              pageIndex: activeParagraphMetrics.pageIndex,
+                              startLeftIndent: activeParagraphMetrics.leftIndent,
+                              startFirstLineIndent: activeParagraphMetrics.firstLineIndent,
+                            };
+                          }}
+                          aria-label="Geser indent baris pertama paragraf"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           </div>
 
           <div className="admin-doc-editor admin-material-doc-editor admin-learning-editor-workspace">
@@ -2621,22 +3146,6 @@ export default function AdminLearningMaterialEditor() {
                   className={editorPageClassName}
                   style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
                 >
-                  <div className="admin-word-ruler" aria-hidden="true">
-                    <div
-                      className="admin-word-ruler-scale"
-                      ref={(node) => {
-                        if (node) {
-                          rulerScaleRefs.current.empty = node;
-                        } else {
-                          delete rulerScaleRefs.current.empty;
-                        }
-                      }}
-                    >
-                      {currentRulerMarks.map((mark) => (
-                        <span key={`ruler-empty-${mark}`}>{mark}</span>
-                      ))}
-                    </div>
-                  </div>
                   <div className="admin-doc-page-head">
                     <span>{`Topik ${activeTopicIndex + 1}`}</span>
                   </div>
@@ -2654,58 +3163,6 @@ export default function AdminLearningMaterialEditor() {
                   className={pageIndex === activePageIndex ? `${editorPageClassName} admin-doc-page-current` : editorPageClassName}
                   style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
                 >
-                  <div className="admin-word-ruler" aria-hidden="true">
-                    <div
-                      className="admin-word-ruler-scale"
-                      ref={(node) => {
-                        if (node) {
-                          rulerScaleRefs.current[pageIndex] = node;
-                        } else {
-                          delete rulerScaleRefs.current[pageIndex];
-                        }
-                      }}
-                    >
-                      {currentRulerMarks.map((mark) => (
-                        <span key={`ruler-${pageIndex}-${mark}`}>{mark}</span>
-                      ))}
-                      {pageIndex === activeParagraphMetrics.pageIndex && (
-                        <div className="admin-word-ruler-markers">
-                          <button
-                            type="button"
-                            className="admin-word-ruler-marker admin-word-ruler-marker-left"
-                            style={{ left: activeRulerLeftPercent }}
-                            onPointerDown={(event) => {
-                              event.preventDefault();
-                              activatePage(pageIndex);
-                              paragraphRulerDragRef.current = {
-                                marker: 'left',
-                                pageIndex,
-                                startLeftIndent: activeParagraphMetrics.leftIndent,
-                                startFirstLineIndent: activeParagraphMetrics.firstLineIndent,
-                              };
-                            }}
-                            aria-label="Geser indent kiri paragraf"
-                          />
-                          <button
-                            type="button"
-                            className="admin-word-ruler-marker admin-word-ruler-marker-first-line"
-                            style={{ left: activeRulerFirstLinePercent }}
-                            onPointerDown={(event) => {
-                              event.preventDefault();
-                              activatePage(pageIndex);
-                              paragraphRulerDragRef.current = {
-                                marker: 'first-line',
-                                pageIndex,
-                                startLeftIndent: activeParagraphMetrics.leftIndent,
-                                startFirstLineIndent: activeParagraphMetrics.firstLineIndent,
-                              };
-                            }}
-                            aria-label="Geser indent baris pertama paragraf"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
                   <div className="admin-doc-page-head">
                     <span>{`Halaman ${pageIndex + 1}`}</span>
                     <button
@@ -2744,11 +3201,17 @@ export default function AdminLearningMaterialEditor() {
                     suppressContentEditableWarning
                     onFocus={() => {
                       activatePage(pageIndex);
-                      requestAnimationFrame(() => updateActiveParagraphMetrics(pageIndex));
+                      requestAnimationFrame(() => {
+                        rememberCurrentSelection(pageIndex);
+                        updateActiveParagraphMetrics(pageIndex);
+                      });
                     }}
                     onKeyDown={(event) => handleEditorKeyDown(event, pageIndex)}
                     onKeyUp={() => handleEditorKeyUp(pageIndex)}
-                    onInput={() => handlePageInput(pageIndex)}
+                    onInput={() => {
+                      rememberCurrentSelection(pageIndex);
+                      handlePageInput(pageIndex);
+                    }}
                     onPointerDown={handleEditorPointerDown}
                     onClick={handleEditorClick}
                     onContextMenu={handleEditorContextMenu}

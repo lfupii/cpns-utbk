@@ -1582,7 +1582,7 @@ export default function AdminLearningMaterialEditor() {
     serializeActiveTopicPagesFromDom,
   ]);
 
-  const schedulePaginationRebalance = useCallback((startIndex = 0) => {
+  function schedulePaginationRebalance(startIndex = 0) {
     if (paginationFrameRef.current) {
       cancelAnimationFrame(paginationFrameRef.current);
     }
@@ -1591,16 +1591,16 @@ export default function AdminLearningMaterialEditor() {
       rebalancePaginatedEditors(startIndex);
       paginationFrameRef.current = null;
     });
-  }, [rebalancePaginatedEditors]);
+  }
 
-  const handlePageInput = useCallback((pageIndex) => {
+  function handlePageInput(pageIndex) {
     activatePage(pageIndex);
     if (pageNeedsPaginationRebalance(pageIndex)) {
       schedulePaginationRebalance(pageIndex);
     }
-  }, [activatePage, pageNeedsPaginationRebalance, schedulePaginationRebalance]);
+  }
 
-  const runCommand = useCallback((command, value = null) => {
+  function runCommand(command, value = null) {
     const restoredSelection = restoreSavedSelection(activePageIndex);
     const resolvedPageIndex = restoredSelection?.pageIndex ?? activePageIndex;
     const editorNode = restoredSelection?.editorNode || getEditorNode(resolvedPageIndex);
@@ -1613,7 +1613,7 @@ export default function AdminLearningMaterialEditor() {
     }
     updateActiveParagraphMetrics(resolvedPageIndex);
     schedulePaginationRebalance(resolvedPageIndex);
-  }, [activePageIndex, getEditorNode, persistActivePageContent, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+  }
 
   const applyFontSize = (size) => {
     runCommand('fontSize', FONT_SIZE_COMMANDS[size] || '3');

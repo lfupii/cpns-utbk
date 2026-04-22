@@ -443,6 +443,7 @@ export default function AdminLearningMaterialEditor() {
   const [pageOrientation, setPageOrientation] = useState('portrait');
   const [pageZoom, setPageZoom] = useState('100');
   const [editorView, setEditorView] = useState('page');
+  const [focusMode, setFocusMode] = useState(false);
   const [editorRenderNonce, setEditorRenderNonce] = useState(0);
   const selectedImageFigureRef = useRef(null);
   const imageInteractionRef = useRef(null);
@@ -539,10 +540,12 @@ export default function AdminLearningMaterialEditor() {
     pageOrientation,
     pageZoom,
     editorView,
+    focusMode,
   }), [
     activePageIndex,
     activeTopicIndex,
     editorView,
+    focusMode,
     materialForm,
     materialMeta,
     pageOrientation,
@@ -2243,6 +2246,7 @@ export default function AdminLearningMaterialEditor() {
     setPageOrientation(safeSnapshot.pageOrientation === 'landscape' ? 'landscape' : 'portrait');
     setPageZoom(String(safeSnapshot.pageZoom || '100'));
     setEditorView(safeSnapshot.editorView === 'compact' ? 'compact' : 'page');
+    setFocusMode(Boolean(safeSnapshot.focusMode));
     setEditorRenderNonce((current) => current + 1);
     requestAnimationFrame(() => {
       syncSelectionInUrl(
@@ -2825,6 +2829,35 @@ export default function AdminLearningMaterialEditor() {
   };
 
   const currentTopicLabel = activeTopic?.title?.trim() || `Document ${Math.max(1, activeTopicIndex + 1)}`;
+  const totalTopicPages = Math.max(1, activeTopic?.pages?.length || 0);
+  const activePageNumber = Math.min(totalTopicPages, Math.max(1, activePageIndex + 1));
+  const activeTopicWordCount = useMemo(() => {
+    if (!activeTopic?.pages?.length) {
+      return 0;
+    }
+
+    return activeTopic.pages.reduce((total, page) => {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(String(page?.content_html || ''), 'text/html');
+      const plainText = String(doc.body.textContent || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!plainText) {
+        return total;
+      }
+
+      return total + plainText.split(' ').filter(Boolean).length;
+    }, 0);
+  }, [activeTopic]);
+  const handleZoomChange = useCallback((nextZoom) => {
+    const safeZoom = Math.min(140, Math.max(70, Number(nextZoom) || 100));
+    markHistorySource('layout');
+    setPageZoom(String(safeZoom));
+  }, [markHistorySource]);
+  const toggleFocusMode = useCallback(() => {
+    markHistorySource('layout');
+    setFocusMode((current) => !current);
+  }, [markHistorySource]);
 
   return (
     <AccountShell
@@ -2834,6 +2867,7 @@ export default function AdminLearningMaterialEditor() {
       hidePageHeader
       hideBrandLogo
       hideNavActions
+      hideNavbar
     >
       {error && <div className="alert">{error}</div>}
       {success && <div className="account-success">{success}</div>}
@@ -3055,6 +3089,9 @@ export default function AdminLearningMaterialEditor() {
                       <button type="button" onClick={insertImage} disabled={imageUploading}>
                         {imageUploading ? 'Mengupload...' : 'Gambar'}
                       </button>
+                      <button type="button" onClick={openPdfImportOptions} disabled={!activeTopic || pdfImporting}>
+                        {pdfImporting ? 'Memproses PDF...' : 'Import PDF'}
+                      </button>
                       <button type="button" onClick={insertLink}>Link</button>
                       <button type="button" onClick={insertTable}>Tabel</button>
                     </div>
@@ -3236,7 +3273,7 @@ export default function AdminLearningMaterialEditor() {
               hidden
               onChange={handlePdfFileSelection}
             />
-            <div className="admin-word-workspace-shell">
+            <div className={focusMode ? 'admin-word-workspace-shell admin-word-workspace-shell-focus' : 'admin-word-workspace-shell'}>
               <aside className="admin-word-sidepane">
                 <div className="admin-word-sidepane-section">
                   <span className="admin-word-sidepane-label">Status</span>
@@ -3252,10 +3289,6 @@ export default function AdminLearningMaterialEditor() {
 
                 {activeTopic && (
                   <div className="admin-word-sidepane-section">
-                    <div className="admin-word-sidepane-head">
-                      <span className="admin-word-sidepane-label">Pages</span>
-                      <strong>{`${activeTopic.pages?.length || 0} halaman`}</strong>
-                    </div>
                     <div className="admin-word-page-list">
                       {(activeTopic.pages || []).map((page, pageIndex) => (
                         <button
@@ -3279,9 +3312,6 @@ export default function AdminLearningMaterialEditor() {
                         disabled={(activeTopic.pages?.length || 0) <= 1}
                       >
                         Hapus Halaman Aktif
-                      </button>
-                      <button type="button" className="btn btn-outline" onClick={openPdfImportOptions} disabled={pdfImporting}>
-                        {pdfImporting ? 'Memproses PDF...' : 'Import PDF'}
                       </button>
                     </div>
                   </div>
@@ -3507,6 +3537,69 @@ export default function AdminLearningMaterialEditor() {
                     />
                   </section>
                 ))}
+              </div>
+            </div>
+
+            <div className="admin-word-statusbar">
+              <div className="admin-word-statusbar-left">
+                <span>{`Page ${activePageNumber} of ${totalTopicPages}`}</span>
+                <span>{`${activeTopicWordCount} words`}</span>
+                <span>Bahasa Indonesia</span>
+                <span>Accessibility: Siap digunakan</span>
+              </div>
+              <div className="admin-word-statusbar-right">
+                <button
+                  type="button"
+                  className={focusMode ? 'admin-word-statusbar-button admin-word-statusbar-button-active' : 'admin-word-statusbar-button'}
+                  onClick={toggleFocusMode}
+                >
+                  Focus
+                </button>
+                <button
+                  type="button"
+                  className={editorView === 'page' ? 'admin-word-statusbar-button admin-word-statusbar-button-active' : 'admin-word-statusbar-button'}
+                  onClick={() => {
+                    markHistorySource('layout');
+                    setEditorView('page');
+                  }}
+                >
+                  Page
+                </button>
+                <button
+                  type="button"
+                  className={editorView === 'compact' ? 'admin-word-statusbar-button admin-word-statusbar-button-active' : 'admin-word-statusbar-button'}
+                  onClick={() => {
+                    markHistorySource('layout');
+                    setEditorView('compact');
+                  }}
+                >
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  className="admin-word-statusbar-button"
+                  onClick={() => handleZoomChange(Number(pageZoom) - 10)}
+                >
+                  -
+                </button>
+                <input
+                  className="admin-word-statusbar-zoom"
+                  type="range"
+                  min="70"
+                  max="140"
+                  step="10"
+                  value={Number(pageZoom)}
+                  onChange={(event) => handleZoomChange(event.target.value)}
+                  aria-label="Zoom editor"
+                />
+                <button
+                  type="button"
+                  className="admin-word-statusbar-button"
+                  onClick={() => handleZoomChange(Number(pageZoom) + 10)}
+                >
+                  +
+                </button>
+                <strong>{`${pageZoom}%`}</strong>
               </div>
             </div>
           </div>

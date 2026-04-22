@@ -1067,7 +1067,7 @@ export default function AdminLearningMaterialEditor() {
     }),
   })), [activeTopicIndex, materialForm.topics]);
 
-  const persistActivePageContent = useCallback((rawHtml = null, pageIndex = activePageIndex) => {
+  function persistActivePageContent(rawHtml = null, pageIndex = activePageIndex) {
     const contentHtml = sanitizeEditorHtml(rawHtml ?? (getEditorNode(pageIndex)?.innerHTML || ''));
     setMaterialForm((current) => ({
       ...current,
@@ -1088,7 +1088,7 @@ export default function AdminLearningMaterialEditor() {
           : topic
       )),
     }));
-  }, [activePageIndex, activeTopicIndex, getEditorNode]);
+  }
 
   const updateTopicTitle = (topicIndex, title) => {
     setMaterialForm((current) => ({

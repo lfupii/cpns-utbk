@@ -3287,36 +3287,6 @@ export default function AdminLearningMaterialEditor() {
                   </p>
                 </div>
 
-                {activeTopic && (
-                  <div className="admin-word-sidepane-section">
-                    <div className="admin-word-page-list">
-                      {(activeTopic.pages || []).map((page, pageIndex) => (
-                        <button
-                          key={`page-tab-${activeTopicIndex}-${pageIndex}`}
-                          type="button"
-                          className={pageIndex === activePageIndex ? 'admin-word-page-chip admin-word-page-chip-active' : 'admin-word-page-chip'}
-                          onClick={() => selectPage(pageIndex)}
-                        >
-                          {`Page ${pageIndex + 1}`}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="admin-word-sidepane-actions">
-                      <button type="button" className="btn btn-outline" onClick={addMaterialPage}>
-                        Tambah Halaman
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        onClick={() => removeMaterialPage(activePageIndex)}
-                        disabled={(activeTopic.pages?.length || 0) <= 1}
-                      >
-                        Hapus Halaman Aktif
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 <details
                   className="admin-word-inspector"
                   open={isInspectorOpen}

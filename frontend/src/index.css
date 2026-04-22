@@ -3444,6 +3444,32 @@ html[data-theme='dark'] .theme-toggle-thumb {
     0 0 0 1px rgba(214, 226, 240, 0.92);
 }
 
+.learning-page-document-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.learning-page-document-label {
+  flex: 1 1 auto;
+}
+
+.learning-page-brand {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.learning-page-brand-logo {
+  display: block;
+  width: clamp(74px, 9vw, 104px);
+  height: auto;
+  object-fit: contain;
+}
+
 .learning-page:hover,
 .learning-subtest-box:hover {
   transform: translateY(-2px);

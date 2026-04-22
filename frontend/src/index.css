@@ -5322,7 +5322,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-doc-page-stack {
   display: grid;
-  gap: 1rem;
+  gap: 0.52rem;
 }
 
 .admin-doc-cover,
@@ -7010,7 +7010,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-learning-editor-content {
   display: grid;
-  gap: 1.25rem;
+  gap: 0.52rem;
   justify-items: center;
 }
 
@@ -7241,8 +7241,8 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .account-shell-word-editor .admin-word-ribbon {
-  gap: 0.48rem;
-  padding: 0.34rem 0.7rem 0.38rem;
+  gap: 0.32rem;
+  padding: 0.2rem 0.6rem 0.16rem;
   border: 0;
   border-radius: 0;
   background: linear-gradient(180deg, #343434 0%, #2e2e2e 100%);
@@ -7263,7 +7263,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-word-ribbon-topic-label {
   color: rgba(255, 255, 255, 0.48);
-  font-size: 0.52rem;
+  font-size: 0.48rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7277,7 +7277,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   padding: 0;
   background: transparent;
   color: #ffffff;
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   font-weight: 800;
   line-height: 1.02;
   text-align: center;
@@ -7291,13 +7291,13 @@ html[data-theme='dark'] .theme-toggle-thumb {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 27px;
-  padding: 0 0.68rem;
+  min-height: 24px;
+  padding: 0 0.58rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.05);
   color: #f7f7f7;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -7309,19 +7309,19 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .account-shell-word-editor .admin-ribbon-group {
-  gap: 0.28rem;
-  padding-right: 0.62rem;
+  gap: 0.16rem;
+  padding-right: 0.48rem;
   border-right-color: rgba(255, 255, 255, 0.08);
 }
 
 .account-shell-word-editor .admin-ribbon-group-label {
   color: rgba(255, 255, 255, 0.48);
-  font-size: 0.58rem;
+  font-size: 0.52rem;
   line-height: 1;
 }
 
 .account-shell-word-editor .admin-ribbon-control-row {
-  gap: 0.3rem;
+  gap: 0.22rem;
 }
 
 .account-shell-word-editor .admin-word-ribbon button,
@@ -7330,9 +7330,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.06);
   color: #f2f2f2;
-  min-height: 28px;
-  font-size: 0.75rem;
-  border-radius: 0.42rem;
+  min-height: 24px;
+  font-size: 0.69rem;
+  border-radius: 0.38rem;
 }
 
 .account-shell-word-editor .admin-word-ribbon button:hover {
@@ -7341,20 +7341,30 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .account-shell-word-editor .admin-word-ribbon button {
-  padding: 0 0.52rem;
+  padding: 0 0.44rem;
 }
 
 .account-shell-word-editor .admin-ribbon-icon-button {
-  gap: 0.28rem;
+  gap: 0.22rem;
+}
+
+.account-shell-word-editor .admin-toolbar-icon {
+  gap: 0.12rem 0.18rem;
+  width: 0.92rem;
+  min-width: 0.92rem;
+}
+
+.account-shell-word-editor .admin-toolbar-icon-order {
+  font-size: 0.44rem;
 }
 
 .account-shell-word-editor .admin-ribbon-inline-select {
-  max-width: 6.7rem;
+  max-width: 6.05rem;
 }
 
 .account-shell-word-editor .admin-color-control {
-  gap: 0.28rem;
-  padding: 0 0.5rem;
+  gap: 0.2rem;
+  padding: 0 0.42rem;
 }
 
 .account-shell-word-editor .admin-learning-ruler-dock {
@@ -7362,10 +7372,8 @@ html[data-theme='dark'] .theme-toggle-thumb {
   z-index: 3;
   padding: 0;
   background: #2b2b2b;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 8px 18px rgba(0, 0, 0, 0.14);
+  border-top: 0;
+  box-shadow: none;
 }
 
 .account-shell-word-editor .admin-learning-ruler-shell {
@@ -7383,7 +7391,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .account-shell-word-editor .admin-word-ruler {
   margin: 0;
-  padding: 0.04rem 0.3rem 0.38rem;
+  padding: 0 0.24rem 0.22rem;
   background: #2b2b2b;
   border-bottom: 0;
 }
@@ -7508,13 +7516,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
   padding: 0 0 1rem;
 }
 
+.admin-word-editable-host {
+  outline: none;
+}
+
 .account-shell-word-editor .admin-learning-page-shell {
   position: relative;
   width: min(100%, 210mm);
   border-radius: 0.3rem;
   background: #ffffff;
   box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.3),
+    0 16px 28px rgba(0, 0, 0, 0.24),
     0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
@@ -7534,17 +7546,43 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .admin-word-editable-document,
 .admin-word-editable-empty {
   margin-top: 0;
-  min-height: calc(100% - 2.6rem);
-  padding-top: 0.55rem;
+  min-height: 297mm;
+  padding-top: calc(var(--doc-page-padding-top) + 1.1rem);
+  padding-right: var(--doc-page-padding-inline);
+  padding-bottom: var(--doc-page-padding-bottom);
+  padding-left: var(--doc-page-padding-inline);
+  position: relative;
 }
 
 .admin-word-editable-empty {
   color: transparent;
 }
 
+.admin-word-editable-document::before,
+.admin-word-editable-document::after {
+  position: absolute;
+  top: calc(var(--doc-page-padding-top) - 0.1rem);
+  color: #818181;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.admin-word-editable-document::before {
+  content: attr(data-surface-label);
+  left: var(--doc-page-padding-inline);
+}
+
+.admin-word-editable-document::after {
+  content: attr(data-page-label);
+  right: var(--doc-page-padding-inline);
+}
+
 .account-shell-word-editor .admin-doc-page-current {
   box-shadow:
-    0 30px 56px rgba(0, 0, 0, 0.34),
+    0 20px 34px rgba(0, 0, 0, 0.28),
     0 0 0 2px rgba(37, 99, 235, 0.18);
 }
 

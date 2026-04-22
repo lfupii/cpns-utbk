@@ -1362,20 +1362,9 @@ export default function Learning() {
 
               {activeSectionView === 'material' && activeTopic ? (
                 <div className="learning-page-list">
-                  <section className="learning-page learning-page-topic-intro">
-                    <span>{`Topik ${activeTopicIndex + 1}`}</span>
-                    <h3>{activeTopic.title || `Topik ${activeTopicIndex + 1}`}</h3>
-                    <p>
-                      {hasAccess
-                        ? `${activeTopic.pages?.length || 0} halaman siap dibaca di topik ini.`
-                        : `Preview ${activeTopic.visible_page_count || activeTopic.pages?.length || 0} dari ${activeTopic.total_page_count || activeTopic.pages?.length || 0} halaman di topik ini.`}
-                    </p>
-                  </section>
-
                   {(activeTopic.pages || []).map((page, index) => (
                     <section key={`${activeTopic.title || 'topic'}-${index}`} className="learning-page learning-page-document">
                       <span>Halaman {index + 1}</span>
-                      <h3>{page.title}</h3>
                       {page.content_html ? (
                         <div
                           className="learning-rich-content"

@@ -42,6 +42,19 @@ const FONT_SIZE_COMMANDS = {
   '28': '6',
   '36': '7',
 };
+const FONT_SIZE_PRESET_VALUES = ['12', '14', '16', '20', '28', '36'];
+const DEFAULT_EDITOR_FORMAT_STATE = {
+  blockType: 'p',
+  fontSize: '16',
+  textColor: '#16243c',
+  bold: false,
+  italic: false,
+  underline: false,
+  strikeThrough: false,
+  align: 'left',
+  isBulletList: false,
+  isOrderedList: false,
+};
 
 const createEmptyMaterialPage = (order = 1) => ({
   title: `Halaman ${order}`,
@@ -188,6 +201,25 @@ function pageToHtml(page) {
     pointItems ? `<ul>${pointItems}</ul>` : '<p><br></p>',
     closing ? `<p><strong>Rangkuman:</strong> ${escapeHtml(closing)}</p>` : '',
   ].join('');
+}
+
+function plainTextToEditorHtml(value) {
+  const normalizedText = String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+
+  const paragraphs = normalizedText
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  if (paragraphs.length === 0) {
+    return '<p><br></p>';
+  }
+
+  return paragraphs
+    .map((paragraph) => `<p>${paragraph.split('\n').map((line) => escapeHtml(line)).join('<br>')}</p>`)
+    .join('');
 }
 
 function sanitizeEditorHtml(html) {
@@ -390,6 +422,68 @@ function parseIndentValue(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function rgbToHex(value) {
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedValue) {
+    return DEFAULT_EDITOR_FORMAT_STATE.textColor;
+  }
+
+  if (normalizedValue.startsWith('#')) {
+    if (normalizedValue.length === 4) {
+      return `#${normalizedValue[1]}${normalizedValue[1]}${normalizedValue[2]}${normalizedValue[2]}${normalizedValue[3]}${normalizedValue[3]}`.toLowerCase();
+    }
+    return normalizedValue.toLowerCase();
+  }
+
+  const matched = normalizedValue.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (!matched) {
+    return DEFAULT_EDITOR_FORMAT_STATE.textColor;
+  }
+
+  return `#${matched
+    .slice(1, 4)
+    .map((channel) => Number(channel).toString(16).padStart(2, '0'))
+    .join('')}`.toLowerCase();
+}
+
+function resolveEditorFontSize(value) {
+  const parsedSize = parseFloat(String(value || '').replace('px', '').trim());
+  if (!Number.isFinite(parsedSize)) {
+    return DEFAULT_EDITOR_FORMAT_STATE.fontSize;
+  }
+
+  return FONT_SIZE_PRESET_VALUES.reduce((closestValue, currentValue) => (
+    Math.abs(Number(currentValue) - parsedSize) < Math.abs(Number(closestValue) - parsedSize)
+      ? currentValue
+      : closestValue
+  ), DEFAULT_EDITOR_FORMAT_STATE.fontSize);
+}
+
+function normalizeEditorBlockType(tagName) {
+  const normalizedTagName = String(tagName || '').toLowerCase();
+  if (normalizedTagName === 'h1' || normalizedTagName === 'h2') {
+    return 'h2';
+  }
+  if (['h3', 'h4', 'h5', 'h6'].includes(normalizedTagName)) {
+    return 'h3';
+  }
+  return 'p';
+}
+
+function normalizeEditorAlignment(value) {
+  const normalizedValue = String(value || '').toLowerCase();
+  if (normalizedValue === 'center') {
+    return 'center';
+  }
+  if (normalizedValue === 'right' || normalizedValue === 'end') {
+    return 'right';
+  }
+  if (normalizedValue === 'justify') {
+    return 'justify';
+  }
+  return 'left';
+}
+
 function getEditorPageIndexFromNode(node) {
   if (!node) {
     return null;
@@ -409,9 +503,62 @@ function getEditorPageIndexFromNode(node) {
   return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : null;
 }
 
+function getSelectionPageBounds(selection, fallbackPageIndex = 0) {
+  if (!selection) {
+    return {
+      anchorPageIndex: fallbackPageIndex,
+      focusPageIndex: fallbackPageIndex,
+      startPageIndex: fallbackPageIndex,
+      endPageIndex: fallbackPageIndex,
+    };
+  }
+
+  const anchorPageIndex = getEditorPageIndexFromNode(selection.anchorNode) ?? fallbackPageIndex;
+  const focusPageIndex = getEditorPageIndexFromNode(selection.focusNode) ?? anchorPageIndex;
+
+  return {
+    anchorPageIndex,
+    focusPageIndex,
+    startPageIndex: Math.min(anchorPageIndex, focusPageIndex),
+    endPageIndex: Math.max(anchorPageIndex, focusPageIndex),
+  };
+}
+
+function buildNodePath(rootNode, targetNode) {
+  if (!rootNode || !targetNode) {
+    return null;
+  }
+
+  const path = [];
+  let currentNode = targetNode;
+
+  while (currentNode && currentNode !== rootNode) {
+    const parentNode = currentNode.parentNode;
+    if (!parentNode) {
+      return null;
+    }
+
+    path.unshift([...parentNode.childNodes].indexOf(currentNode));
+    currentNode = parentNode;
+  }
+
+  return currentNode === rootNode ? path : null;
+}
+
+function resolveNodePath(rootNode, path = []) {
+  if (!rootNode) {
+    return null;
+  }
+
+  return path.reduce((currentNode, childIndex) => (
+    currentNode?.childNodes?.[childIndex] || null
+  ), rootNode);
+}
+
 export default function AdminLearningMaterialEditor() {
   const { packageId, sectionCode } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const editorHostRef = useRef(null);
   const editorRefs = useRef({});
   const rulerScaleRef = useRef(null);
   const imageUploadInputRef = useRef(null);
@@ -440,6 +587,7 @@ export default function AdminLearningMaterialEditor() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeRibbonTab, setActiveRibbonTab] = useState('home');
+  const [editorFormatState, setEditorFormatState] = useState(DEFAULT_EDITOR_FORMAT_STATE);
   const [pageOrientation, setPageOrientation] = useState('portrait');
   const [pageZoom, setPageZoom] = useState('100');
   const [editorView, setEditorView] = useState('page');
@@ -458,6 +606,9 @@ export default function AdminLearningMaterialEditor() {
   const pendingEnterPageFocusRef = useRef(null);
   const savedSelectionRangeRef = useRef(null);
   const savedSelectionPageIndexRef = useRef(null);
+  const pendingMutationContextRef = useRef(null);
+  const pendingHistorySelectionRef = useRef(null);
+  const pendingHistoryScrollRef = useRef(null);
   const historyStateRef = useRef({
     initialized: false,
     restoring: false,
@@ -503,6 +654,9 @@ export default function AdminLearningMaterialEditor() {
   const activeTopic = materialForm.topics[activeTopicIndex] || null;
   const activePage = activeTopic?.pages?.[activePageIndex] || null;
   const getEditorNode = useCallback((pageIndex = activePageIndex) => editorRefs.current[pageIndex] || null, [activePageIndex]);
+  const focusEditorHost = useCallback(() => {
+    editorHostRef.current?.focus();
+  }, []);
   const focusEditorAtEnd = useCallback((pageIndex) => {
     requestAnimationFrame(() => {
       const editorNode = editorRefs.current[pageIndex];
@@ -510,7 +664,7 @@ export default function AdminLearningMaterialEditor() {
         return;
       }
 
-      editorNode.focus();
+      focusEditorHost();
       const selection = window.getSelection();
       if (!selection) {
         return;
@@ -522,7 +676,7 @@ export default function AdminLearningMaterialEditor() {
       selection.removeAllRanges();
       selection.addRange(range);
     });
-  }, []);
+  }, [focusEditorHost]);
   const markHistorySource = useCallback((source = 'generic') => {
     const currentSource = pendingHistorySourceRef.current || 'generic';
     const nextPriority = HISTORY_SOURCE_PRIORITY[source] ?? HISTORY_SOURCE_PRIORITY.generic;
@@ -532,6 +686,51 @@ export default function AdminLearningMaterialEditor() {
       pendingHistorySourceRef.current = source;
     }
   }, []);
+  const captureCurrentSelectionBookmark = useCallback((preferredPageIndex = activePageIndex) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      const fallbackPageIndex = Math.max(0, preferredPageIndex);
+      return {
+        anchor: {
+          pageIndex: fallbackPageIndex,
+          path: [],
+          offset: 0,
+        },
+        focus: {
+          pageIndex: fallbackPageIndex,
+          path: [],
+          offset: 0,
+        },
+        isCollapsed: true,
+        activePageIndex: fallbackPageIndex,
+      };
+    }
+
+    const serializePoint = (node, offset) => {
+      const pageIndex = getEditorPageIndexFromNode(node) ?? preferredPageIndex;
+      const editorNode = editorRefs.current[pageIndex];
+      const resolvedNode = editorNode && node && editorNode.contains(node) ? node : editorNode;
+      const path = buildNodePath(editorNode, resolvedNode) || [];
+      const safeOffset = resolvedNode?.nodeType === Node.TEXT_NODE
+        ? Math.min(Number(offset || 0), resolvedNode.textContent?.length || 0)
+        : Math.min(Number(offset || 0), resolvedNode?.childNodes?.length || 0);
+
+      return {
+        pageIndex,
+        path,
+        offset: safeOffset,
+      };
+    };
+
+    const pageBounds = getSelectionPageBounds(selection, preferredPageIndex);
+
+    return {
+      anchor: serializePoint(selection.anchorNode, selection.anchorOffset),
+      focus: serializePoint(selection.focusNode, selection.focusOffset),
+      isCollapsed: selection.isCollapsed,
+      activePageIndex: pageBounds.anchorPageIndex,
+    };
+  }, [activePageIndex]);
   const createHistorySnapshot = useCallback(() => cloneHistoryValue({
     materialForm,
     materialMeta,
@@ -541,9 +740,12 @@ export default function AdminLearningMaterialEditor() {
     pageZoom,
     editorView,
     focusMode,
+    selectionBookmark: captureCurrentSelectionBookmark(),
+    scrollY: typeof window !== 'undefined' ? window.scrollY : 0,
   }), [
     activePageIndex,
     activeTopicIndex,
+    captureCurrentSelectionBookmark,
     editorView,
     focusMode,
     materialForm,
@@ -802,13 +1004,76 @@ export default function AdminLearningMaterialEditor() {
       };
     }
 
-    editorNode.focus();
+    focusEditorHost();
     setSelectionRange(savedRange.cloneRange());
     return {
       pageIndex: savedPageIndex,
       editorNode,
     };
-  }, [activePageIndex, setSelectionRange]);
+  }, [activePageIndex, focusEditorHost, setSelectionRange]);
+  const restoreSelectionBookmark = useCallback((bookmark, preferredPageIndex = activePageIndex) => {
+    if (!bookmark) {
+      return false;
+    }
+
+    const resolvePoint = (point) => {
+      const pageIndex = Math.max(0, Number(point?.pageIndex ?? preferredPageIndex));
+      const editorNode = editorRefs.current[pageIndex];
+      if (!editorNode) {
+        return null;
+      }
+
+      const targetNode = resolveNodePath(editorNode, Array.isArray(point?.path) ? point.path : []) || editorNode;
+      const safeOffset = targetNode.nodeType === Node.TEXT_NODE
+        ? Math.min(Number(point?.offset || 0), targetNode.textContent?.length || 0)
+        : Math.min(Number(point?.offset || 0), targetNode.childNodes?.length || 0);
+
+      return {
+        pageIndex,
+        editorNode,
+        node: targetNode,
+        offset: safeOffset,
+      };
+    };
+
+    const anchorPoint = resolvePoint(bookmark.anchor);
+    const focusPoint = resolvePoint(bookmark.focus || bookmark.anchor);
+    if (!anchorPoint || !focusPoint) {
+      return false;
+    }
+
+    focusEditorHost();
+
+    const selection = window.getSelection();
+    if (!selection) {
+      return false;
+    }
+
+    const range = document.createRange();
+    const anchorStartsAfterFocus = anchorPoint.node === focusPoint.node
+      ? anchorPoint.offset > focusPoint.offset
+      : Boolean(anchorPoint.node.compareDocumentPosition(focusPoint.node) & Node.DOCUMENT_POSITION_PRECEDING);
+    const startPoint = anchorStartsAfterFocus ? focusPoint : anchorPoint;
+    const endPoint = anchorStartsAfterFocus ? anchorPoint : focusPoint;
+
+    range.setStart(startPoint.node, startPoint.offset);
+    range.setEnd(endPoint.node, endPoint.offset);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    if (!bookmark.isCollapsed && typeof selection.setBaseAndExtent === 'function') {
+      selection.setBaseAndExtent(
+        anchorPoint.node,
+        anchorPoint.offset,
+        focusPoint.node,
+        focusPoint.offset
+      );
+    }
+
+    savedSelectionRangeRef.current = range.cloneRange();
+    savedSelectionPageIndexRef.current = anchorPoint.pageIndex;
+    return true;
+  }, [activePageIndex, focusEditorHost]);
 
   const placeCaretInsideNode = useCallback((node, collapseToStart = false) => {
     if (!node) {
@@ -899,6 +1164,21 @@ export default function AdminLearningMaterialEditor() {
     return caretRect.bottom >= editorRect.bottom - threshold;
   }, []);
 
+  const isCaretAtPageStart = useCallback((pageIndex) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context || !context.selection.isCollapsed) {
+      return false;
+    }
+
+    const { editorNode, selection } = context;
+    const range = selection.getRangeAt(0).cloneRange();
+    const leadingRange = document.createRange();
+    leadingRange.selectNodeContents(editorNode);
+    leadingRange.setEnd(range.startContainer, range.startOffset);
+    const leadingText = leadingRange.toString().replace(/\u200B/g, '').replace(/\n/g, '').trim();
+    return leadingText === '';
+  }, [getSelectionEditorContext]);
+
   const normalizeEditorContent = useCallback((editorNode) => {
     if (!editorNode) {
       return;
@@ -920,6 +1200,228 @@ export default function AdminLearningMaterialEditor() {
   const getMovableEditorNodes = useCallback((editorNode) => (
     [...editorNode.childNodes].filter((childNode) => isMeaningfulEditorNode(childNode))
   ), [isMeaningfulEditorNode]);
+
+  const getDirectListItems = useCallback((listNode) => (
+    listNode instanceof HTMLElement
+      ? [...listNode.children].filter((childNode) => childNode.tagName === 'LI')
+      : []
+  ), []);
+
+  const areListsCompatibleForPagination = useCallback((leftList, rightList) => {
+    if (!(leftList instanceof HTMLElement) || !(rightList instanceof HTMLElement)) {
+      return false;
+    }
+
+    return leftList.tagName === rightList.tagName
+      && leftList.className === rightList.className
+      && leftList.style.listStyleType === rightList.style.listStyleType
+      && (leftList.getAttribute('type') || '') === (rightList.getAttribute('type') || '');
+  }, []);
+
+  const syncPaginatedOrderedListStarts = useCallback((pages = materialForm.topics[activeTopicIndex]?.pages || []) => {
+    let previousOrderedList = null;
+
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+      const editorNode = editorRefs.current[pageIndex];
+      if (!editorNode) {
+        previousOrderedList = null;
+        continue;
+      }
+
+      const movableNodes = getMovableEditorNodes(editorNode);
+      const firstNode = movableNodes[0];
+      const lastNode = movableNodes[movableNodes.length - 1];
+
+      if (firstNode instanceof HTMLOListElement) {
+        if (previousOrderedList && areListsCompatibleForPagination(previousOrderedList.node, firstNode)) {
+          const nextStart = previousOrderedList.start + previousOrderedList.itemCount;
+          if (nextStart > 1) {
+            firstNode.setAttribute('start', String(nextStart));
+          } else {
+            firstNode.removeAttribute('start');
+          }
+        } else {
+          firstNode.removeAttribute('start');
+        }
+      }
+
+      if (lastNode instanceof HTMLOListElement) {
+        previousOrderedList = {
+          node: lastNode,
+          start: Math.max(1, Number(lastNode.getAttribute('start') || 1)),
+          itemCount: Math.max(1, getDirectListItems(lastNode).length),
+        };
+      } else {
+        previousOrderedList = null;
+      }
+    }
+  }, [activeTopicIndex, areListsCompatibleForPagination, getDirectListItems, getMovableEditorNodes, materialForm.topics]);
+
+  const splitOverflowingListBlock = useCallback((editorNode, nextEditorNode, listNode) => {
+    if (!(listNode instanceof HTMLElement) || !listNode.matches('ol, ul') || !editorNode || !nextEditorNode) {
+      return false;
+    }
+
+    const listItems = getDirectListItems(listNode);
+    if (listItems.length <= 1) {
+      return false;
+    }
+
+    const leadingNextNode = getMovableEditorNodes(nextEditorNode)[0] || null;
+    let targetList = leadingNextNode instanceof HTMLElement && areListsCompatibleForPagination(listNode, leadingNextNode)
+      ? leadingNextNode
+      : null;
+
+    if (!targetList) {
+      if (getMovableEditorNodes(nextEditorNode).length === 1 && nextEditorNode.textContent.trim() === '') {
+        nextEditorNode.innerHTML = '';
+      }
+      targetList = listNode.cloneNode(false);
+      nextEditorNode.insertBefore(targetList, nextEditorNode.firstChild);
+    }
+
+    const movedItem = listItems[listItems.length - 1];
+    targetList.insertBefore(movedItem, targetList.firstChild);
+
+    if (getDirectListItems(listNode).length === 0) {
+      listNode.remove();
+    }
+
+    normalizeEditorContent(editorNode);
+    normalizeEditorContent(nextEditorNode);
+    return true;
+  }, [areListsCompatibleForPagination, getDirectListItems, getMovableEditorNodes, normalizeEditorContent]);
+
+  const moveLeadingListItemBackward = useCallback((editorNode, nextEditorNode, listNode) => {
+    if (!(listNode instanceof HTMLElement) || !listNode.matches('ol, ul') || !editorNode || !nextEditorNode) {
+      return null;
+    }
+
+    const listItems = getDirectListItems(listNode);
+    if (listItems.length === 0) {
+      return null;
+    }
+
+    const currentMovableNodes = getMovableEditorNodes(editorNode);
+    const trailingNode = currentMovableNodes[currentMovableNodes.length - 1] || null;
+    let targetList = trailingNode instanceof HTMLElement && areListsCompatibleForPagination(trailingNode, listNode)
+      ? trailingNode
+      : null;
+    let createdTargetList = false;
+
+    if (!targetList) {
+      targetList = listNode.cloneNode(false);
+      editorNode.appendChild(targetList);
+      createdTargetList = true;
+    }
+
+    const movedItem = listItems[0];
+    const originalParent = listNode.parentNode;
+    const originalNextSibling = listNode.nextSibling;
+    const originalTargetNextSibling = targetList.nextSibling;
+
+    targetList.appendChild(movedItem);
+
+    if (getDirectListItems(listNode).length === 0) {
+      listNode.remove();
+    }
+
+    normalizeEditorContent(editorNode);
+    normalizeEditorContent(nextEditorNode);
+
+    return () => {
+      if (createdTargetList && !editorNode.contains(targetList)) {
+        editorNode.insertBefore(targetList, originalTargetNextSibling);
+      }
+
+      if (!listNode.isConnected && originalParent) {
+        originalParent.insertBefore(listNode, originalNextSibling);
+      }
+
+      listNode.insertBefore(movedItem, listNode.firstChild);
+
+      if (createdTargetList && getDirectListItems(targetList).length === 0) {
+        targetList.remove();
+      }
+
+      normalizeEditorContent(editorNode);
+      normalizeEditorContent(nextEditorNode);
+    };
+  }, [areListsCompatibleForPagination, getDirectListItems, getMovableEditorNodes, normalizeEditorContent]);
+
+  const splitOverflowingTextBlock = useCallback((editorNode, nextEditorNode, blockNode) => {
+    if (!(blockNode instanceof HTMLElement) || !editorNode || !nextEditorNode) {
+      return false;
+    }
+
+    if (!blockNode.matches('p, div, blockquote, h1, h2, h3, h4, h5, h6')) {
+      return false;
+    }
+
+    if (blockNode.querySelector('img, table, figure, hr, ul, ol')) {
+      return false;
+    }
+
+    const words = String(blockNode.textContent || '')
+      .replace(/\u200B/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter(Boolean);
+
+    if (words.length < 8) {
+      return false;
+    }
+
+    const originalBlockHtml = blockNode.innerHTML;
+    const originalNextHtml = nextEditorNode.innerHTML;
+    let bestSplit = null;
+    let low = 1;
+    let high = words.length - 1;
+
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const keptText = words.slice(0, middle).join(' ');
+      const overflowText = words.slice(middle).join(' ');
+
+      blockNode.textContent = keptText;
+      nextEditorNode.innerHTML = originalNextHtml;
+      if (getMovableEditorNodes(nextEditorNode).length === 1 && nextEditorNode.textContent.trim() === '') {
+        nextEditorNode.innerHTML = '';
+      }
+
+      const overflowClone = blockNode.cloneNode(false);
+      overflowClone.textContent = overflowText;
+      nextEditorNode.insertBefore(overflowClone, nextEditorNode.firstChild);
+      normalizeEditorContent(nextEditorNode);
+
+      if (editorNode.scrollHeight <= editorNode.clientHeight + 2) {
+        bestSplit = { keptText, overflowText };
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+
+    blockNode.innerHTML = originalBlockHtml;
+    nextEditorNode.innerHTML = originalNextHtml;
+
+    if (!bestSplit || !bestSplit.overflowText) {
+      return false;
+    }
+
+    blockNode.textContent = bestSplit.keptText;
+    if (getMovableEditorNodes(nextEditorNode).length === 1 && nextEditorNode.textContent.trim() === '') {
+      nextEditorNode.innerHTML = '';
+    }
+
+    const overflowClone = blockNode.cloneNode(false);
+    overflowClone.textContent = bestSplit.overflowText;
+    nextEditorNode.insertBefore(overflowClone, nextEditorNode.firstChild);
+    normalizeEditorContent(editorNode);
+    normalizeEditorContent(nextEditorNode);
+    return true;
+  }, [getMovableEditorNodes, normalizeEditorContent]);
 
   const serializeActiveTopicPagesFromDom = useCallback((topicIndex = activeTopicIndex) => {
     const activeTopicData = materialForm.topics[topicIndex];
@@ -1100,6 +1602,42 @@ export default function AdminLearningMaterialEditor() {
     });
   }, [activePageIndex, getParagraphIndentMetrics, getSelectionEditorContext]);
 
+  const readEditorFormatState = useCallback((pageIndex = activePageIndex) => {
+    const context = getSelectionEditorContext(pageIndex);
+    const editorNode = context?.editorNode || getEditorNode(pageIndex);
+    if (!editorNode) {
+      return DEFAULT_EDITOR_FORMAT_STATE;
+    }
+
+    const blockNode = context?.blockNode
+      || editorNode.querySelector('p, div, li, blockquote, h1, h2, h3, h4, h5, h6, td, th');
+    if (!(blockNode instanceof HTMLElement)) {
+      return DEFAULT_EDITOR_FORMAT_STATE;
+    }
+
+    const computedStyles = window.getComputedStyle(blockNode);
+    const listNode = blockNode.closest('ul, ol');
+    const fontWeight = Number.parseInt(computedStyles.fontWeight || '400', 10);
+    const textDecoration = String(computedStyles.textDecorationLine || computedStyles.textDecoration || '').toLowerCase();
+
+    return {
+      blockType: normalizeEditorBlockType(blockNode.tagName),
+      fontSize: resolveEditorFontSize(computedStyles.fontSize),
+      textColor: rgbToHex(computedStyles.color),
+      bold: Number.isFinite(fontWeight) ? fontWeight >= 600 : /(bold|[6-9]00)/i.test(computedStyles.fontWeight),
+      italic: String(computedStyles.fontStyle || '').toLowerCase().includes('italic'),
+      underline: textDecoration.includes('underline'),
+      strikeThrough: textDecoration.includes('line-through'),
+      align: normalizeEditorAlignment(computedStyles.textAlign),
+      isBulletList: listNode?.tagName?.toLowerCase() === 'ul',
+      isOrderedList: listNode?.tagName?.toLowerCase() === 'ol',
+    };
+  }, [activePageIndex, getEditorNode, getSelectionEditorContext]);
+
+  const syncEditorFormatState = useCallback((pageIndex = activePageIndex) => {
+    setEditorFormatState(readEditorFormatState(pageIndex));
+  }, [activePageIndex, readEditorFormatState]);
+
   const applyParagraphMetrics = useCallback((pageIndex, { leftIndent, firstLineIndent }) => {
     const context = getSelectionEditorContext(pageIndex);
     if (!context) {
@@ -1216,28 +1754,36 @@ export default function AdminLearningMaterialEditor() {
     activatePage(nextPageIndex);
   };
 
-  const removeMaterialPage = (pageIndex) => {
+  const removeMaterialPage = useCallback((pageIndex) => {
     if (!activeTopic || (activeTopic.pages?.length || 0) <= 1) {
-      return;
+      return false;
     }
 
-    markHistorySource('structure');
     const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
       topicIndex === activeTopicIndex
         ? {
             ...topic,
-            pages: topic.pages.filter((_, index) => index !== pageIndex),
+            pages: renumberMaterialPages(topic.pages.filter((_, index) => index !== pageIndex)),
           }
         : topic
     ));
-    const nextIndex = Math.max(0, Math.min(pageIndex === activePageIndex ? activePageIndex - 1 : activePageIndex, (nextTopics[activeTopicIndex]?.pages?.length || 1) - 1));
+    const nextIndex = Math.max(
+      0,
+      Math.min(pageIndex === activePageIndex ? activePageIndex - 1 : activePageIndex, (nextTopics[activeTopicIndex]?.pages?.length || 1) - 1)
+    );
 
+    markHistorySource('structure');
+    editorRefs.current = {};
+    pendingEnterPageFocusRef.current = nextIndex;
     setMaterialForm((current) => ({
       ...current,
       topics: nextTopics,
     }));
-    activatePage(nextIndex);
-  };
+    setActivePageIndex(nextIndex);
+    syncSelectionInUrl(activeTopicIndex, nextIndex);
+    setEditorRenderNonce((current) => current + 1);
+    return true;
+  }, [activePageIndex, activeTopic, activeTopicIndex, markHistorySource, readTopicsFromEditor, syncSelectionInUrl]);
 
   const isEditorPageEmpty = useCallback((pageIndex) => {
     const editorNode = editorRefs.current[pageIndex];
@@ -1384,7 +1930,7 @@ export default function AdminLearningMaterialEditor() {
       return false;
     }
 
-    editorNode.focus();
+    focusEditorHost();
 
     if (typeof document.caretPositionFromPoint === 'function') {
       const caretPosition = document.caretPositionFromPoint(clientX, clientY);
@@ -1428,6 +1974,7 @@ export default function AdminLearningMaterialEditor() {
     return placeCaretInsideNode(trailingParagraph, false);
   }, [
     ensureEditorTrailingParagraph,
+    focusEditorHost,
     getMovableEditorNodes,
     persistActivePageContent,
     placeCaretInsideNode,
@@ -1443,7 +1990,7 @@ export default function AdminLearningMaterialEditor() {
       normalizeEditorContent(nextEditorNode);
       persistActivePageContent(nextEditorNode.innerHTML, nextPageIndex, 'structure');
       activatePage(nextPageIndex);
-      nextEditorNode.focus();
+      focusEditorHost();
       placeCaretInsideNode(leadingParagraph, true);
       requestAnimationFrame(() => updateActiveParagraphMetrics(nextPageIndex));
       return;
@@ -1475,6 +2022,7 @@ export default function AdminLearningMaterialEditor() {
     activatePage,
     activeTopicIndex,
     ensureEditorLeadingParagraph,
+    focusEditorHost,
     markHistorySource,
     normalizeEditorContent,
     persistActivePageContent,
@@ -1483,8 +2031,53 @@ export default function AdminLearningMaterialEditor() {
     syncSelectionInUrl,
     updateActiveParagraphMetrics,
   ]);
+  const deleteBackwardAcrossPageBoundary = useCallback((pageIndex) => {
+    if (pageIndex <= 0) {
+      return false;
+    }
+
+    const previousPageIndex = pageIndex - 1;
+    const previousEditorNode = editorRefs.current[previousPageIndex];
+    if (!previousEditorNode) {
+      return false;
+    }
+
+    focusEditorHost();
+    const selection = window.getSelection();
+    if (!selection) {
+      return false;
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(previousEditorNode);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    if (typeof selection.modify === 'function') {
+      selection.modify('extend', 'backward', 'character');
+      document.execCommand('delete', false, null);
+      rememberCurrentSelection(previousPageIndex);
+      handlePageInput(previousPageIndex, 'deleteContentBackward', previousPageIndex);
+      activatePage(previousPageIndex);
+      return true;
+    }
+
+    return false;
+  }, [activatePage, focusEditorHost, handlePageInput, rememberCurrentSelection]);
 
   const handleEditorKeyDown = useCallback((event, pageIndex) => {
+    pendingMutationContextRef.current = {
+      inputType: event.key === 'Backspace'
+        ? 'deleteContentBackward'
+        : event.key === 'Delete'
+          ? 'deleteContentForward'
+          : event.key === 'Enter'
+            ? 'insertParagraph'
+            : 'insertText',
+      ...getSelectionPageBounds(window.getSelection(), pageIndex),
+    };
+
     if (event.key === 'Tab') {
       event.preventDefault();
       applyKeyboardTabIndent(pageIndex, event.shiftKey ? -1 : 1);
@@ -1512,6 +2105,12 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
+    if (event.key === 'Backspace' && pageIndex > 0 && isCaretAtPageStart(pageIndex)) {
+      event.preventDefault();
+      deleteBackwardAcrossPageBoundary(pageIndex);
+      return;
+    }
+
     if (event.key !== 'Backspace' && event.key !== 'Delete') {
       return;
     }
@@ -1528,36 +2127,20 @@ export default function AdminLearningMaterialEditor() {
 
     event.preventDefault();
 
-    const nextPageIndex = Math.max(0, pageIndex - 1);
-    const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
-      topicIndex === activeTopicIndex
-        ? {
-            ...topic,
-            pages: topic.pages.filter((_, index) => index !== pageIndex),
-          }
-        : topic
-    ));
-
-    setMaterialForm((current) => ({
-      ...current,
-      topics: nextTopics,
-    }));
-    activatePage(nextPageIndex);
-    focusEditorAtEnd(nextPageIndex);
+    removeMaterialPage(pageIndex);
   }, [
-    activatePage,
     activeTopicIndex,
     applyKeyboardTabIndent,
-    focusEditorAtEnd,
+    deleteBackwardAcrossPageBoundary,
     handlePageInput,
     isSelectionInsideListItem,
+    isCaretAtPageStart,
     isCaretNearPageBottom,
     isEditorPageEmpty,
     materialForm.topics,
     openNextEditorPageFromBoundary,
     outdentAtCaretStart,
-    readTopicsFromEditor,
-    rememberCurrentSelection,
+    removeMaterialPage,
   ]);
 
   const rebalancePaginatedEditors = useCallback((startIndex = 0) => {
@@ -1567,7 +2150,6 @@ export default function AdminLearningMaterialEditor() {
     }
 
     let createdNewPage = false;
-    let focusNextPageIndex = null;
     let didReflow = false;
 
     for (let pageIndex = Math.max(0, startIndex); pageIndex < currentTopic.pages.length; pageIndex += 1) {
@@ -1601,13 +2183,16 @@ export default function AdminLearningMaterialEditor() {
 
         const movedNode = movableNodes[movableNodes.length - 1];
         normalizeEditorContent(nextEditorNode);
-        if (getMovableEditorNodes(nextEditorNode).length === 1 && nextEditorNode.textContent.trim() === '') {
-          nextEditorNode.innerHTML = '';
+        const didSplitList = splitOverflowingListBlock(editorNode, nextEditorNode, movedNode);
+        const didSplitBlock = !didSplitList && splitOverflowingTextBlock(editorNode, nextEditorNode, movedNode);
+        if (!didSplitList && !didSplitBlock) {
+          if (getMovableEditorNodes(nextEditorNode).length === 1 && nextEditorNode.textContent.trim() === '') {
+            nextEditorNode.innerHTML = '';
+          }
+          nextEditorNode.insertBefore(movedNode, nextEditorNode.firstChild);
         }
-        nextEditorNode.insertBefore(movedNode, nextEditorNode.firstChild);
         normalizeEditorContent(editorNode);
         normalizeEditorContent(nextEditorNode);
-        focusNextPageIndex = pageIndex + 1;
         didReflow = true;
       }
     }
@@ -1629,18 +2214,29 @@ export default function AdminLearningMaterialEditor() {
         }
 
         const movedNode = nextMovableNodes[0];
-        editorNode.appendChild(movedNode);
+        const rollbackListMove = moveLeadingListItemBackward(editorNode, nextEditorNode, movedNode);
+        if (!rollbackListMove) {
+          editorNode.appendChild(movedNode);
+        }
         normalizeEditorContent(editorNode);
         didReflow = true;
 
         if (editorNode.scrollHeight > editorNode.clientHeight + 2) {
-          nextEditorNode.insertBefore(movedNode, nextEditorNode.firstChild);
-          normalizeEditorContent(nextEditorNode);
+          if (rollbackListMove) {
+            rollbackListMove();
+          } else {
+            nextEditorNode.insertBefore(movedNode, nextEditorNode.firstChild);
+            normalizeEditorContent(nextEditorNode);
+          }
           break;
         }
 
         normalizeEditorContent(nextEditorNode);
       }
+    }
+
+    if (didReflow) {
+      syncPaginatedOrderedListStarts(currentTopic.pages);
     }
 
     const nextSerializedPages = serializeActiveTopicPagesFromDom(activeTopicIndex);
@@ -1656,18 +2252,16 @@ export default function AdminLearningMaterialEditor() {
       }));
     }
 
-    if (!createdNewPage && focusNextPageIndex !== null) {
-      activatePage(focusNextPageIndex);
-      focusEditorAtEnd(focusNextPageIndex);
-    }
   }, [
-    activatePage,
     activeTopicIndex,
-    focusEditorAtEnd,
     getMovableEditorNodes,
     materialForm.topics,
+    moveLeadingListItemBackward,
     normalizeEditorContent,
     serializeActiveTopicPagesFromDom,
+    splitOverflowingListBlock,
+    splitOverflowingTextBlock,
+    syncPaginatedOrderedListStarts,
   ]);
 
   function schedulePaginationRebalance(startIndex = 0) {
@@ -1681,11 +2275,20 @@ export default function AdminLearningMaterialEditor() {
     });
   }
 
-  function handlePageInput(pageIndex) {
+  function handlePageInput(pageIndex, inputType = '', preferredStartIndex = pageIndex) {
     persistActivePageContent(getEditorNode(pageIndex)?.innerHTML || '', pageIndex, 'typing');
     activatePage(pageIndex);
-    if (pageNeedsPaginationRebalance(pageIndex)) {
-      schedulePaginationRebalance(pageIndex);
+    syncEditorFormatState(pageIndex);
+
+    const totalPages = materialForm.topics[activeTopicIndex]?.pages?.length || 0;
+    if (totalPages > 1 && isEditorPageEmpty(pageIndex) && String(inputType).startsWith('delete')) {
+      removeMaterialPage(pageIndex);
+      return;
+    }
+
+    const rebalanceStartIndex = Math.max(0, Math.min(pageIndex, preferredStartIndex));
+    if (pageNeedsPaginationRebalance(rebalanceStartIndex) || pageNeedsPaginationRebalance(pageIndex)) {
+      schedulePaginationRebalance(rebalanceStartIndex);
     }
   }
 
@@ -1694,7 +2297,7 @@ export default function AdminLearningMaterialEditor() {
     const resolvedPageIndex = restoredSelection?.pageIndex ?? activePageIndex;
     const editorNode = restoredSelection?.editorNode || getEditorNode(resolvedPageIndex);
     if (editorNode) {
-      editorNode.focus();
+      focusEditorHost();
     }
     markHistorySource(command === 'undo' || command === 'redo' ? 'history' : 'format');
     document.execCommand(command, false, value);
@@ -1702,6 +2305,7 @@ export default function AdminLearningMaterialEditor() {
       persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
     }
     updateActiveParagraphMetrics(resolvedPageIndex);
+    syncEditorFormatState(resolvedPageIndex);
     schedulePaginationRebalance(resolvedPageIndex);
   }
 
@@ -1759,7 +2363,7 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
-    editorNode.focus();
+    focusEditorHost();
     let listNode = getCurrentListNode(pageIndex);
     if (!listNode) {
       document.execCommand(kind === 'unordered' ? 'insertUnorderedList' : 'insertOrderedList', false, null);
@@ -1788,7 +2392,7 @@ export default function AdminLearningMaterialEditor() {
     persistActivePageContent(editorNode.innerHTML, pageIndex, 'format');
     updateActiveParagraphMetrics(pageIndex);
     schedulePaginationRebalance(pageIndex);
-  }, [activePageIndex, clearListPresetClasses, getCurrentListNode, getEditorNode, persistActivePageContent, replaceListTag, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+  }, [activePageIndex, clearListPresetClasses, focusEditorHost, getCurrentListNode, getEditorNode, persistActivePageContent, replaceListTag, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
 
   const applyMultilevelListStyle = useCallback((presetValue) => {
     const presetClassMap = {
@@ -1810,7 +2414,7 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
-    editorNode.focus();
+    focusEditorHost();
     let listNode = getCurrentListNode(pageIndex);
     if (!listNode) {
       document.execCommand(kind === 'unordered' ? 'insertUnorderedList' : 'insertOrderedList', false, null);
@@ -1834,7 +2438,7 @@ export default function AdminLearningMaterialEditor() {
     persistActivePageContent(editorNode.innerHTML, pageIndex, 'format');
     updateActiveParagraphMetrics(pageIndex);
     schedulePaginationRebalance(pageIndex);
-  }, [activePageIndex, clearListPresetClasses, getCurrentListNode, getEditorNode, persistActivePageContent, replaceListTag, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+  }, [activePageIndex, clearListPresetClasses, focusEditorHost, getCurrentListNode, getEditorNode, persistActivePageContent, replaceListTag, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
 
   const openPdfImportOptions = () => {
     const suggestedStartPage = String(Math.max(1, (activeTopic?.pages?.length || 0) + 1));
@@ -2232,6 +2836,10 @@ export default function AdminLearningMaterialEditor() {
     historyStateRef.current.restoring = true;
     pendingHistorySourceRef.current = 'history';
     editorRefs.current = {};
+    pendingHistorySelectionRef.current = safeSnapshot.selectionBookmark || null;
+    pendingHistoryScrollRef.current = Number.isFinite(Number(safeSnapshot.scrollY))
+      ? Number(safeSnapshot.scrollY)
+      : null;
     clearSelectedImageFigure();
     closeImageContextMenu();
     setMaterialForm(safeSnapshot.materialForm || { title: '', topics: [] });
@@ -2287,6 +2895,38 @@ export default function AdminLearningMaterialEditor() {
     restoreHistorySnapshot(nextSnapshot);
     return true;
   }, [createHistorySnapshot, restoreHistorySnapshot]);
+  const handleEditorBeforeInput = useCallback((event) => {
+    const selection = window.getSelection();
+    const pageBounds = getSelectionPageBounds(selection, activePageIndex);
+    pendingMutationContextRef.current = {
+      inputType: event.nativeEvent?.inputType || 'insertText',
+      ...pageBounds,
+    };
+  }, [activePageIndex]);
+
+  const handleEditorPaste = useCallback((event) => {
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) {
+      return;
+    }
+
+    event.preventDefault();
+    const selection = window.getSelection();
+    const pageBounds = getSelectionPageBounds(selection, activePageIndex);
+    pendingMutationContextRef.current = {
+      inputType: 'insertFromPaste',
+      ...pageBounds,
+    };
+
+    const rawHtml = clipboardData.getData('text/html');
+    const rawText = clipboardData.getData('text/plain');
+    const nextHtml = rawHtml
+      ? sanitizeEditorHtml(rawHtml)
+      : plainTextToEditorHtml(rawText);
+
+    focusEditorHost();
+    document.execCommand('insertHTML', false, nextHtml || '<p><br></p>');
+  }, [activePageIndex, focusEditorHost]);
 
   const openImageContextMenu = useCallback((clientX, clientY, layout) => {
     const menuWidth = 220;
@@ -2338,8 +2978,9 @@ export default function AdminLearningMaterialEditor() {
     requestAnimationFrame(() => {
       rememberCurrentSelection();
       updateActiveParagraphMetrics();
+      syncEditorFormatState();
     });
-  }, [clearSelectedImageFigure, closeImageContextMenu, ensureImageFigure, normalizeImageFigureSize, persistActivePageContent, rememberCurrentSelection, selectImageFigure, updateActiveParagraphMetrics]);
+  }, [clearSelectedImageFigure, closeImageContextMenu, ensureImageFigure, normalizeImageFigureSize, persistActivePageContent, rememberCurrentSelection, selectImageFigure, syncEditorFormatState, updateActiveParagraphMetrics]);
 
   const handleEditorContextMenu = useCallback((event) => {
     const imageNode = event.target.closest?.('img');
@@ -2388,7 +3029,7 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
-    const editorNode = event.currentTarget;
+    const editorNode = event.target.closest?.('.admin-word-editable');
     if (!(editorNode instanceof HTMLElement) || event.target !== editorNode) {
       return;
     }
@@ -2402,6 +3043,7 @@ export default function AdminLearningMaterialEditor() {
     requestAnimationFrame(() => {
       rememberCurrentSelection(pageIndex);
       updateActiveParagraphMetrics(pageIndex);
+      syncEditorFormatState(pageIndex);
     });
   }, [
     activatePage,
@@ -2412,13 +3054,15 @@ export default function AdminLearningMaterialEditor() {
     placeCaretFromEditorPoint,
     rememberCurrentSelection,
     selectImageFigure,
+    syncEditorFormatState,
     updateActiveParagraphMetrics,
   ]);
 
   const handleEditorKeyUp = useCallback((pageIndex) => {
     rememberCurrentSelection(pageIndex);
     updateActiveParagraphMetrics(pageIndex);
-  }, [rememberCurrentSelection, updateActiveParagraphMetrics]);
+    syncEditorFormatState(pageIndex);
+  }, [rememberCurrentSelection, syncEditorFormatState, updateActiveParagraphMetrics]);
 
   useEffect(() => {
     clearSelectedImageFigure();
@@ -2438,11 +3082,12 @@ export default function AdminLearningMaterialEditor() {
       }
       rememberCurrentSelection(selectionPageIndex);
       updateActiveParagraphMetrics(selectionPageIndex);
+      syncEditorFormatState(selectionPageIndex);
     };
 
     document.addEventListener('selectionchange', handleSelectionChange);
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
-  }, [activatePage, activePageIndex, rememberCurrentSelection, updateActiveParagraphMetrics]);
+  }, [activatePage, activePageIndex, rememberCurrentSelection, syncEditorFormatState, updateActiveParagraphMetrics]);
 
   useEffect(() => {
     const handlePointerMove = (event) => {
@@ -2644,10 +3289,50 @@ export default function AdminLearningMaterialEditor() {
     const editorNode = editorRefs.current[pendingFocusPageIndex];
     const leadingParagraph = ensureEditorLeadingParagraph(editorNode);
     persistActivePageContent(editorNode.innerHTML, pendingFocusPageIndex);
-    editorNode.focus();
+    focusEditorHost();
     placeCaretInsideNode(leadingParagraph, true);
+    syncEditorFormatState(pendingFocusPageIndex);
     pendingEnterPageFocusRef.current = null;
-  }, [ensureEditorLeadingParagraph, materialForm.topics, persistActivePageContent, placeCaretInsideNode]);
+  }, [ensureEditorLeadingParagraph, focusEditorHost, materialForm.topics, persistActivePageContent, placeCaretInsideNode, syncEditorFormatState]);
+
+  useEffect(() => {
+    const pendingSelectionBookmark = pendingHistorySelectionRef.current;
+    const pendingScrollY = pendingHistoryScrollRef.current;
+    if (!pendingSelectionBookmark && pendingScrollY === null) {
+      return;
+    }
+
+    const targetPageIndex = Math.max(0, Number(
+      pendingSelectionBookmark?.activePageIndex
+      ?? pendingSelectionBookmark?.anchor?.pageIndex
+      ?? activePageIndex
+    ));
+    if (!editorRefs.current[targetPageIndex]) {
+      return;
+    }
+
+    const rafId = requestAnimationFrame(() => {
+      if (pendingSelectionBookmark) {
+        restoreSelectionBookmark(pendingSelectionBookmark, targetPageIndex);
+        syncEditorFormatState(targetPageIndex);
+      }
+
+      if (pendingScrollY !== null) {
+        window.scrollTo({ top: pendingScrollY, behavior: 'auto' });
+      } else {
+        editorRefs.current[targetPageIndex]?.scrollIntoView?.({ block: 'nearest' });
+      }
+
+      pendingHistorySelectionRef.current = null;
+      pendingHistoryScrollRef.current = null;
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [activePageIndex, materialForm.topics, restoreSelectionBookmark, syncEditorFormatState]);
+
+  useEffect(() => {
+    syncEditorFormatState(activePageIndex);
+  }, [activePageIndex, activeTopicIndex, syncEditorFormatState]);
 
   useEffect(() => () => {
     if (paginationFrameRef.current) {
@@ -2951,12 +3636,20 @@ export default function AdminLearningMaterialEditor() {
                   <div className="admin-ribbon-group">
                     <span className="admin-ribbon-group-label">Teks</span>
                     <div className="admin-ribbon-control-row">
-                      <select name="editor_block_type" onChange={(event) => runCommand('formatBlock', event.target.value)} defaultValue="p">
+                      <select
+                        name="editor_block_type"
+                        value={editorFormatState.blockType}
+                        onChange={(event) => runCommand('formatBlock', event.target.value)}
+                      >
                         <option value="p">Paragraf</option>
                         <option value="h2">Heading 1</option>
                         <option value="h3">Heading 2</option>
                       </select>
-                      <select name="editor_font_size" onChange={(event) => applyFontSize(event.target.value)} defaultValue="16">
+                      <select
+                        name="editor_font_size"
+                        value={editorFormatState.fontSize}
+                        onChange={(event) => applyFontSize(event.target.value)}
+                      >
                         <option value="12">12</option>
                         <option value="14">14</option>
                         <option value="16">16</option>
@@ -2966,7 +3659,12 @@ export default function AdminLearningMaterialEditor() {
                       </select>
                       <label className="admin-color-control">
                         Warna
-                        <input name="editor_text_color" type="color" defaultValue="#16243c" onChange={(event) => runCommand('foreColor', event.target.value)} />
+                        <input
+                          name="editor_text_color"
+                          type="color"
+                          value={editorFormatState.textColor}
+                          onChange={(event) => runCommand('foreColor', event.target.value)}
+                        />
                       </label>
                     </div>
                   </div>
@@ -2974,10 +3672,10 @@ export default function AdminLearningMaterialEditor() {
                   <div className="admin-ribbon-group">
                     <span className="admin-ribbon-group-label">Format</span>
                     <div className="admin-ribbon-control-row">
-                      <button type="button" onClick={() => runCommand('bold')}>B</button>
-                      <button type="button" onClick={() => runCommand('italic')}><em>I</em></button>
-                      <button type="button" onClick={() => runCommand('underline')}><u>U</u></button>
-                      <button type="button" onClick={() => runCommand('strikeThrough')}>S</button>
+                      <button type="button" className={editorFormatState.bold ? 'admin-ribbon-button-active' : ''} onClick={() => runCommand('bold')}>B</button>
+                      <button type="button" className={editorFormatState.italic ? 'admin-ribbon-button-active' : ''} onClick={() => runCommand('italic')}><em>I</em></button>
+                      <button type="button" className={editorFormatState.underline ? 'admin-ribbon-button-active' : ''} onClick={() => runCommand('underline')}><u>U</u></button>
+                      <button type="button" className={editorFormatState.strikeThrough ? 'admin-ribbon-button-active' : ''} onClick={() => runCommand('strikeThrough')}>S</button>
                       <button type="button" onClick={() => runCommand('removeFormat')}>Reset</button>
                     </div>
                   </div>
@@ -2987,7 +3685,7 @@ export default function AdminLearningMaterialEditor() {
                     <div className="admin-ribbon-control-row">
                       <button
                         type="button"
-                        className="admin-ribbon-icon-button"
+                        className={editorFormatState.isBulletList ? 'admin-ribbon-icon-button admin-ribbon-button-active' : 'admin-ribbon-icon-button'}
                         aria-label="Buat bullet list"
                         onClick={() => applyListStyle('unordered', 'disc')}
                       >
@@ -3013,7 +3711,7 @@ export default function AdminLearningMaterialEditor() {
                       </select>
                       <button
                         type="button"
-                        className="admin-ribbon-icon-button"
+                        className={editorFormatState.isOrderedList ? 'admin-ribbon-icon-button admin-ribbon-button-active' : 'admin-ribbon-icon-button'}
                         aria-label="Buat numbered list"
                         onClick={() => applyListStyle('ordered', 'decimal')}
                       >
@@ -3065,19 +3763,19 @@ export default function AdminLearningMaterialEditor() {
                       </select>
                       <button type="button" onClick={() => adjustParagraphIndent(-1)}>Outdent</button>
                       <button type="button" onClick={() => adjustParagraphIndent(1)}>Indent</button>
-                      <button type="button" className="admin-ribbon-icon-button" aria-label="Rata kiri" onClick={() => runCommand('justifyLeft')}>
+                      <button type="button" className={editorFormatState.align === 'left' ? 'admin-ribbon-icon-button admin-ribbon-button-active' : 'admin-ribbon-icon-button'} aria-label="Rata kiri" onClick={() => runCommand('justifyLeft')}>
                         <RibbonIcon type="alignLeft" />
                         <span>Kiri</span>
                       </button>
-                      <button type="button" className="admin-ribbon-icon-button" aria-label="Rata tengah" onClick={() => runCommand('justifyCenter')}>
+                      <button type="button" className={editorFormatState.align === 'center' ? 'admin-ribbon-icon-button admin-ribbon-button-active' : 'admin-ribbon-icon-button'} aria-label="Rata tengah" onClick={() => runCommand('justifyCenter')}>
                         <RibbonIcon type="alignCenter" />
                         <span>Tengah</span>
                       </button>
-                      <button type="button" className="admin-ribbon-icon-button" aria-label="Rata kanan" onClick={() => runCommand('justifyRight')}>
+                      <button type="button" className={editorFormatState.align === 'right' ? 'admin-ribbon-icon-button admin-ribbon-button-active' : 'admin-ribbon-icon-button'} aria-label="Rata kanan" onClick={() => runCommand('justifyRight')}>
                         <RibbonIcon type="alignRight" />
                         <span>Kanan</span>
                       </button>
-                      <button type="button" className="admin-ribbon-icon-button" aria-label="Rata kiri kanan" onClick={() => runCommand('justifyFull')}>
+                      <button type="button" className={editorFormatState.align === 'justify' ? 'admin-ribbon-icon-button admin-ribbon-button-active' : 'admin-ribbon-icon-button'} aria-label="Rata kiri kanan" onClick={() => runCommand('justifyFull')}>
                         <RibbonIcon type="alignJustify" />
                         <span>Justify</span>
                       </button>
@@ -3449,68 +4147,73 @@ export default function AdminLearningMaterialEditor() {
                 </details>
               </aside>
 
-              <div className="admin-doc-page-stack admin-learning-editor-content">
-                {!activePage && activeTopic && (
-                  <section
-                    className={editorPageClassName}
-                    style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
-                  >
-                    <div className="admin-word-page-topline">
-                      <span>{currentTopicLabel}</span>
-                      <strong>Page 1</strong>
-                    </div>
-                    <div className="admin-word-editable admin-word-editable-empty">
-                      <p><br /></p>
-                    </div>
-                  </section>
-                )}
-
+              <div
+                ref={editorHostRef}
+                className="admin-doc-page-stack admin-learning-editor-content admin-word-editable-host"
+                contentEditable
+                suppressContentEditableWarning
+                onFocus={() => {
+                  requestAnimationFrame(() => {
+                    const selectionPageIndex = getEditorPageIndexFromNode(window.getSelection()?.anchorNode) ?? activePageIndex;
+                    activatePage(selectionPageIndex);
+                    rememberCurrentSelection(selectionPageIndex);
+                    updateActiveParagraphMetrics(selectionPageIndex);
+                    syncEditorFormatState(selectionPageIndex);
+                  });
+                }}
+                onKeyDown={(event) => {
+                  const selectionPageIndex = getEditorPageIndexFromNode(window.getSelection()?.anchorNode) ?? activePageIndex;
+                  handleEditorKeyDown(event, selectionPageIndex);
+                }}
+                onKeyUp={() => {
+                  const selectionPageIndex = getEditorPageIndexFromNode(window.getSelection()?.anchorNode) ?? activePageIndex;
+                  handleEditorKeyUp(selectionPageIndex);
+                }}
+                onBeforeInput={handleEditorBeforeInput}
+                onInput={(event) => {
+                  const selectionPageIndex = getEditorPageIndexFromNode(window.getSelection()?.anchorNode) ?? activePageIndex;
+                  const mutationContext = pendingMutationContextRef.current;
+                  const originPageIndex = mutationContext?.startPageIndex ?? selectionPageIndex;
+                  rememberCurrentSelection(selectionPageIndex);
+                  handlePageInput(
+                    selectionPageIndex,
+                    event.nativeEvent?.inputType || mutationContext?.inputType || '',
+                    originPageIndex
+                  );
+                  pendingMutationContextRef.current = null;
+                }}
+                onPaste={handleEditorPaste}
+                onPointerDown={handleEditorPointerDown}
+                onClick={handleEditorClick}
+                onContextMenu={handleEditorContextMenu}
+                onBlur={() => {
+                  setMaterialForm((current) => ({
+                    ...current,
+                    topics: readTopicsFromEditor(),
+                  }));
+                }}
+              >
                 {activeTopic && (activeTopic.pages || []).map((page, pageIndex) => (
-                  <section
+                  <div
                     key={`material-page-${activeTopicIndex}-${pageIndex}-${editorRenderNonce}`}
-                    className={pageIndex === activePageIndex ? `${editorPageClassName} admin-doc-page-current` : editorPageClassName}
-                    style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
-                  >
-                    <div className="admin-word-page-topline">
-                      <span>{currentPageSurfaceLabel}</span>
-                      <strong>{`Page ${pageIndex + 1}`}</strong>
-                    </div>
-                    <div
-                      ref={(node) => {
-                        if (node) {
-                          editorRefs.current[pageIndex] = node;
-                          const editorKey = `${activeTopicIndex}:${pageIndex}:${editorRenderNonce}`;
-                          if (node.dataset.editorKey !== editorKey) {
-                            node.innerHTML = page.content_html || '<p><br></p>';
-                            node.dataset.editorKey = editorKey;
-                          }
-                        } else {
-                          delete editorRefs.current[pageIndex];
+                    ref={(node) => {
+                      if (node) {
+                        editorRefs.current[pageIndex] = node;
+                        const editorKey = `${activeTopicIndex}:${pageIndex}:${editorRenderNonce}`;
+                        if (node.dataset.editorKey !== editorKey) {
+                          node.innerHTML = page.content_html || '<p><br></p>';
+                          node.dataset.editorKey = editorKey;
                         }
-                      }}
-                      className="admin-word-editable admin-word-editable-document"
-                      data-page-index={pageIndex}
-                      contentEditable
-                      suppressContentEditableWarning
-                      onFocus={() => {
-                        activatePage(pageIndex);
-                        requestAnimationFrame(() => {
-                          rememberCurrentSelection(pageIndex);
-                          updateActiveParagraphMetrics(pageIndex);
-                        });
-                      }}
-                      onKeyDown={(event) => handleEditorKeyDown(event, pageIndex)}
-                      onKeyUp={() => handleEditorKeyUp(pageIndex)}
-                      onInput={() => {
-                        rememberCurrentSelection(pageIndex);
-                        handlePageInput(pageIndex);
-                      }}
-                      onPointerDown={handleEditorPointerDown}
-                      onClick={handleEditorClick}
-                      onContextMenu={handleEditorContextMenu}
-                      onBlur={() => updatePageContent(activeTopicIndex, pageIndex)}
-                    />
-                  </section>
+                      } else {
+                        delete editorRefs.current[pageIndex];
+                      }
+                    }}
+                    className={pageIndex === activePageIndex ? `${editorPageClassName} admin-word-editable admin-word-editable-document admin-doc-page-current` : `${editorPageClassName} admin-word-editable admin-word-editable-document`}
+                    data-page-index={pageIndex}
+                    data-surface-label={currentPageSurfaceLabel}
+                    data-page-label={`Page ${pageIndex + 1}`}
+                    style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
+                  />
                 ))}
               </div>
             </div>

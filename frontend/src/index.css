@@ -7163,6 +7163,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-word-editor-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
   padding: 0;
   border-radius: 0;
   background: #1f1f1f;
@@ -7184,15 +7187,33 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .account-shell-word-editor .admin-ribbon-tabs {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
   gap: 0.8rem;
-  padding: 0.15rem 0.75rem 0;
+  padding: 0.22rem 0.75rem 0.18rem;
   border: 0;
   border-radius: 0;
   background: #2c2c2c;
   box-shadow: none;
+}
+
+.admin-ribbon-tabs-left {
+  min-width: 0;
+}
+
+.admin-ribbon-tabs-center {
+  justify-self: center;
+  min-width: 0;
+}
+
+.admin-ribbon-tabs-right {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.42rem;
+  min-width: 0;
 }
 
 .admin-ribbon-tab-list {
@@ -7202,12 +7223,14 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .account-shell-word-editor .admin-ribbon-tab {
-  min-height: 32px;
+  min-height: 28px;
   border: 0;
-  padding: 0 0.8rem;
+  padding: 0 0.72rem;
   border-radius: 0.35rem 0.35rem 0 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.72);
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .account-shell-word-editor .admin-ribbon-tab-active,
@@ -7219,37 +7242,28 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .account-shell-word-editor .admin-word-ribbon {
   gap: 0.7rem;
-  padding: 0.72rem 1rem 0.82rem;
+  padding: 0.55rem 0.85rem 0.62rem;
   border: 0;
   border-radius: 0;
   background: linear-gradient(180deg, #343434 0%, #2e2e2e 100%);
   box-shadow: none;
 }
 
-.admin-word-ribbon-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-left: auto;
-}
-
 .admin-word-ribbon-topic {
-  min-width: min(28vw, 320px);
-  max-width: min(36vw, 420px);
+  min-width: min(22vw, 250px);
+  max-width: min(30vw, 360px);
   padding: 0.05rem 0;
   border: 0;
   background: transparent;
   display: grid;
-  gap: 0.08rem;
+  gap: 0.04rem;
   justify-items: center;
   text-align: center;
 }
 
 .admin-word-ribbon-topic-label {
   color: rgba(255, 255, 255, 0.48);
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7262,7 +7276,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   padding: 0;
   background: transparent;
   color: #ffffff;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 800;
   line-height: 1.1;
   text-align: center;
@@ -7276,13 +7290,13 @@ html[data-theme='dark'] .theme-toggle-thumb {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
-  padding: 0 0.9rem;
+  min-height: 31px;
+  padding: 0 0.78rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.05);
   color: #f7f7f7;
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -7294,12 +7308,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .account-shell-word-editor .admin-ribbon-group {
-  padding-right: 1rem;
+  padding-right: 0.82rem;
   border-right-color: rgba(255, 255, 255, 0.08);
 }
 
 .account-shell-word-editor .admin-ribbon-group-label {
   color: rgba(255, 255, 255, 0.48);
+  font-size: 0.64rem;
+}
+
+.account-shell-word-editor .admin-ribbon-control-row {
+  gap: 0.38rem;
 }
 
 .account-shell-word-editor .admin-word-ribbon button,
@@ -7308,11 +7327,31 @@ html[data-theme='dark'] .theme-toggle-thumb {
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.06);
   color: #f2f2f2;
+  min-height: 32px;
+  font-size: 0.8rem;
+  border-radius: 0.5rem;
 }
 
 .account-shell-word-editor .admin-word-ribbon button:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
+}
+
+.account-shell-word-editor .admin-word-ribbon button {
+  padding: 0 0.62rem;
+}
+
+.account-shell-word-editor .admin-ribbon-icon-button {
+  gap: 0.38rem;
+}
+
+.account-shell-word-editor .admin-ribbon-inline-select {
+  max-width: 7.4rem;
+}
+
+.account-shell-word-editor .admin-color-control {
+  gap: 0.38rem;
+  padding: 0 0.62rem;
 }
 
 .account-shell-word-editor .admin-learning-ruler-dock {
@@ -7361,8 +7400,12 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .account-shell-word-editor .admin-learning-editor-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: calc(100vh - 150px);
   margin-top: 0;
-  padding: 0 1rem 1rem;
+  padding: 0 1rem 0.75rem;
   border-radius: 0;
   background: linear-gradient(180deg, #242424 0%, #1c1c1c 100%);
   box-shadow: none;
@@ -7370,9 +7413,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-word-workspace-shell {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: 252px minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+  min-height: 0;
 }
 
 .admin-word-workspace-shell-focus {
@@ -7457,7 +7502,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-learning-editor-content {
   min-width: 0;
-  padding: 0 0 2rem;
+  padding: 0 0 1rem;
 }
 
 .account-shell-word-editor .admin-learning-page-shell {
@@ -7501,9 +7546,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-word-statusbar {
-  position: static;
-  z-index: 1;
-  margin-top: 0.2rem;
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
+  flex: 0 0 auto;
+  margin-top: 0.3rem;
   padding: 0.32rem 0.7rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(33, 33, 33, 0.98);
@@ -7582,8 +7629,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
     padding-right: 0.65rem;
   }
 
-  .admin-word-ribbon-actions {
-    width: 100%;
+  .account-shell-word-editor .admin-ribbon-tabs {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .admin-ribbon-tabs-center,
+  .admin-ribbon-tabs-right {
+    justify-self: stretch;
+  }
+
+  .admin-ribbon-tabs-right {
     justify-content: flex-start;
   }
 

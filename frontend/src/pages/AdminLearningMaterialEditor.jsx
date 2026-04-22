@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 
@@ -67,6 +67,18 @@ const MATERIAL_LIST_PRESET_CLASSES = [
   'material-list-preset-decimal-decimal-decimal',
   'material-list-preset-disc-circle-square',
 ];
+const HISTORY_TYPING_MERGE_WINDOW = 900;
+const HISTORY_SOURCE_PRIORITY = {
+  system: 0,
+  generic: 1,
+  navigation: 1,
+  typing: 2,
+  format: 2,
+  metadata: 2,
+  layout: 2,
+  structure: 3,
+  history: 4,
+};
 
 function RibbonIcon({ type }) {
   const icons = {
@@ -230,6 +242,14 @@ function normalizeMaterialStatus(value) {
   return value === 'draft' ? 'draft' : 'published';
 }
 
+function cloneHistoryValue(value) {
+  if (typeof window !== 'undefined' && typeof window.structuredClone === 'function') {
+    return window.structuredClone(value);
+  }
+
+  return JSON.parse(JSON.stringify(value));
+}
+
 function getMaterialStatusLabel(status) {
   return normalizeMaterialStatus(status) === 'draft' ? 'Draft Admin' : 'Published';
 }
@@ -391,7 +411,6 @@ function getEditorPageIndexFromNode(node) {
 
 export default function AdminLearningMaterialEditor() {
   const { packageId, sectionCode } = useParams();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const editorRefs = useRef({});
   const rulerScaleRef = useRef(null);
@@ -415,6 +434,7 @@ export default function AdminLearningMaterialEditor() {
   const [pdfImporting, setPdfImporting] = useState(false);
   const [pdfImportProgress, setPdfImportProgress] = useState('');
   const [pdfImportOptions, setPdfImportOptions] = useState(buildDefaultPdfImportOptions);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [selectedPdfImportFile, setSelectedPdfImportFile] = useState(null);
   const [selectedPdfImportPageCount, setSelectedPdfImportPageCount] = useState(0);
   const [error, setError] = useState('');
@@ -437,6 +457,17 @@ export default function AdminLearningMaterialEditor() {
   const pendingEnterPageFocusRef = useRef(null);
   const savedSelectionRangeRef = useRef(null);
   const savedSelectionPageIndexRef = useRef(null);
+  const historyStateRef = useRef({
+    initialized: false,
+    restoring: false,
+    currentSnapshot: null,
+    currentSerialized: '',
+    undoStack: [],
+    redoStack: [],
+    lastSource: 'system',
+    lastCommitAt: 0,
+  });
+  const pendingHistorySourceRef = useRef('system');
 
   const numericPackageId = Number(packageId);
   const workspace = searchParams.get('workspace') === 'draft' ? 'draft' : 'published';
@@ -491,6 +522,32 @@ export default function AdminLearningMaterialEditor() {
       selection.addRange(range);
     });
   }, []);
+  const markHistorySource = useCallback((source = 'generic') => {
+    const currentSource = pendingHistorySourceRef.current || 'generic';
+    const nextPriority = HISTORY_SOURCE_PRIORITY[source] ?? HISTORY_SOURCE_PRIORITY.generic;
+    const currentPriority = HISTORY_SOURCE_PRIORITY[currentSource] ?? HISTORY_SOURCE_PRIORITY.generic;
+
+    if (nextPriority >= currentPriority) {
+      pendingHistorySourceRef.current = source;
+    }
+  }, []);
+  const createHistorySnapshot = useCallback(() => cloneHistoryValue({
+    materialForm,
+    materialMeta,
+    activeTopicIndex,
+    activePageIndex,
+    pageOrientation,
+    pageZoom,
+    editorView,
+  }), [
+    activePageIndex,
+    activeTopicIndex,
+    editorView,
+    materialForm,
+    materialMeta,
+    pageOrientation,
+    pageZoom,
+  ]);
 
   const syncSelectionInUrl = useCallback((topicIndex, pageIndex = 0) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -504,12 +561,13 @@ export default function AdminLearningMaterialEditor() {
       return false;
     }
 
+    markHistorySource('navigation');
     setActivePageIndex(pageIndex);
     if (syncUrl) {
       syncSelectionInUrl(activeTopicIndex, pageIndex);
     }
     return true;
-  }, [activePageIndex, activeTopicIndex, syncSelectionInUrl]);
+  }, [activePageIndex, activeTopicIndex, markHistorySource, syncSelectionInUrl]);
 
   const fetchLearningContent = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !sectionCode) {
@@ -578,6 +636,20 @@ export default function AdminLearningMaterialEditor() {
   useEffect(() => {
     fetchLearningContent();
   }, [fetchLearningContent]);
+
+  useEffect(() => {
+    historyStateRef.current = {
+      initialized: false,
+      restoring: false,
+      currentSnapshot: null,
+      currentSerialized: '',
+      undoStack: [],
+      redoStack: [],
+      lastSource: 'system',
+      lastCommitAt: 0,
+    };
+    pendingHistorySourceRef.current = 'system';
+  }, [numericPackageId, sectionCode, workspace]);
 
   const syncLearningMaterialState = useCallback((nextMaterial) => {
     setLearningContent((current) => current.map((section) => (
@@ -1042,7 +1114,7 @@ export default function AdminLearningMaterialEditor() {
     blockNode.style.marginLeft = safeLeftIndent > 0 ? `${safeLeftIndent}px` : '';
     blockNode.style.textIndent = safeFirstLineIndent !== 0 ? `${safeFirstLineIndent}px` : '';
 
-    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex);
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
     setActiveParagraphMetrics({
       pageIndex: resolvedPageIndex,
       leftIndent: safeLeftIndent,
@@ -1067,8 +1139,9 @@ export default function AdminLearningMaterialEditor() {
     }),
   })), [activeTopicIndex, materialForm.topics]);
 
-  function persistActivePageContent(rawHtml = null, pageIndex = activePageIndex) {
+  function persistActivePageContent(rawHtml = null, pageIndex = activePageIndex, historySource = 'generic') {
     const contentHtml = sanitizeEditorHtml(rawHtml ?? (getEditorNode(pageIndex)?.innerHTML || ''));
+    markHistorySource(historySource);
     setMaterialForm((current) => ({
       ...current,
       topics: current.topics.map((topic, currentTopicIndex) => (
@@ -1091,6 +1164,7 @@ export default function AdminLearningMaterialEditor() {
   }
 
   const updateTopicTitle = (topicIndex, title) => {
+    markHistorySource('metadata');
     setMaterialForm((current) => ({
       ...current,
       topics: current.topics.map((topic, index) => (
@@ -1099,30 +1173,15 @@ export default function AdminLearningMaterialEditor() {
     }));
   };
 
-  const updatePageTitle = (topicIndex, pageIndex, title) => {
-    setMaterialForm((current) => ({
-      ...current,
-      topics: current.topics.map((topic, currentTopicIndex) => (
-        currentTopicIndex === topicIndex
-          ? {
-              ...topic,
-              pages: topic.pages.map((page, currentPageIndex) => (
-                currentPageIndex === pageIndex ? { ...page, title } : page
-              )),
-            }
-          : topic
-      )),
-    }));
-  };
-
   const updatePageContent = (topicIndex, pageIndex) => {
     if (topicIndex !== activeTopicIndex || pageIndex !== activePageIndex) {
       return;
     }
-    persistActivePageContent();
+    persistActivePageContent(null, pageIndex, 'typing');
   };
 
   const selectPage = (pageIndex) => {
+    markHistorySource('navigation');
     setMaterialForm((current) => ({
       ...current,
       topics: readTopicsFromEditor(),
@@ -1131,11 +1190,35 @@ export default function AdminLearningMaterialEditor() {
     focusEditorAtEnd(pageIndex);
   };
 
+  const addMaterialPage = () => {
+    const nextPageIndex = activeTopic?.pages?.length || 0;
+    markHistorySource('structure');
+    const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
+      topicIndex === activeTopicIndex
+        ? {
+            ...topic,
+            pages: renumberMaterialPages([
+              ...topic.pages,
+              createEmptyMaterialPage(topic.pages.length + 1),
+            ]),
+          }
+        : topic
+    ));
+
+    pendingEnterPageFocusRef.current = nextPageIndex;
+    setMaterialForm((current) => ({
+      ...current,
+      topics: nextTopics,
+    }));
+    activatePage(nextPageIndex);
+  };
+
   const removeMaterialPage = (pageIndex) => {
     if (!activeTopic || (activeTopic.pages?.length || 0) <= 1) {
       return;
     }
 
+    markHistorySource('structure');
     const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
       topicIndex === activeTopicIndex
         ? {
@@ -1181,7 +1264,7 @@ export default function AdminLearningMaterialEditor() {
       blockNode.style.marginLeft = nextMarginLeft > 0 ? `${nextMarginLeft}px` : '';
     }
 
-    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex);
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
     updateActiveParagraphMetrics(resolvedPageIndex);
     schedulePaginationRebalance(resolvedPageIndex);
     return true;
@@ -1221,7 +1304,7 @@ export default function AdminLearningMaterialEditor() {
       blockNode.style.textIndent = nextFirstLineIndent !== 0 ? `${nextFirstLineIndent}px` : '';
     }
 
-    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex);
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
     updateActiveParagraphMetrics(resolvedPageIndex);
     schedulePaginationRebalance(resolvedPageIndex);
     return true;
@@ -1327,7 +1410,7 @@ export default function AdminLearningMaterialEditor() {
       const lastRect = lastMovableNode.getBoundingClientRect?.() || null;
       if (!lastRect || clientY >= lastRect.bottom - 6) {
         const trailingParagraph = ensureEditorTrailingParagraph(editorNode);
-        persistActivePageContent(editorNode.innerHTML, pageIndex);
+        persistActivePageContent(editorNode.innerHTML, pageIndex, 'typing');
         return placeCaretInsideNode(trailingParagraph, false);
       }
     }
@@ -1338,7 +1421,7 @@ export default function AdminLearningMaterialEditor() {
     }
 
     const trailingParagraph = ensureEditorTrailingParagraph(editorNode);
-    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    persistActivePageContent(editorNode.innerHTML, pageIndex, 'typing');
     return placeCaretInsideNode(trailingParagraph, false);
   }, [
     ensureEditorTrailingParagraph,
@@ -1355,7 +1438,7 @@ export default function AdminLearningMaterialEditor() {
     if (nextEditorNode) {
       const leadingParagraph = ensureEditorLeadingParagraph(nextEditorNode);
       normalizeEditorContent(nextEditorNode);
-      persistActivePageContent(nextEditorNode.innerHTML, nextPageIndex);
+      persistActivePageContent(nextEditorNode.innerHTML, nextPageIndex, 'structure');
       activatePage(nextPageIndex);
       nextEditorNode.focus();
       placeCaretInsideNode(leadingParagraph, true);
@@ -1363,6 +1446,7 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
+    markHistorySource('structure');
     const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => {
       if (topicIndex !== activeTopicIndex) {
         return topic;
@@ -1388,6 +1472,7 @@ export default function AdminLearningMaterialEditor() {
     activatePage,
     activeTopicIndex,
     ensureEditorLeadingParagraph,
+    markHistorySource,
     normalizeEditorContent,
     persistActivePageContent,
     placeCaretInsideNode,
@@ -1594,6 +1679,7 @@ export default function AdminLearningMaterialEditor() {
   }
 
   function handlePageInput(pageIndex) {
+    persistActivePageContent(getEditorNode(pageIndex)?.innerHTML || '', pageIndex, 'typing');
     activatePage(pageIndex);
     if (pageNeedsPaginationRebalance(pageIndex)) {
       schedulePaginationRebalance(pageIndex);
@@ -1607,9 +1693,10 @@ export default function AdminLearningMaterialEditor() {
     if (editorNode) {
       editorNode.focus();
     }
+    markHistorySource(command === 'undo' || command === 'redo' ? 'history' : 'format');
     document.execCommand(command, false, value);
     if (editorNode) {
-      persistActivePageContent(editorNode.innerHTML, resolvedPageIndex);
+      persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
     }
     updateActiveParagraphMetrics(resolvedPageIndex);
     schedulePaginationRebalance(resolvedPageIndex);
@@ -1695,7 +1782,7 @@ export default function AdminLearningMaterialEditor() {
       normalizedListNode.removeAttribute('type');
     }
 
-    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    persistActivePageContent(editorNode.innerHTML, pageIndex, 'format');
     updateActiveParagraphMetrics(pageIndex);
     schedulePaginationRebalance(pageIndex);
   }, [activePageIndex, clearListPresetClasses, getCurrentListNode, getEditorNode, persistActivePageContent, replaceListTag, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
@@ -1741,13 +1828,14 @@ export default function AdminLearningMaterialEditor() {
       normalizedListNode.removeAttribute('type');
     }
 
-    persistActivePageContent(editorNode.innerHTML, pageIndex);
+    persistActivePageContent(editorNode.innerHTML, pageIndex, 'format');
     updateActiveParagraphMetrics(pageIndex);
     schedulePaginationRebalance(pageIndex);
   }, [activePageIndex, clearListPresetClasses, getCurrentListNode, getEditorNode, persistActivePageContent, replaceListTag, restoreSavedSelection, schedulePaginationRebalance, updateActiveParagraphMetrics]);
 
   const openPdfImportOptions = () => {
     const suggestedStartPage = String(Math.max(1, (activeTopic?.pages?.length || 0) + 1));
+    setIsInspectorOpen(true);
     setPdfImportOptions((current) => ({
       visible: true,
       mode: current.mode || 'replace',
@@ -1850,6 +1938,7 @@ export default function AdminLearningMaterialEditor() {
       nextActivePage = insertIndex;
     }
 
+    markHistorySource('structure');
     editorRefs.current = {};
     setMaterialForm((current) => ({
       ...current,
@@ -1862,7 +1951,7 @@ export default function AdminLearningMaterialEditor() {
     setActivePageIndex(nextActivePage);
     syncSelectionInUrl(activeTopicIndex, nextActivePage);
     setEditorRenderNonce((current) => current + 1);
-  }, [activeTopicIndex, readTopicsFromEditor, syncSelectionInUrl]);
+  }, [activeTopicIndex, markHistorySource, readTopicsFromEditor, syncSelectionInUrl]);
 
   const getPdfJsLib = useCallback(async () => {
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -2131,6 +2220,69 @@ export default function AdminLearningMaterialEditor() {
       current.visible ? { ...current, visible: false } : current
     ));
   }, []);
+  const restoreHistorySnapshot = useCallback((snapshot) => {
+    if (!snapshot) {
+      return;
+    }
+
+    const safeSnapshot = cloneHistoryValue(snapshot);
+    historyStateRef.current.restoring = true;
+    pendingHistorySourceRef.current = 'history';
+    editorRefs.current = {};
+    clearSelectedImageFigure();
+    closeImageContextMenu();
+    setMaterialForm(safeSnapshot.materialForm || { title: '', topics: [] });
+    setMaterialMeta(safeSnapshot.materialMeta || {
+      status: 'published',
+      sourceUrl: '',
+      reviewNotes: '',
+      publishedAt: null,
+    });
+    setActiveTopicIndex(Math.max(0, Number(safeSnapshot.activeTopicIndex || 0)));
+    setActivePageIndex(Math.max(0, Number(safeSnapshot.activePageIndex || 0)));
+    setPageOrientation(safeSnapshot.pageOrientation === 'landscape' ? 'landscape' : 'portrait');
+    setPageZoom(String(safeSnapshot.pageZoom || '100'));
+    setEditorView(safeSnapshot.editorView === 'compact' ? 'compact' : 'page');
+    setEditorRenderNonce((current) => current + 1);
+    requestAnimationFrame(() => {
+      syncSelectionInUrl(
+        Math.max(0, Number(safeSnapshot.activeTopicIndex || 0)),
+        Math.max(0, Number(safeSnapshot.activePageIndex || 0))
+      );
+    });
+  }, [clearSelectedImageFigure, closeImageContextMenu, syncSelectionInUrl]);
+  const runUndoHistory = useCallback(() => {
+    const historyState = historyStateRef.current;
+    if (historyState.undoStack.length === 0) {
+      return false;
+    }
+
+    const previousSnapshot = historyState.undoStack.pop();
+    const currentSnapshot = createHistorySnapshot();
+    historyState.redoStack.push(currentSnapshot);
+    historyState.currentSnapshot = cloneHistoryValue(previousSnapshot);
+    historyState.currentSerialized = JSON.stringify(previousSnapshot);
+    historyState.lastSource = 'history';
+    historyState.lastCommitAt = Date.now();
+    restoreHistorySnapshot(previousSnapshot);
+    return true;
+  }, [createHistorySnapshot, restoreHistorySnapshot]);
+  const runRedoHistory = useCallback(() => {
+    const historyState = historyStateRef.current;
+    if (historyState.redoStack.length === 0) {
+      return false;
+    }
+
+    const nextSnapshot = historyState.redoStack.pop();
+    const currentSnapshot = createHistorySnapshot();
+    historyState.undoStack.push(currentSnapshot);
+    historyState.currentSnapshot = cloneHistoryValue(nextSnapshot);
+    historyState.currentSerialized = JSON.stringify(nextSnapshot);
+    historyState.lastSource = 'history';
+    historyState.lastCommitAt = Date.now();
+    restoreHistorySnapshot(nextSnapshot);
+    return true;
+  }, [createHistorySnapshot, restoreHistorySnapshot]);
 
   const openImageContextMenu = useCallback((clientX, clientY, layout) => {
     const menuWidth = 220;
@@ -2506,6 +2658,110 @@ export default function AdminLearningMaterialEditor() {
     }
   }, []);
 
+  useEffect(() => {
+    if (loading || !activeSection) {
+      return;
+    }
+
+    const historyState = historyStateRef.current;
+    const snapshot = createHistorySnapshot();
+    const serializedSnapshot = JSON.stringify(snapshot);
+    const source = pendingHistorySourceRef.current || 'generic';
+
+    if (!historyState.initialized) {
+      historyState.initialized = true;
+      historyState.currentSnapshot = cloneHistoryValue(snapshot);
+      historyState.currentSerialized = serializedSnapshot;
+      historyState.undoStack = [];
+      historyState.redoStack = [];
+      historyState.lastSource = source;
+      historyState.lastCommitAt = Date.now();
+      pendingHistorySourceRef.current = 'generic';
+      return;
+    }
+
+    if (historyState.restoring) {
+      historyState.restoring = false;
+      historyState.currentSnapshot = cloneHistoryValue(snapshot);
+      historyState.currentSerialized = serializedSnapshot;
+      historyState.lastSource = 'history';
+      historyState.lastCommitAt = Date.now();
+      pendingHistorySourceRef.current = 'generic';
+      return;
+    }
+
+    if (serializedSnapshot === historyState.currentSerialized) {
+      pendingHistorySourceRef.current = 'generic';
+      return;
+    }
+
+    if (source === 'navigation') {
+      historyState.currentSnapshot = cloneHistoryValue(snapshot);
+      historyState.currentSerialized = serializedSnapshot;
+      historyState.lastSource = 'navigation';
+      historyState.lastCommitAt = Date.now();
+      pendingHistorySourceRef.current = 'generic';
+      return;
+    }
+
+    const now = Date.now();
+    const shouldMergeTyping = (
+      source === 'typing'
+      && historyState.lastSource === 'typing'
+      && now - historyState.lastCommitAt <= HISTORY_TYPING_MERGE_WINDOW
+    );
+
+    if (shouldMergeTyping) {
+      historyState.currentSnapshot = cloneHistoryValue(snapshot);
+      historyState.currentSerialized = serializedSnapshot;
+      historyState.lastCommitAt = now;
+      pendingHistorySourceRef.current = 'generic';
+      return;
+    }
+
+    if (historyState.currentSnapshot) {
+      historyState.undoStack.push(cloneHistoryValue(historyState.currentSnapshot));
+      if (historyState.undoStack.length > 120) {
+        historyState.undoStack.shift();
+      }
+    }
+
+    historyState.currentSnapshot = cloneHistoryValue(snapshot);
+    historyState.currentSerialized = serializedSnapshot;
+    historyState.redoStack = [];
+    historyState.lastSource = source;
+    historyState.lastCommitAt = now;
+    pendingHistorySourceRef.current = 'generic';
+  }, [activeSection, createHistorySnapshot, loading]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.defaultPrevented) {
+        return;
+      }
+
+      const pressedKey = String(event.key || '').toLowerCase();
+      if (pressedKey === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          runRedoHistory();
+          return;
+        }
+
+        runUndoHistory();
+        return;
+      }
+
+      if (pressedKey === 'y') {
+        event.preventDefault();
+        runRedoHistory();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [runRedoHistory, runUndoHistory]);
+
   const editorPageClassName = [
     'admin-doc-page',
     'admin-word-page',
@@ -2568,28 +2824,64 @@ export default function AdminLearningMaterialEditor() {
     }
   };
 
+  const canUndoHistory = historyStateRef.current.undoStack.length > 0;
+  const canRedoHistory = historyStateRef.current.redoStack.length > 0;
+  const currentTopicLabel = activeTopic?.title?.trim() || `Document ${Math.max(1, activeTopicIndex + 1)}`;
+  const editorNavContent = (
+    <div className="admin-word-navbar">
+      <div className="admin-word-navbar-quick">
+        <Link
+          to={`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`}
+          className="admin-word-quick-button"
+        >
+          Admin
+        </Link>
+        <button type="button" className="admin-word-quick-button" onClick={runUndoHistory} disabled={!canUndoHistory}>
+          Undo
+        </button>
+        <button type="button" className="admin-word-quick-button" onClick={runRedoHistory} disabled={!canRedoHistory}>
+          Redo
+        </button>
+        <button type="button" className="admin-word-quick-button" onClick={addMaterialPage} disabled={!activeTopic}>
+          Halaman Baru
+        </button>
+        <button type="button" className="admin-word-quick-button" onClick={openPdfImportOptions} disabled={!activeTopic || pdfImporting}>
+          PDF
+        </button>
+        <button
+          type="button"
+          className="admin-word-quick-button admin-word-quick-button-primary"
+          onClick={handleSave}
+          disabled={saving || loading || pdfImporting}
+        >
+          {saving ? 'Menyimpan...' : (isDraftWorkspace ? 'Simpan Draft' : 'Simpan Materi')}
+        </button>
+      </div>
+      <div className="admin-word-navbar-document">
+        <span className="admin-word-navbar-caption">{activeSection?.name || 'Workspace Materi'}</span>
+        {activeTopic ? (
+          <input
+            name={`material_topic_title_nav_${activeTopicIndex}`}
+            value={activeTopic.title}
+            onChange={(event) => updateTopicTitle(activeTopicIndex, event.target.value)}
+            placeholder="Document1"
+            aria-label="Nama dokumen"
+          />
+        ) : (
+          <strong>{currentTopicLabel}</strong>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <AccountShell
-      shellClassName="account-shell-learning"
+      shellClassName="account-shell-learning account-shell-word-editor"
       title={activeTopic?.title || 'Editor Materi'}
       subtitle="Kelola isi halaman di dalam topik materi yang sedang dipilih."
+      navContent={editorNavContent}
+      hidePageHeader
     >
-      <div className="admin-material-editor-topbar admin-learning-editor-topbar">
-        <Link to={`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`} className="btn btn-outline">Kembali ke Admin</Link>
-        <div className="admin-material-editor-actions">
-          {isDraftWorkspace && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleSave}
-              disabled={saving || loading || pdfImporting}
-            >
-              {saving ? 'Menyimpan Draft...' : 'Simpan Draft'}
-            </button>
-          )}
-        </div>
-      </div>
-
       {error && <div className="alert">{error}</div>}
       {success && <div className="account-success">{success}</div>}
       {pdfImportProgress && <div className="alert">{pdfImportProgress}</div>}
@@ -2599,27 +2891,7 @@ export default function AdminLearningMaterialEditor() {
           <p>Memuat editor materi...</p>
         </div>
       ) : activeSection ? (
-        <section className="account-card admin-material-editor-shell admin-learning-editor-shell-page">
-          <div className="admin-doc-toolbar admin-learning-editor-hero">
-            <div>
-              <span className="account-package-tag">{activeSection.name}</span>
-              <h3>{activeTopic?.title || 'Topik materi baru'}</h3>
-              <div className="admin-learning-editor-status-line">
-                <span className={`admin-material-status-badge admin-material-status-badge-${activeMaterialStatus}`}>
-                  {getMaterialStatusLabel(activeMaterialStatus)}
-                </span>
-                <p>
-                  {activeMaterialStatus === 'draft'
-                    ? 'Draft ini hanya terlihat di area admin sampai Anda menekan Publish Draft dari panel admin.'
-                    : `Materi aktif untuk peserta. Publish terakhir ${formatPublishedAt(materialMeta.publishedAt)}.`}
-                </p>
-              </div>
-            </div>
-            <div className="admin-doc-toolbar-actions">
-              <button type="button" className="btn btn-outline" onClick={() => navigate(`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`)}>Tutup Editor</button>
-            </div>
-          </div>
-
+        <section className="account-card admin-material-editor-shell admin-learning-editor-shell-page admin-word-editor-frame">
           <div className="admin-learning-editor-nav-sticky">
             <div className="admin-ribbon-tabs">
               {[
@@ -2822,14 +3094,20 @@ export default function AdminLearningMaterialEditor() {
                       <button
                         type="button"
                         className={pageOrientation === 'portrait' ? 'admin-ribbon-button-active' : ''}
-                        onClick={() => setPageOrientation('portrait')}
+                        onClick={() => {
+                          markHistorySource('layout');
+                          setPageOrientation('portrait');
+                        }}
                       >
                         Portrait
                       </button>
                       <button
                         type="button"
                         className={pageOrientation === 'landscape' ? 'admin-ribbon-button-active' : ''}
-                        onClick={() => setPageOrientation('landscape')}
+                        onClick={() => {
+                          markHistorySource('layout');
+                          setPageOrientation('landscape');
+                        }}
                       >
                         Landscape
                       </button>
@@ -2855,14 +3133,20 @@ export default function AdminLearningMaterialEditor() {
                       <button
                         type="button"
                         className={editorView === 'page' ? 'admin-ribbon-button-active' : ''}
-                        onClick={() => setEditorView('page')}
+                        onClick={() => {
+                          markHistorySource('layout');
+                          setEditorView('page');
+                        }}
                       >
                         Page View
                       </button>
                       <button
                         type="button"
                         className={editorView === 'compact' ? 'admin-ribbon-button-active' : ''}
-                        onClick={() => setEditorView('compact')}
+                        onClick={() => {
+                          markHistorySource('layout');
+                          setEditorView('compact');
+                        }}
                       >
                         Compact
                       </button>
@@ -2877,7 +3161,10 @@ export default function AdminLearningMaterialEditor() {
                           key={zoom}
                           type="button"
                           className={pageZoom === zoom ? 'admin-ribbon-button-active' : ''}
-                          onClick={() => setPageZoom(zoom)}
+                          onClick={() => {
+                            markHistorySource('layout');
+                            setPageZoom(zoom);
+                          }}
                         >
                           {zoom}%
                         </button>
@@ -2963,266 +3250,278 @@ export default function AdminLearningMaterialEditor() {
               hidden
               onChange={handlePdfFileSelection}
             />
-            <div className="admin-doc-page-stack admin-learning-editor-content">
-              <div className="admin-doc-cover admin-learning-cover-card">
-                <label>Nama Kelompok Materi</label>
-                <input
-                  name="material_title"
-                  value={materialForm.title}
-                  onChange={(event) => setMaterialForm((current) => ({ ...current, title: event.target.value }))}
-                />
-                <div className="admin-learning-material-meta-grid">
-                  <div className="admin-learning-material-meta-card">
-                    <label>Sumber Referensi</label>
-                    <input
-                      name="material_source_url"
-                      value={materialMeta.sourceUrl}
-                      onChange={(event) => setMaterialMeta((current) => ({ ...current, sourceUrl: event.target.value }))}
-                      placeholder="https://contoh.com/sumber-materi"
-                    />
-                  </div>
-                  <div className="admin-learning-material-meta-card">
-                    <label>Catatan Review Admin</label>
-                    <textarea
-                      name="material_review_notes"
-                      rows="4"
-                      value={materialMeta.reviewNotes}
-                      onChange={(event) => setMaterialMeta((current) => ({ ...current, reviewNotes: event.target.value }))}
-                      placeholder="Contoh: cek lagi istilah hukum, tambahkan contoh kasus singkat, atau catat sumber revisi."
-                    />
-                  </div>
+            <div className="admin-word-workspace-shell">
+              <aside className="admin-word-sidepane">
+                <div className="admin-word-sidepane-section">
+                  <span className="admin-word-sidepane-label">Status</span>
+                  <span className={`admin-material-status-badge admin-material-status-badge-${activeMaterialStatus}`}>
+                    {getMaterialStatusLabel(activeMaterialStatus)}
+                  </span>
+                  <p>
+                    {activeMaterialStatus === 'draft'
+                      ? 'Draft hanya terlihat di area admin sampai dipublish dari panel admin.'
+                      : `Published untuk peserta. Update terakhir ${formatPublishedAt(materialMeta.publishedAt)}.`}
+                  </p>
                 </div>
-              </div>
 
-              {activeTopic && (
-                <section className="admin-doc-cover admin-learning-cover-card">
-                  <label>Nama Topik</label>
-                  <input
-                    name={`material_topic_title_${activeTopicIndex}`}
-                    value={activeTopic.title}
-                    onChange={(event) => updateTopicTitle(activeTopicIndex, event.target.value)}
-                    placeholder="Nama topik"
-                  />
-                  <div className="admin-learning-topic-actions">
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      onClick={openPdfImportOptions}
-                      disabled={pdfImporting}
-                    >
-                      {pdfImporting ? 'Memproses PDF...' : 'Upload PDF ke Topik Ini'}
-                    </button>
-                  </div>
-                  {pdfImportOptions.visible && (
-                    <div className="admin-learning-pdf-import-panel">
-                      <div className="admin-learning-pdf-import-copy">
-                        <strong>Import PDF ke Topik Aktif</strong>
-                        <p className="text-muted">
-                          Pilih `Replace` untuk mengganti semua isi topik ini, atau `Append` untuk menyisipkan isi PDF mulai dari halaman tertentu.
-                        </p>
-                      </div>
-
-                      <div className="admin-learning-pdf-import-mode">
-                        <button
-                          type="button"
-                          className={pdfImportOptions.mode === 'replace' ? 'admin-learning-pdf-import-mode-button admin-learning-pdf-import-mode-button-active' : 'admin-learning-pdf-import-mode-button'}
-                          onClick={() => setPdfImportOptions((current) => ({
-                            ...current,
-                            mode: 'replace',
-                            startPage: '1',
-                          }))}
-                        >
-                          Replace
-                        </button>
-                        <button
-                          type="button"
-                          className={pdfImportOptions.mode === 'append' ? 'admin-learning-pdf-import-mode-button admin-learning-pdf-import-mode-button-active' : 'admin-learning-pdf-import-mode-button'}
-                          onClick={() => setPdfImportOptions((current) => ({
-                            ...current,
-                            mode: 'append',
-                            startPage: current.startPage || String(Math.max(1, (activeTopic.pages?.length || 0) + 1)),
-                          }))}
-                        >
-                          Append
-                        </button>
-                      </div>
-
-                      {pdfImportOptions.mode === 'append' && (
-                        <div className="form-group">
-                          <label>Mulai Sisipkan dari Halaman</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={pdfImportOptions.startPage}
-                            onChange={(event) => setPdfImportOptions((current) => ({
-                              ...current,
-                              startPage: event.target.value,
-                            }))}
-                            placeholder="Contoh: 2"
-                          />
-                          <small className="text-muted">
-                            Jika halaman tujuan belum ada, halaman kosong akan dibuat sampai posisi itu. Jika sudah ada, halaman lama dari posisi itu akan digeser ke belakang setelah halaman PDF yang diimpor.
-                          </small>
-                        </div>
-                      )}
-
-                      <div className="admin-learning-pdf-range-grid">
-                        <div className="form-group">
-                          <label>Ambil Halaman PDF Dari</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={pdfImportOptions.pdfPageFrom}
-                            onChange={(event) => setPdfImportOptions((current) => ({
-                              ...current,
-                              pdfPageFrom: event.target.value,
-                            }))}
-                            placeholder="Contoh: 1"
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label>Sampai Halaman PDF</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={pdfImportOptions.pdfPageTo}
-                            onChange={(event) => setPdfImportOptions((current) => ({
-                              ...current,
-                              pdfPageTo: event.target.value,
-                            }))}
-                            placeholder={selectedPdfImportPageCount > 0 ? `Maks ${selectedPdfImportPageCount}` : 'Contoh: 5'}
-                          />
-                        </div>
-                      </div>
-
-                      {selectedPdfImportFile && (
-                        <div className="admin-learning-pdf-file-preview">
-                          <span>File PDF Terpilih</span>
-                          <strong>{selectedPdfImportFile.name}</strong>
-                          <small>Ukuran file: {formatFileSize(selectedPdfImportFile.size)}</small>
-                          {selectedPdfImportPageCount > 0 && (
-                            <small>Total halaman PDF: {selectedPdfImportPageCount}</small>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="admin-doc-toolbar-actions">
-                        <button type="button" className="btn btn-outline" onClick={openPdfImport} disabled={pdfImporting}>
-                          {selectedPdfImportFile ? 'Ganti File PDF' : 'Pilih File PDF'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={applySelectedPdfImport}
-                          disabled={pdfImporting || !selectedPdfImportFile}
-                        >
-                          {pdfImporting ? 'Memproses PDF...' : 'Terapkan ke Topik'}
-                        </button>
-                        <button type="button" className="btn btn-outline" onClick={closePdfImportOptions} disabled={pdfImporting}>
-                          Batal
-                        </button>
-                      </div>
+                {activeTopic && (
+                  <div className="admin-word-sidepane-section">
+                    <div className="admin-word-sidepane-head">
+                      <span className="admin-word-sidepane-label">Pages</span>
+                      <strong>{`${activeTopic.pages?.length || 0} halaman`}</strong>
                     </div>
-                  )}
-                  {(activeTopic.pages || []).length > 0 && (
-                    <div className="admin-learning-page-tabs">
-                      {activeTopic.pages.map((page, pageIndex) => (
+                    <div className="admin-word-page-list">
+                      {(activeTopic.pages || []).map((page, pageIndex) => (
                         <button
                           key={`page-tab-${activeTopicIndex}-${pageIndex}`}
                           type="button"
-                          className={pageIndex === activePageIndex ? 'admin-doc-outline-item-active admin-learning-page-tab' : 'admin-learning-page-tab'}
+                          className={pageIndex === activePageIndex ? 'admin-word-page-chip admin-word-page-chip-active' : 'admin-word-page-chip'}
                           onClick={() => selectPage(pageIndex)}
                         >
-                          {`Halaman ${pageIndex + 1}`}
+                          {`Page ${pageIndex + 1}`}
                         </button>
                       ))}
                     </div>
-                  )}
-                </section>
-              )}
+                    <div className="admin-word-sidepane-actions">
+                      <button type="button" className="btn btn-outline" onClick={addMaterialPage}>
+                        Tambah Halaman
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => removeMaterialPage(activePageIndex)}
+                        disabled={(activeTopic.pages?.length || 0) <= 1}
+                      >
+                        Hapus Halaman Aktif
+                      </button>
+                      <button type="button" className="btn btn-outline" onClick={openPdfImportOptions} disabled={pdfImporting}>
+                        {pdfImporting ? 'Memproses PDF...' : 'Import PDF'}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-              {!activePage && activeTopic && (
-                <section
-                  className={editorPageClassName}
-                  style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
+                <details
+                  className="admin-word-inspector"
+                  open={isInspectorOpen}
+                  onToggle={(event) => setIsInspectorOpen(event.currentTarget.open)}
                 >
-                  <div className="admin-doc-page-head">
-                    <span>{`Topik ${activeTopicIndex + 1}`}</span>
-                  </div>
-                  <p className="text-muted">Halaman pertama sedang disiapkan. Setelah itu isi materi akan otomatis lanjut ke halaman berikutnya saat sudah penuh.</p>
-                  <div className="admin-word-page-footer">
-                    <span>{currentPageSurfaceLabel}</span>
-                    <strong>Halaman 1</strong>
-                  </div>
-                </section>
-              )}
+                  <summary>Detail dokumen</summary>
+                  <div className="admin-word-inspector-body">
+                    <div className="form-group">
+                      <label>Nama Kelompok Materi</label>
+                      <input
+                        name="material_title"
+                        value={materialForm.title}
+                        onChange={(event) => {
+                          markHistorySource('metadata');
+                          setMaterialForm((current) => ({ ...current, title: event.target.value }));
+                        }}
+                        placeholder="Nama kelompok materi"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Sumber Referensi</label>
+                      <input
+                        name="material_source_url"
+                        value={materialMeta.sourceUrl}
+                        onChange={(event) => {
+                          markHistorySource('metadata');
+                          setMaterialMeta((current) => ({ ...current, sourceUrl: event.target.value }));
+                        }}
+                        placeholder="https://contoh.com/sumber-materi"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Catatan Review Admin</label>
+                      <textarea
+                        name="material_review_notes"
+                        rows="4"
+                        value={materialMeta.reviewNotes}
+                        onChange={(event) => {
+                          markHistorySource('metadata');
+                          setMaterialMeta((current) => ({ ...current, reviewNotes: event.target.value }));
+                        }}
+                        placeholder="Catatan revisi atau review admin."
+                      />
+                    </div>
 
-              {activeTopic && (activeTopic.pages || []).map((page, pageIndex) => (
-                <section
-                  key={`material-page-${activeTopicIndex}-${pageIndex}-${editorRenderNonce}`}
-                  className={pageIndex === activePageIndex ? `${editorPageClassName} admin-doc-page-current` : editorPageClassName}
-                  style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
-                >
-                  <div className="admin-doc-page-head">
-                    <span>{`Halaman ${pageIndex + 1}`}</span>
-                    <button
-                      type="button"
-                      className="btn btn-outline admin-option-delete"
-                      onClick={() => removeMaterialPage(pageIndex)}
-                      disabled={(activeTopic.pages?.length || 0) <= 1}
-                    >
-                      Hapus
-                    </button>
+                    {pdfImportOptions.visible && (
+                      <div className="admin-learning-pdf-import-panel">
+                        <div className="admin-learning-pdf-import-copy">
+                          <strong>Import PDF ke Topik Aktif</strong>
+                          <p className="text-muted">
+                            Pilih `Replace` untuk mengganti isi topik, atau `Append` untuk menyisipkan mulai halaman tertentu.
+                          </p>
+                        </div>
+
+                        <div className="admin-learning-pdf-import-mode">
+                          <button
+                            type="button"
+                            className={pdfImportOptions.mode === 'replace' ? 'admin-learning-pdf-import-mode-button admin-learning-pdf-import-mode-button-active' : 'admin-learning-pdf-import-mode-button'}
+                            onClick={() => setPdfImportOptions((current) => ({
+                              ...current,
+                              mode: 'replace',
+                              startPage: '1',
+                            }))}
+                          >
+                            Replace
+                          </button>
+                          <button
+                            type="button"
+                            className={pdfImportOptions.mode === 'append' ? 'admin-learning-pdf-import-mode-button admin-learning-pdf-import-mode-button-active' : 'admin-learning-pdf-import-mode-button'}
+                            onClick={() => setPdfImportOptions((current) => ({
+                              ...current,
+                              mode: 'append',
+                              startPage: current.startPage || String(Math.max(1, (activeTopic?.pages?.length || 0) + 1)),
+                            }))}
+                          >
+                            Append
+                          </button>
+                        </div>
+
+                        {pdfImportOptions.mode === 'append' && (
+                          <div className="form-group">
+                            <label>Mulai Sisipkan dari Halaman</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={pdfImportOptions.startPage}
+                              onChange={(event) => setPdfImportOptions((current) => ({
+                                ...current,
+                                startPage: event.target.value,
+                              }))}
+                              placeholder="Contoh: 2"
+                            />
+                          </div>
+                        )}
+
+                        <div className="admin-learning-pdf-range-grid">
+                          <div className="form-group">
+                            <label>Ambil Halaman PDF Dari</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={pdfImportOptions.pdfPageFrom}
+                              onChange={(event) => setPdfImportOptions((current) => ({
+                                ...current,
+                                pdfPageFrom: event.target.value,
+                              }))}
+                              placeholder="Contoh: 1"
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Sampai Halaman PDF</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={pdfImportOptions.pdfPageTo}
+                              onChange={(event) => setPdfImportOptions((current) => ({
+                                ...current,
+                                pdfPageTo: event.target.value,
+                              }))}
+                              placeholder={selectedPdfImportPageCount > 0 ? `Maks ${selectedPdfImportPageCount}` : 'Contoh: 5'}
+                            />
+                          </div>
+                        </div>
+
+                        {selectedPdfImportFile && (
+                          <div className="admin-learning-pdf-file-preview">
+                            <span>File PDF Terpilih</span>
+                            <strong>{selectedPdfImportFile.name}</strong>
+                            <small>Ukuran file: {formatFileSize(selectedPdfImportFile.size)}</small>
+                            {selectedPdfImportPageCount > 0 && (
+                              <small>Total halaman PDF: {selectedPdfImportPageCount}</small>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="admin-doc-toolbar-actions">
+                          <button type="button" className="btn btn-outline" onClick={openPdfImport} disabled={pdfImporting}>
+                            {selectedPdfImportFile ? 'Ganti File PDF' : 'Pilih File PDF'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={applySelectedPdfImport}
+                            disabled={pdfImporting || !selectedPdfImportFile}
+                          >
+                            {pdfImporting ? 'Memproses PDF...' : 'Terapkan ke Topik'}
+                          </button>
+                          <button type="button" className="btn btn-outline" onClick={closePdfImportOptions} disabled={pdfImporting}>
+                            Tutup
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <input
-                    name={`material_page_title_${activeTopicIndex}_${pageIndex}`}
-                    className="admin-doc-title-input"
-                    value={page.title}
-                    onChange={(event) => updatePageTitle(activeTopicIndex, pageIndex, event.target.value)}
-                    onFocus={() => activatePage(pageIndex)}
-                    placeholder="Judul halaman materi"
-                  />
-                  <div
-                    ref={(node) => {
-                      if (node) {
-                        editorRefs.current[pageIndex] = node;
-                        const editorKey = `${activeTopicIndex}:${pageIndex}:${editorRenderNonce}`;
-                        if (node.dataset.editorKey !== editorKey) {
-                          node.innerHTML = page.content_html || '<p><br></p>';
-                          node.dataset.editorKey = editorKey;
+                </details>
+              </aside>
+
+              <div className="admin-doc-page-stack admin-learning-editor-content">
+                {!activePage && activeTopic && (
+                  <section
+                    className={editorPageClassName}
+                    style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
+                  >
+                    <div className="admin-word-page-topline">
+                      <span>{currentTopicLabel}</span>
+                      <strong>Page 1</strong>
+                    </div>
+                    <div className="admin-word-editable admin-word-editable-empty">
+                      <p><br /></p>
+                    </div>
+                  </section>
+                )}
+
+                {activeTopic && (activeTopic.pages || []).map((page, pageIndex) => (
+                  <section
+                    key={`material-page-${activeTopicIndex}-${pageIndex}-${editorRenderNonce}`}
+                    className={pageIndex === activePageIndex ? `${editorPageClassName} admin-doc-page-current` : editorPageClassName}
+                    style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
+                  >
+                    <div className="admin-word-page-topline">
+                      <span>{currentPageSurfaceLabel}</span>
+                      <strong>{`Page ${pageIndex + 1}`}</strong>
+                    </div>
+                    <div
+                      ref={(node) => {
+                        if (node) {
+                          editorRefs.current[pageIndex] = node;
+                          const editorKey = `${activeTopicIndex}:${pageIndex}:${editorRenderNonce}`;
+                          if (node.dataset.editorKey !== editorKey) {
+                            node.innerHTML = page.content_html || '<p><br></p>';
+                            node.dataset.editorKey = editorKey;
+                          }
+                        } else {
+                          delete editorRefs.current[pageIndex];
                         }
-                      } else {
-                        delete editorRefs.current[pageIndex];
-                      }
-                    }}
-                    className="admin-word-editable"
-                    data-page-index={pageIndex}
-                    contentEditable
-                    suppressContentEditableWarning
-                    onFocus={() => {
-                      activatePage(pageIndex);
-                      requestAnimationFrame(() => {
+                      }}
+                      className="admin-word-editable admin-word-editable-document"
+                      data-page-index={pageIndex}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onFocus={() => {
+                        activatePage(pageIndex);
+                        requestAnimationFrame(() => {
+                          rememberCurrentSelection(pageIndex);
+                          updateActiveParagraphMetrics(pageIndex);
+                        });
+                      }}
+                      onKeyDown={(event) => handleEditorKeyDown(event, pageIndex)}
+                      onKeyUp={() => handleEditorKeyUp(pageIndex)}
+                      onInput={() => {
                         rememberCurrentSelection(pageIndex);
-                        updateActiveParagraphMetrics(pageIndex);
-                      });
-                    }}
-                    onKeyDown={(event) => handleEditorKeyDown(event, pageIndex)}
-                    onKeyUp={() => handleEditorKeyUp(pageIndex)}
-                    onInput={() => {
-                      rememberCurrentSelection(pageIndex);
-                      handlePageInput(pageIndex);
-                    }}
-                    onPointerDown={handleEditorPointerDown}
-                    onClick={handleEditorClick}
-                    onContextMenu={handleEditorContextMenu}
-                    onBlur={() => updatePageContent(activeTopicIndex, pageIndex)}
-                  />
-                  <div className="admin-word-page-footer">
-                    <span>{currentPageSurfaceLabel}</span>
-                    <strong>{`Halaman ${pageIndex + 1}`}</strong>
-                  </div>
-                </section>
-              ))}
+                        handlePageInput(pageIndex);
+                      }}
+                      onPointerDown={handleEditorPointerDown}
+                      onClick={handleEditorClick}
+                      onContextMenu={handleEditorContextMenu}
+                      onBlur={() => updatePageContent(activeTopicIndex, pageIndex)}
+                    />
+                  </section>
+                ))}
+              </div>
             </div>
           </div>
         </section>

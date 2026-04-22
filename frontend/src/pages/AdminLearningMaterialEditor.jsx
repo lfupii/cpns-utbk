@@ -2881,25 +2881,27 @@ export default function AdminLearningMaterialEditor() {
         <section className="account-card admin-material-editor-shell admin-learning-editor-shell-page admin-word-editor-frame">
           <div className="admin-learning-editor-nav-sticky">
             <div className="admin-ribbon-tabs">
-              <div className="admin-ribbon-tab-list">
-                {[
-                  ['home', 'Home'],
-                  ['insert', 'Insert'],
-                  ['layout', 'Layout'],
-                  ['view', 'View'],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={activeRibbonTab === value ? 'admin-ribbon-tab admin-ribbon-tab-active' : 'admin-ribbon-tab'}
-                    onClick={() => setActiveRibbonTab(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="admin-ribbon-tabs-left">
+                <div className="admin-ribbon-tab-list">
+                  {[
+                    ['home', 'Home'],
+                    ['insert', 'Insert'],
+                    ['layout', 'Layout'],
+                    ['view', 'View'],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={activeRibbonTab === value ? 'admin-ribbon-tab admin-ribbon-tab-active' : 'admin-ribbon-tab'}
+                      onClick={() => setActiveRibbonTab(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="admin-word-ribbon-actions">
+              <div className="admin-ribbon-tabs-center">
                 <div className="admin-word-ribbon-topic">
                   <span className="admin-word-ribbon-topic-label">{activeSection?.name || 'Materi'}</span>
                   {activeTopic ? (
@@ -2914,6 +2916,9 @@ export default function AdminLearningMaterialEditor() {
                     <strong>{currentTopicLabel}</strong>
                   )}
                 </div>
+              </div>
+
+              <div className="admin-ribbon-tabs-right">
                 <Link
                   to={`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`}
                   className="admin-word-ribbon-action-button"

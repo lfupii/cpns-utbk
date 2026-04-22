@@ -11,6 +11,8 @@ export default function AccountShell({
   shellClassName = '',
   navContent = null,
   hidePageHeader = false,
+  hideBrandLogo = false,
+  hideNavActions = false,
 }) {
   const { user, logout, isAdmin } = useAuth();
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
@@ -19,7 +21,7 @@ export default function AccountShell({
     <div className={`account-shell ${shellClassName}`.trim()}>
       <nav className="landing-navbar">
         <div className="container landing-navbar-inner account-shell-nav-container">
-          <BrandLogo />
+          {!hideBrandLogo && <BrandLogo />}
 
           {navContent && (
             <div className="landing-navbar-panel account-shell-nav-panel">
@@ -29,16 +31,18 @@ export default function AccountShell({
             </div>
           )}
 
-          <div className="landing-nav-actions landing-nav-actions-authenticated">
-            {user ? (
-              <ProfileDropdown displayName={displayName} onLogout={logout} isAdmin={isAdmin} />
-            ) : (
-              <>
-                <Link to="/login" className="btn btn-outline">Login</Link>
-                <Link to="/register" className="btn btn-primary">Daftar</Link>
-              </>
-            )}
-          </div>
+          {!hideNavActions && (
+            <div className="landing-nav-actions landing-nav-actions-authenticated">
+              {user ? (
+                <ProfileDropdown displayName={displayName} onLogout={logout} isAdmin={isAdmin} />
+              ) : (
+                <>
+                  <Link to="/login" className="btn btn-outline">Login</Link>
+                  <Link to="/register" className="btn btn-primary">Daftar</Link>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </nav>
 

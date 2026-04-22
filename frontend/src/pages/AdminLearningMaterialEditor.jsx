@@ -2824,63 +2824,16 @@ export default function AdminLearningMaterialEditor() {
     }
   };
 
-  const canUndoHistory = historyStateRef.current.undoStack.length > 0;
-  const canRedoHistory = historyStateRef.current.redoStack.length > 0;
   const currentTopicLabel = activeTopic?.title?.trim() || `Document ${Math.max(1, activeTopicIndex + 1)}`;
-  const editorNavContent = (
-    <div className="admin-word-navbar">
-      <div className="admin-word-navbar-quick">
-        <Link
-          to={`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`}
-          className="admin-word-quick-button"
-        >
-          Admin
-        </Link>
-        <button type="button" className="admin-word-quick-button" onClick={runUndoHistory} disabled={!canUndoHistory}>
-          Undo
-        </button>
-        <button type="button" className="admin-word-quick-button" onClick={runRedoHistory} disabled={!canRedoHistory}>
-          Redo
-        </button>
-        <button type="button" className="admin-word-quick-button" onClick={addMaterialPage} disabled={!activeTopic}>
-          Halaman Baru
-        </button>
-        <button type="button" className="admin-word-quick-button" onClick={openPdfImportOptions} disabled={!activeTopic || pdfImporting}>
-          PDF
-        </button>
-        <button
-          type="button"
-          className="admin-word-quick-button admin-word-quick-button-primary"
-          onClick={handleSave}
-          disabled={saving || loading || pdfImporting}
-        >
-          {saving ? 'Menyimpan...' : (isDraftWorkspace ? 'Simpan Draft' : 'Simpan Materi')}
-        </button>
-      </div>
-      <div className="admin-word-navbar-document">
-        <span className="admin-word-navbar-caption">{activeSection?.name || 'Workspace Materi'}</span>
-        {activeTopic ? (
-          <input
-            name={`material_topic_title_nav_${activeTopicIndex}`}
-            value={activeTopic.title}
-            onChange={(event) => updateTopicTitle(activeTopicIndex, event.target.value)}
-            placeholder="Document1"
-            aria-label="Nama dokumen"
-          />
-        ) : (
-          <strong>{currentTopicLabel}</strong>
-        )}
-      </div>
-    </div>
-  );
 
   return (
     <AccountShell
       shellClassName="account-shell-learning account-shell-word-editor"
       title={activeTopic?.title || 'Editor Materi'}
       subtitle="Kelola isi halaman di dalam topik materi yang sedang dipilih."
-      navContent={editorNavContent}
       hidePageHeader
+      hideBrandLogo
+      hideNavActions
     >
       {error && <div className="alert">{error}</div>}
       {success && <div className="account-success">{success}</div>}
@@ -2894,21 +2847,54 @@ export default function AdminLearningMaterialEditor() {
         <section className="account-card admin-material-editor-shell admin-learning-editor-shell-page admin-word-editor-frame">
           <div className="admin-learning-editor-nav-sticky">
             <div className="admin-ribbon-tabs">
-              {[
-                ['home', 'Home'],
-                ['insert', 'Insert'],
-                ['layout', 'Layout'],
-                ['view', 'View'],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={activeRibbonTab === value ? 'admin-ribbon-tab admin-ribbon-tab-active' : 'admin-ribbon-tab'}
-                  onClick={() => setActiveRibbonTab(value)}
+              <div className="admin-ribbon-tab-list">
+                {[
+                  ['home', 'Home'],
+                  ['insert', 'Insert'],
+                  ['layout', 'Layout'],
+                  ['view', 'View'],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={activeRibbonTab === value ? 'admin-ribbon-tab admin-ribbon-tab-active' : 'admin-ribbon-tab'}
+                    onClick={() => setActiveRibbonTab(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="admin-word-ribbon-actions">
+                <div className="admin-word-ribbon-topic">
+                  <span className="admin-word-ribbon-topic-label">{activeSection?.name || 'Materi'}</span>
+                  {activeTopic ? (
+                    <input
+                      name={`material_topic_title_ribbon_${activeTopicIndex}`}
+                      value={activeTopic.title}
+                      onChange={(event) => updateTopicTitle(activeTopicIndex, event.target.value)}
+                      placeholder="Nama topik aktif"
+                      aria-label="Nama topik aktif"
+                    />
+                  ) : (
+                    <strong>{currentTopicLabel}</strong>
+                  )}
+                </div>
+                <Link
+                  to={`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`}
+                  className="admin-word-ribbon-action-button"
                 >
-                  {label}
+                  Kembali ke Admin
+                </Link>
+                <button
+                  type="button"
+                  className="admin-word-ribbon-action-button admin-word-ribbon-action-button-primary"
+                  onClick={handleSave}
+                  disabled={saving || loading || pdfImporting}
+                >
+                  {saving ? 'Menyimpan...' : (isDraftWorkspace ? 'Simpan Draft' : 'Simpan Materi')}
                 </button>
-              ))}
+              </div>
             </div>
 
             <div

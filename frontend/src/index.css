@@ -7188,7 +7188,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.8rem;
-  padding: 0.3rem 0.9rem 0;
+  padding: 0.15rem 0.75rem 0;
   border: 0;
   border-radius: 0;
   background: #2c2c2c;
@@ -7202,9 +7202,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .account-shell-word-editor .admin-ribbon-tab {
-  min-height: 36px;
+  min-height: 32px;
   border: 0;
-  border-radius: 0.4rem 0.4rem 0 0;
+  padding: 0 0.8rem;
+  border-radius: 0.35rem 0.35rem 0 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.72);
 }
@@ -7230,24 +7231,25 @@ html[data-theme='dark'] .theme-toggle-thumb {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 0.55rem;
+  gap: 0.45rem;
   margin-left: auto;
 }
 
 .admin-word-ribbon-topic {
   min-width: min(28vw, 320px);
   max-width: min(36vw, 420px);
-  padding: 0.55rem 1rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
+  padding: 0.05rem 0;
+  border: 0;
+  background: transparent;
   display: grid;
-  gap: 0.18rem;
+  gap: 0.08rem;
+  justify-items: center;
+  text-align: center;
 }
 
 .admin-word-ribbon-topic-label {
   color: rgba(255, 255, 255, 0.48);
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7260,9 +7262,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
   padding: 0;
   background: transparent;
   color: #ffffff;
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.1;
+  text-align: center;
 }
 
 .admin-word-ribbon-topic input:focus {
@@ -7273,13 +7276,13 @@ html[data-theme='dark'] .theme-toggle-thumb {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
-  padding: 0 1rem;
+  min-height: 36px;
+  padding: 0 0.9rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.05);
   color: #f7f7f7;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -7420,30 +7423,6 @@ html[data-theme='dark'] .theme-toggle-thumb {
   line-height: 1.6;
 }
 
-.admin-word-page-list,
-.admin-word-sidepane-actions {
-  display: grid;
-  gap: 0.55rem;
-  margin-top: 0.75rem;
-}
-
-.admin-word-page-chip {
-  min-height: 40px;
-  padding: 0 0.85rem;
-  border-radius: 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.76);
-  font-weight: 700;
-  text-align: left;
-}
-
-.admin-word-page-chip-active {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-}
-
 .admin-word-inspector summary {
   list-style: none;
   cursor: pointer;
@@ -7522,20 +7501,19 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-word-statusbar {
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  margin-top: 0.4rem;
-  padding: 0.5rem 0.85rem;
+  position: static;
+  z-index: 1;
+  margin-top: 0.2rem;
+  padding: 0.32rem 0.7rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(33, 33, 33, 0.98);
   backdrop-filter: blur(10px);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   color: rgba(255, 255, 255, 0.72);
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 600;
 }
 
@@ -7543,18 +7521,18 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .admin-word-statusbar-right {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.72rem;
   flex-wrap: wrap;
 }
 
 .admin-word-statusbar-button {
-  min-height: 30px;
-  padding: 0 0.7rem;
-  border-radius: 0.55rem;
+  min-height: 24px;
+  padding: 0 0.55rem;
+  border-radius: 0.45rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.05);
   color: #f3f3f3;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 700;
 }
 
@@ -7563,13 +7541,14 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-word-statusbar-zoom {
-  width: 120px;
+  width: 88px;
+  height: 18px;
   accent-color: #f3f3f3;
 }
 
 .admin-word-statusbar strong {
   color: #ffffff;
-  font-size: 0.84rem;
+  font-size: 0.76rem;
 }
 
 @media (max-width: 1100px) {

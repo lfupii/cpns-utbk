@@ -1364,7 +1364,12 @@ export default function Learning() {
                 <div className="learning-page-list">
                   {(activeTopic.pages || []).map((page, index) => (
                     <section key={`${activeTopic.title || 'topic'}-${index}`} className="learning-page learning-page-document">
-                      <span>Halaman {index + 1}</span>
+                      <div className="learning-page-document-header">
+                        <span className="learning-page-document-label">Halaman {index + 1}</span>
+                        <div className="learning-page-brand" aria-hidden="true">
+                          <img className="learning-page-brand-logo" src="/ujiin-logo.png" alt="Ujiin" />
+                        </div>
+                      </div>
                       {page.content_html ? (
                         <div
                           className="learning-rich-content"

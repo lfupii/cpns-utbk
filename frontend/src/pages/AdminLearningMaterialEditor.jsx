@@ -1135,6 +1135,31 @@ export default function AdminLearningMaterialEditor() {
     editorNode.appendChild(paragraph);
     return paragraph;
   }, [isEmptyEditorBreakNode]);
+  const getSelectionEditorContext = useCallback((preferredPageIndex = activePageIndex) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return null;
+    }
+
+    const selectionPageIndex = getEditorPageIndexFromNode(selection.anchorNode);
+    const resolvedPageIndex = selectionPageIndex ?? preferredPageIndex;
+    const editorNode = getEditorNode(resolvedPageIndex);
+    if (!editorNode || !editorNode.contains(selection.anchorNode)) {
+      return null;
+    }
+
+    const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
+    if (!blockNode) {
+      return null;
+    }
+
+    return {
+      selection,
+      editorNode,
+      blockNode,
+      pageIndex: resolvedPageIndex,
+    };
+  }, [activePageIndex, getEditorNode]);
 
   const isCaretNearPageBottom = useCallback((pageIndex, threshold = 28) => {
     const editorNode = editorRefs.current[pageIndex];
@@ -1561,32 +1586,6 @@ export default function AdminLearningMaterialEditor() {
     leftIndent: Math.max(0, parseIndentValue(blockNode?.style?.marginLeft)),
     firstLineIndent: parseIndentValue(blockNode?.style?.textIndent),
   }), []);
-
-  const getSelectionEditorContext = useCallback((preferredPageIndex = activePageIndex) => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      return null;
-    }
-
-    const selectionPageIndex = getEditorPageIndexFromNode(selection.anchorNode);
-    const resolvedPageIndex = selectionPageIndex ?? preferredPageIndex;
-    const editorNode = getEditorNode(resolvedPageIndex);
-    if (!editorNode || !editorNode.contains(selection.anchorNode)) {
-      return null;
-    }
-
-    const blockNode = getClosestEditableBlock(selection.anchorNode, editorNode);
-    if (!blockNode) {
-      return null;
-    }
-
-    return {
-      selection,
-      editorNode,
-      blockNode,
-      pageIndex: resolvedPageIndex,
-    };
-  }, [activePageIndex, getEditorNode]);
 
   const updateActiveParagraphMetrics = useCallback((pageIndex = activePageIndex) => {
     const context = getSelectionEditorContext(pageIndex);

@@ -2066,6 +2066,7 @@ export default function AdminLearningMaterialEditor() {
   }, [activatePage, focusEditorHost, handlePageInput, rememberCurrentSelection]);
 
   const handleEditorKeyDown = useCallback((event, pageIndex) => {
+    const selection = window.getSelection();
     pendingMutationContextRef.current = {
       inputType: event.key === 'Backspace'
         ? 'deleteContentBackward'
@@ -2074,8 +2075,17 @@ export default function AdminLearningMaterialEditor() {
           : event.key === 'Enter'
             ? 'insertParagraph'
             : 'insertText',
-      ...getSelectionPageBounds(window.getSelection(), pageIndex),
+      ...getSelectionPageBounds(selection, pageIndex),
     };
+
+    if ((event.key === 'Backspace' || event.key === 'Delete') && selection && !selection.isCollapsed) {
+      const selectionBounds = getSelectionPageBounds(selection, pageIndex);
+      if (selectionBounds.startPageIndex !== selectionBounds.endPageIndex) {
+        event.preventDefault();
+        deleteSelectionAcrossPages();
+        return;
+      }
+    }
 
     if (event.key === 'Tab') {
       event.preventDefault();
@@ -2131,6 +2141,7 @@ export default function AdminLearningMaterialEditor() {
     activeTopicIndex,
     applyKeyboardTabIndent,
     deleteBackwardAcrossPageBoundary,
+    deleteSelectionAcrossPages,
     handlePageInput,
     isSelectionInsideListItem,
     isCaretAtPageStart,
@@ -2894,6 +2905,80 @@ export default function AdminLearningMaterialEditor() {
     restoreHistorySnapshot(nextSnapshot);
     return true;
   }, [createHistorySnapshot, restoreHistorySnapshot]);
+  const deleteSelectionAcrossPages = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return false;
+    }
+
+    const range = selection.getRangeAt(0);
+    const startPageIndex = getEditorPageIndexFromNode(range.startContainer);
+    const endPageIndex = getEditorPageIndexFromNode(range.endContainer);
+    if (startPageIndex === null || endPageIndex === null || startPageIndex === endPageIndex) {
+      return false;
+    }
+
+    const firstPageIndex = Math.min(startPageIndex, endPageIndex);
+    const lastPageIndex = Math.max(startPageIndex, endPageIndex);
+    const firstEditorNode = editorRefs.current[firstPageIndex];
+    const lastEditorNode = editorRefs.current[lastPageIndex];
+    if (!firstEditorNode || !lastEditorNode) {
+      return false;
+    }
+
+    const firstDeletionRange = document.createRange();
+    firstDeletionRange.selectNodeContents(firstEditorNode);
+    firstDeletionRange.setStart(range.startContainer, range.startOffset);
+    firstDeletionRange.deleteContents();
+
+    const lastDeletionRange = document.createRange();
+    lastDeletionRange.selectNodeContents(lastEditorNode);
+    lastDeletionRange.setEnd(range.endContainer, range.endOffset);
+    lastDeletionRange.deleteContents();
+
+    while (lastEditorNode.firstChild) {
+      firstEditorNode.appendChild(lastEditorNode.firstChild);
+    }
+
+    for (let pageIndex = firstPageIndex + 1; pageIndex <= lastPageIndex; pageIndex += 1) {
+      const editorNode = editorRefs.current[pageIndex];
+      if (!editorNode) {
+        continue;
+      }
+      editorNode.innerHTML = '<p><br></p>';
+    }
+
+    normalizeEditorContent(firstEditorNode);
+    normalizeEditorContent(lastEditorNode);
+    focusEditorHost();
+
+    const trailingParagraph = ensureEditorTrailingParagraph(firstEditorNode);
+    placeCaretInsideNode(trailingParagraph, false);
+    activatePage(firstPageIndex);
+    rememberCurrentSelection(firstPageIndex);
+    syncEditorFormatState(firstPageIndex);
+    updateActiveParagraphMetrics(firstPageIndex);
+
+    markHistorySource('typing');
+    setMaterialForm((current) => ({
+      ...current,
+      topics: readTopicsFromEditor(),
+    }));
+    schedulePaginationRebalance(firstPageIndex);
+    return true;
+  }, [
+    activatePage,
+    ensureEditorTrailingParagraph,
+    focusEditorHost,
+    markHistorySource,
+    normalizeEditorContent,
+    placeCaretInsideNode,
+    readTopicsFromEditor,
+    rememberCurrentSelection,
+    schedulePaginationRebalance,
+    syncEditorFormatState,
+    updateActiveParagraphMetrics,
+  ]);
   const handleEditorBeforeInput = useCallback((event) => {
     const selection = window.getSelection();
     const pageBounds = getSelectionPageBounds(selection, activePageIndex);
@@ -2901,7 +2986,18 @@ export default function AdminLearningMaterialEditor() {
       inputType: event.nativeEvent?.inputType || 'insertText',
       ...pageBounds,
     };
-  }, [activePageIndex]);
+
+    if (
+      selection
+      && !selection.isCollapsed
+      && pageBounds.startPageIndex !== pageBounds.endPageIndex
+      && String(event.nativeEvent?.inputType || '').startsWith('delete')
+    ) {
+      event.preventDefault();
+      deleteSelectionAcrossPages();
+      pendingMutationContextRef.current = null;
+    }
+  }, [activePageIndex, deleteSelectionAcrossPages]);
 
   const handleEditorPaste = useCallback((event) => {
     const clipboardData = event.clipboardData;

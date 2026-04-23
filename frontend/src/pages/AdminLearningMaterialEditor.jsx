@@ -2905,7 +2905,7 @@ export default function AdminLearningMaterialEditor() {
     restoreHistorySnapshot(nextSnapshot);
     return true;
   }, [createHistorySnapshot, restoreHistorySnapshot]);
-  const deleteSelectionAcrossPages = useCallback(() => {
+  function deleteSelectionAcrossPages() {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
       return false;
@@ -2966,19 +2966,7 @@ export default function AdminLearningMaterialEditor() {
     }));
     schedulePaginationRebalance(firstPageIndex);
     return true;
-  }, [
-    activatePage,
-    ensureEditorTrailingParagraph,
-    focusEditorHost,
-    markHistorySource,
-    normalizeEditorContent,
-    placeCaretInsideNode,
-    readTopicsFromEditor,
-    rememberCurrentSelection,
-    schedulePaginationRebalance,
-    syncEditorFormatState,
-    updateActiveParagraphMetrics,
-  ]);
+  }
   const handleEditorBeforeInput = useCallback((event) => {
     const selection = window.getSelection();
     const pageBounds = getSelectionPageBounds(selection, activePageIndex);

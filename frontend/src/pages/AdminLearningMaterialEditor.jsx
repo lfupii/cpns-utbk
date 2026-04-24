@@ -1463,6 +1463,26 @@ export default function AdminLearningMaterialEditor() {
     return true;
   }, [getMovableEditorNodes, normalizeEditorContent]);
 
+  const hasMeaningfulPageContent = useCallback((contentHtml = '') => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(String(contentHtml || ''), 'text/html');
+    return [...doc.body.childNodes].some((childNode) => isMeaningfulEditorNode(childNode));
+  }, [isMeaningfulEditorNode]);
+  const compactSerializedPages = useCallback((pages = []) => {
+    const filteredPages = pages.filter((page) => hasMeaningfulPageContent(page?.content_html || ''));
+    const normalizedPages = filteredPages.length > 0
+      ? filteredPages
+      : [createEmptyMaterialPage(1)];
+
+    return renumberMaterialPages(normalizedPages.map((page, pageIndex) => ({
+      ...page,
+      title: page.title || `Halaman ${pageIndex + 1}`,
+      points: Array.isArray(page.points) ? page.points : extractPointsFromHtml(page.content_html || ''),
+      closing: page.closing || '',
+      content_html: sanitizeEditorHtml(page.content_html || '<p><br></p>'),
+    })));
+  }, [hasMeaningfulPageContent]);
+
   const serializeActiveTopicPagesFromDom = useCallback((topicIndex = activeTopicIndex) => {
     const activeTopicData = materialForm.topics[topicIndex];
     if (!activeTopicData) {
@@ -1641,33 +1661,6 @@ export default function AdminLearningMaterialEditor() {
     setEditorFormatState(readEditorFormatState(pageIndex));
   }, [activePageIndex, readEditorFormatState]);
 
-  const applyParagraphMetrics = useCallback((pageIndex, { leftIndent, firstLineIndent }) => {
-    const context = getSelectionEditorContext(pageIndex);
-    if (!context) {
-      return false;
-    }
-
-    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
-    if (!blockNode || blockNode.tagName === 'LI') {
-      return false;
-    }
-
-    const safeLeftIndent = Math.max(0, Math.min(PARAGRAPH_INDENT_LIMIT, Math.round(leftIndent)));
-    const safeFirstLineIndent = Math.max(-FIRST_LINE_INDENT_LIMIT, Math.min(FIRST_LINE_INDENT_LIMIT, Math.round(firstLineIndent)));
-
-    blockNode.style.marginLeft = safeLeftIndent > 0 ? `${safeLeftIndent}px` : '';
-    blockNode.style.textIndent = safeFirstLineIndent !== 0 ? `${safeFirstLineIndent}px` : '';
-
-    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
-    setActiveParagraphMetrics({
-      pageIndex: resolvedPageIndex,
-      leftIndent: safeLeftIndent,
-      firstLineIndent: safeFirstLineIndent,
-    });
-    schedulePaginationRebalance(resolvedPageIndex);
-    return true;
-  }, [getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance]);
-
   const readTopicsFromEditor = useCallback(() => materialForm.topics.map((topic, topicIndex) => ({
     ...topic,
     pages: topic.pages.map((page, pageIndex) => {
@@ -1756,135 +1749,11 @@ export default function AdminLearningMaterialEditor() {
 
     return getMovableEditorNodes(editorNode).length === 0;
   }, [getMovableEditorNodes]);
-  const hasMeaningfulPageContent = useCallback((contentHtml = '') => {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(String(contentHtml || ''), 'text/html');
-    return [...doc.body.childNodes].some((childNode) => isMeaningfulEditorNode(childNode));
-  }, [isMeaningfulEditorNode]);
-  const compactSerializedPages = useCallback((pages = []) => {
-    const filteredPages = pages.filter((page) => hasMeaningfulPageContent(page?.content_html || ''));
-    const normalizedPages = filteredPages.length > 0
-      ? filteredPages
-      : [createEmptyMaterialPage(1)];
-
-    return renumberMaterialPages(normalizedPages.map((page, pageIndex) => ({
-      ...page,
-      title: page.title || `Halaman ${pageIndex + 1}`,
-      points: Array.isArray(page.points) ? page.points : extractPointsFromHtml(page.content_html || ''),
-      closing: page.closing || '',
-      content_html: sanitizeEditorHtml(page.content_html || '<p><br></p>'),
-    })));
-  }, [hasMeaningfulPageContent]);
-
-  const applyParagraphIndent = useCallback((pageIndex, direction = 1) => {
-    const context = getSelectionEditorContext(pageIndex);
-    if (!context) {
-      return false;
-    }
-
-    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
-    if (!blockNode) {
-      return false;
-    }
-
-    if (blockNode.tagName === 'LI') {
-      document.execCommand(direction > 0 ? 'indent' : 'outdent', false, null);
-    } else {
-      const currentMarginLeft = parseIndentValue(blockNode.style.marginLeft);
-      const nextMarginLeft = Math.max(0, currentMarginLeft + (direction * PARAGRAPH_INDENT_STEP));
-      blockNode.style.marginLeft = nextMarginLeft > 0 ? `${nextMarginLeft}px` : '';
-    }
-
-    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
-    updateActiveParagraphMetrics(resolvedPageIndex);
-    schedulePaginationRebalance(resolvedPageIndex);
-    return true;
-  }, [getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance, updateActiveParagraphMetrics]);
-
-  const applyKeyboardTabIndent = useCallback((pageIndex, direction = 1) => {
-    const context = getSelectionEditorContext(pageIndex);
-    if (!context) {
-      return false;
-    }
-
-    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
-    if (!blockNode) {
-      return false;
-    }
-
-    if (blockNode.tagName === 'LI') {
-      document.execCommand(direction > 0 ? 'indent' : 'outdent', false, null);
-    } else {
-      const currentMetrics = getParagraphIndentMetrics(blockNode);
-      let nextLeftIndent = currentMetrics.leftIndent;
-      let nextFirstLineIndent = currentMetrics.firstLineIndent;
-
-      if (direction > 0) {
-        nextFirstLineIndent = Math.min(FIRST_LINE_INDENT_LIMIT, currentMetrics.firstLineIndent + PARAGRAPH_INDENT_STEP);
-      } else if (currentMetrics.firstLineIndent > 0) {
-        nextFirstLineIndent = Math.max(0, currentMetrics.firstLineIndent - PARAGRAPH_INDENT_STEP);
-      } else if (currentMetrics.firstLineIndent < 0) {
-        nextFirstLineIndent = Math.min(0, currentMetrics.firstLineIndent + PARAGRAPH_INDENT_STEP);
-      } else if (currentMetrics.leftIndent > 0) {
-        nextLeftIndent = Math.max(0, currentMetrics.leftIndent - PARAGRAPH_INDENT_STEP);
-      } else {
-        return false;
-      }
-
-      blockNode.style.marginLeft = nextLeftIndent > 0 ? `${nextLeftIndent}px` : '';
-      blockNode.style.textIndent = nextFirstLineIndent !== 0 ? `${nextFirstLineIndent}px` : '';
-    }
-
-    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
-    updateActiveParagraphMetrics(resolvedPageIndex);
-    schedulePaginationRebalance(resolvedPageIndex);
-    return true;
-  }, [getParagraphIndentMetrics, getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance, updateActiveParagraphMetrics]);
-
-  const outdentAtCaretStart = useCallback((pageIndex) => {
-    const context = getSelectionEditorContext(pageIndex);
-    if (!context || !context.selection.isCollapsed) {
-      return false;
-    }
-
-    const { blockNode, pageIndex: resolvedPageIndex } = context;
-    if (!blockNode) {
-      return false;
-    }
-
-    const range = context.selection.getRangeAt(0).cloneRange();
-    const leadingRange = document.createRange();
-    leadingRange.selectNodeContents(blockNode);
-    leadingRange.setEnd(range.startContainer, range.startOffset);
-    const leadingText = leadingRange.toString().replace(/\u200B/g, '').replace(/\n/g, '').trim();
-    if (leadingText !== '') {
-      return false;
-    }
-
-    if (blockNode.tagName !== 'LI') {
-      const metrics = getParagraphIndentMetrics(blockNode);
-      if (metrics.firstLineIndent === 0 && metrics.leftIndent === 0) {
-        return false;
-      }
-    }
-
-    return applyKeyboardTabIndent(resolvedPageIndex, -1);
-  }, [applyKeyboardTabIndent, getParagraphIndentMetrics, getSelectionEditorContext]);
 
   const isSelectionInsideListItem = useCallback((pageIndex = activePageIndex) => {
     const context = getSelectionEditorContext(pageIndex);
     return context?.blockNode?.tagName === 'LI';
   }, [activePageIndex, getSelectionEditorContext]);
-
-  const adjustParagraphIndent = useCallback((direction = 1, pageIndex = activePageIndex) => {
-    const restoredSelection = restoreSavedSelection(pageIndex);
-    const resolvedPageIndex = restoredSelection?.pageIndex ?? pageIndex;
-    activatePage(resolvedPageIndex);
-    const applied = applyParagraphIndent(resolvedPageIndex, direction);
-    if (!applied) {
-      runCommand(direction > 0 ? 'indent' : 'outdent');
-    }
-  }, [activatePage, activePageIndex, applyParagraphIndent, restoreSavedSelection, runCommand]);
 
   const pageNeedsPaginationRebalance = useCallback((pageIndex) => {
     const editorNode = editorRefs.current[pageIndex];
@@ -2206,6 +2075,139 @@ export default function AdminLearningMaterialEditor() {
     syncEditorFormatState,
     updateActiveParagraphMetrics,
   ]);
+
+  const applyParagraphMetrics = useCallback((pageIndex, { leftIndent, firstLineIndent }) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context) {
+      return false;
+    }
+
+    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
+    if (!blockNode || blockNode.tagName === 'LI') {
+      return false;
+    }
+
+    const safeLeftIndent = Math.max(0, Math.min(PARAGRAPH_INDENT_LIMIT, Math.round(leftIndent)));
+    const safeFirstLineIndent = Math.max(-FIRST_LINE_INDENT_LIMIT, Math.min(FIRST_LINE_INDENT_LIMIT, Math.round(firstLineIndent)));
+
+    blockNode.style.marginLeft = safeLeftIndent > 0 ? `${safeLeftIndent}px` : '';
+    blockNode.style.textIndent = safeFirstLineIndent !== 0 ? `${safeFirstLineIndent}px` : '';
+
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
+    setActiveParagraphMetrics({
+      pageIndex: resolvedPageIndex,
+      leftIndent: safeLeftIndent,
+      firstLineIndent: safeFirstLineIndent,
+    });
+    schedulePaginationRebalance(resolvedPageIndex);
+    return true;
+  }, [getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance]);
+
+  const applyParagraphIndent = useCallback((pageIndex, direction = 1) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context) {
+      return false;
+    }
+
+    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
+    if (!blockNode) {
+      return false;
+    }
+
+    if (blockNode.tagName === 'LI') {
+      document.execCommand(direction > 0 ? 'indent' : 'outdent', false, null);
+    } else {
+      const currentMarginLeft = parseIndentValue(blockNode.style.marginLeft);
+      const nextMarginLeft = Math.max(0, currentMarginLeft + (direction * PARAGRAPH_INDENT_STEP));
+      blockNode.style.marginLeft = nextMarginLeft > 0 ? `${nextMarginLeft}px` : '';
+    }
+
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
+    updateActiveParagraphMetrics(resolvedPageIndex);
+    schedulePaginationRebalance(resolvedPageIndex);
+    return true;
+  }, [getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+
+  const applyKeyboardTabIndent = useCallback((pageIndex, direction = 1) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context) {
+      return false;
+    }
+
+    const { editorNode, blockNode, pageIndex: resolvedPageIndex } = context;
+    if (!blockNode) {
+      return false;
+    }
+
+    if (blockNode.tagName === 'LI') {
+      document.execCommand(direction > 0 ? 'indent' : 'outdent', false, null);
+    } else {
+      const currentMetrics = getParagraphIndentMetrics(blockNode);
+      let nextLeftIndent = currentMetrics.leftIndent;
+      let nextFirstLineIndent = currentMetrics.firstLineIndent;
+
+      if (direction > 0) {
+        nextFirstLineIndent = Math.min(FIRST_LINE_INDENT_LIMIT, currentMetrics.firstLineIndent + PARAGRAPH_INDENT_STEP);
+      } else if (currentMetrics.firstLineIndent > 0) {
+        nextFirstLineIndent = Math.max(0, currentMetrics.firstLineIndent - PARAGRAPH_INDENT_STEP);
+      } else if (currentMetrics.firstLineIndent < 0) {
+        nextFirstLineIndent = Math.min(0, currentMetrics.firstLineIndent + PARAGRAPH_INDENT_STEP);
+      } else if (currentMetrics.leftIndent > 0) {
+        nextLeftIndent = Math.max(0, currentMetrics.leftIndent - PARAGRAPH_INDENT_STEP);
+      } else {
+        return false;
+      }
+
+      blockNode.style.marginLeft = nextLeftIndent > 0 ? `${nextLeftIndent}px` : '';
+      blockNode.style.textIndent = nextFirstLineIndent !== 0 ? `${nextFirstLineIndent}px` : '';
+    }
+
+    persistActivePageContent(editorNode.innerHTML, resolvedPageIndex, 'format');
+    updateActiveParagraphMetrics(resolvedPageIndex);
+    schedulePaginationRebalance(resolvedPageIndex);
+    return true;
+  }, [getParagraphIndentMetrics, getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance, updateActiveParagraphMetrics]);
+
+  const outdentAtCaretStart = useCallback((pageIndex) => {
+    const context = getSelectionEditorContext(pageIndex);
+    if (!context || !context.selection.isCollapsed) {
+      return false;
+    }
+
+    const { blockNode, pageIndex: resolvedPageIndex } = context;
+    if (!blockNode) {
+      return false;
+    }
+
+    const range = context.selection.getRangeAt(0).cloneRange();
+    const leadingRange = document.createRange();
+    leadingRange.selectNodeContents(blockNode);
+    leadingRange.setEnd(range.startContainer, range.startOffset);
+    const leadingText = leadingRange.toString().replace(/\u200B/g, '').replace(/\n/g, '').trim();
+    if (leadingText !== '') {
+      return false;
+    }
+
+    if (blockNode.tagName !== 'LI') {
+      const metrics = getParagraphIndentMetrics(blockNode);
+      if (metrics.firstLineIndent === 0 && metrics.leftIndent === 0) {
+        return false;
+      }
+    }
+
+    return applyKeyboardTabIndent(resolvedPageIndex, -1);
+  }, [applyKeyboardTabIndent, getParagraphIndentMetrics, getSelectionEditorContext]);
+
+  const adjustParagraphIndent = useCallback((direction = 1, pageIndex = activePageIndex) => {
+    const restoredSelection = restoreSavedSelection(pageIndex);
+    const resolvedPageIndex = restoredSelection?.pageIndex ?? pageIndex;
+    activatePage(resolvedPageIndex);
+    const applied = applyParagraphIndent(resolvedPageIndex, direction);
+    if (!applied) {
+      runCommand(direction > 0 ? 'indent' : 'outdent');
+    }
+  }, [activatePage, activePageIndex, applyParagraphIndent, restoreSavedSelection, runCommand]);
+
   const paginateTopicPagesForPersistence = useCallback((topicIndex = activeTopicIndex) => {
     const topic = materialForm.topics[topicIndex];
     if (!topic) {

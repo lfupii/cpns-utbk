@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
+import { sanitizeMaterialHtml } from '../utils/materialHtml';
 
 const CSV_HEADERS = [
   'section_code',
@@ -2937,7 +2938,7 @@ export default function AdminPanel() {
                                   {page.content_html ? (
                                     <div
                                       className="learning-rich-content"
-                                      dangerouslySetInnerHTML={{ __html: page.content_html }}
+                                      dangerouslySetInnerHTML={{ __html: sanitizeMaterialHtml(page.content_html) }}
                                     />
                                   ) : (
                                     <>

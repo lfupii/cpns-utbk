@@ -1894,6 +1894,12 @@ export default function AdminLearningMaterialEditor() {
       return false;
     }
 
+    if (paginationFrameRef.current) {
+      cancelAnimationFrame(paginationFrameRef.current);
+      paginationFrameRef.current = null;
+    }
+    setPendingPaginationStart(null);
+
     const nextTopics = readTopicsFromEditor().map((topic, topicIndex) => (
       topicIndex === activeTopicIndex
         ? {
@@ -1954,33 +1960,6 @@ export default function AdminLearningMaterialEditor() {
     const hasSpareRoom = editorNode.scrollHeight < editorNode.clientHeight - 40;
     return nextHasContent && hasSpareRoom;
   }, [getMovableEditorNodes]);
-
-  const placeCaretFromEditorPoint = useCallback((editorNode, pageIndex, clientX, clientY) => {
-    if (!editorNode) {
-      return false;
-    }
-
-    focusEditorHost(pageIndex);
-
-    const point = resolveSelectionPointFromEditorPoint(editorNode, pageIndex, clientX, clientY);
-    if (!point) {
-      return false;
-    }
-
-    if (point.didMutate) {
-      persistActivePageContent(editorNode.innerHTML, pageIndex, 'typing');
-    }
-
-    const range = document.createRange();
-    range.setStart(point.node, point.offset);
-    range.collapse(true);
-    return setSelectionRange(range);
-  }, [
-    focusEditorHost,
-    persistActivePageContent,
-    resolveSelectionPointFromEditorPoint,
-    setSelectionRange,
-  ]);
 
   const openNextEditorPageFromBoundary = useCallback((pageIndex) => {
     const nextPageIndex = pageIndex + 1;
@@ -3545,27 +3524,23 @@ export default function AdminLearningMaterialEditor() {
 
     const pageIndex = Number(editorNode.dataset.pageIndex || 0);
     const anchorPoint = resolveSelectionPointFromEditorPoint(editorNode, pageIndex, event.clientX, event.clientY);
-    textSelectionDragRef.current = anchorPoint
-      ? {
-          pointerId: event.pointerId,
-          startX: event.clientX,
-          startY: event.clientY,
-          anchorPoint,
-          hasCrossedPageBoundary: false,
-        }
-      : null;
-
-    if (event.target !== editorNode) {
-      clearSelectedImageFigure();
-      closeImageContextMenu();
+    if (!anchorPoint) {
       return;
     }
 
     event.preventDefault();
+    textSelectionDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      anchorPoint,
+      hasMoved: false,
+    };
     clearSelectedImageFigure();
     closeImageContextMenu();
     activatePage(pageIndex);
-    placeCaretFromEditorPoint(editorNode, pageIndex, event.clientX, event.clientY);
+    focusEditorHost(pageIndex);
+    applySelectionBetweenPoints(anchorPoint, anchorPoint);
     requestAnimationFrame(() => {
       rememberCurrentSelection(pageIndex);
       updateActiveParagraphMetrics(pageIndex);
@@ -3575,9 +3550,10 @@ export default function AdminLearningMaterialEditor() {
     activatePage,
     clearSelectedImageFigure,
     closeImageContextMenu,
+    applySelectionBetweenPoints,
+    focusEditorHost,
     getImageFigureMetrics,
     normalizeImageFigureSize,
-    placeCaretFromEditorPoint,
     resolveSelectionPointFromEditorPoint,
     rememberCurrentSelection,
     selectImageFigure,
@@ -3634,14 +3610,6 @@ export default function AdminLearningMaterialEditor() {
       }
 
       const targetPageIndex = Number(targetEditorNode.dataset.pageIndex || dragState.anchorPoint.pageIndex || 0);
-      if (targetPageIndex !== dragState.anchorPoint.pageIndex) {
-        dragState.hasCrossedPageBoundary = true;
-      }
-
-      if (!dragState.hasCrossedPageBoundary) {
-        return;
-      }
-
       const focusPoint = resolveSelectionPointFromEditorPoint(
         targetEditorNode,
         targetPageIndex,
@@ -3656,6 +3624,7 @@ export default function AdminLearningMaterialEditor() {
         persistActivePageContent(targetEditorNode.innerHTML, targetPageIndex, 'typing');
       }
 
+      dragState.hasMoved = true;
       focusEditorHost(dragState.anchorPoint.pageIndex);
       applySelectionBetweenPoints(dragState.anchorPoint, focusPoint);
       activatePage(targetPageIndex);
@@ -3667,13 +3636,11 @@ export default function AdminLearningMaterialEditor() {
         return;
       }
 
-      if (dragState.hasCrossedPageBoundary) {
-        const selection = window.getSelection();
-        const pageBounds = getSelectionPageBounds(selection, dragState.anchorPoint.pageIndex);
-        rememberCurrentSelection(pageBounds.anchorPageIndex);
-        updateActiveParagraphMetrics(pageBounds.focusPageIndex);
-        syncEditorFormatState(pageBounds.focusPageIndex);
-      }
+      const selection = window.getSelection();
+      const pageBounds = getSelectionPageBounds(selection, dragState.anchorPoint.pageIndex);
+      rememberCurrentSelection(pageBounds.anchorPageIndex);
+      updateActiveParagraphMetrics(pageBounds.focusPageIndex);
+      syncEditorFormatState(pageBounds.focusPageIndex);
 
       textSelectionDragRef.current = null;
     };

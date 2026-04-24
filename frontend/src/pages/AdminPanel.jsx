@@ -2934,7 +2934,6 @@ export default function AdminPanel() {
                                   className="learning-page learning-page-document"
                                 >
                                   <span>{`Halaman ${pageIndex + 1}`}</span>
-                                  <h3>{page.title || `Halaman ${pageIndex + 1}`}</h3>
                                   {page.content_html ? (
                                     <div
                                       className="learning-rich-content"

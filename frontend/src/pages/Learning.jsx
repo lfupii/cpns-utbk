@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
+import { sanitizeMaterialHtml } from '../utils/materialHtml';
 
 function formatTime(seconds) {
   const safeSeconds = Math.max(0, Number(seconds || 0));
@@ -22,22 +23,6 @@ function formatScore(result) {
   const total = Number(result.total_questions ?? 0);
 
   return `${score.toLocaleString('id-ID')} - ${correct}/${total} benar`;
-}
-
-function sanitizeMaterialHtml(html) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(String(html || ''), 'text/html');
-  doc.querySelectorAll('script, iframe, object, embed, link, meta, style').forEach((node) => node.remove());
-  doc.body.querySelectorAll('*').forEach((node) => {
-    [...node.attributes].forEach((attribute) => {
-      const name = attribute.name.toLowerCase();
-      const value = attribute.value.trim().toLowerCase();
-      if (name.startsWith('on') || value.startsWith('javascript:')) {
-        node.removeAttribute(attribute.name);
-      }
-    });
-  });
-  return doc.body.innerHTML;
 }
 
 function getSectionTopics(section) {

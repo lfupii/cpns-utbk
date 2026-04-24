@@ -602,6 +602,7 @@ export default function AdminLearningMaterialEditor() {
     firstLineIndent: 0,
   });
   const paragraphRulerDragRef = useRef(null);
+  const textSelectionDragRef = useRef(null);
   const [pendingPaginationStart, setPendingPaginationStart] = useState(null);
   const pendingEnterPageFocusRef = useRef(null);
   const savedSelectionRangeRef = useRef(null);
@@ -1074,6 +1075,28 @@ export default function AdminLearningMaterialEditor() {
     return setSelectionRange(range);
   }, [setSelectionRange]);
 
+  const collapseNodeToPoint = useCallback((node, collapseToStart = false) => {
+    if (!node) {
+      return null;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const textLength = node.textContent?.length || 0;
+      return {
+        node,
+        offset: collapseToStart ? 0 : textLength,
+      };
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(collapseToStart);
+    return {
+      node: range.startContainer,
+      offset: range.startOffset,
+    };
+  }, []);
+
   const ensureEditorLeadingParagraph = useCallback((editorNode) => {
     if (!editorNode) {
       return null;
@@ -1116,6 +1139,172 @@ export default function AdminLearningMaterialEditor() {
     editorNode.appendChild(paragraph);
     return paragraph;
   }, [isEmptyEditorBreakNode]);
+  const resolveSelectionPointFromEditorPoint = useCallback((editorNode, pageIndex, clientX, clientY) => {
+    if (!editorNode) {
+      return null;
+    }
+
+    const buildPoint = (node, offset, didMutate = false) => {
+      if (!node) {
+        return null;
+      }
+
+      const maxOffset = node.nodeType === Node.TEXT_NODE
+        ? (node.textContent?.length || 0)
+        : (node.childNodes?.length || 0);
+      return {
+        pageIndex,
+        node,
+        offset: Math.min(Math.max(0, Number(offset || 0)), maxOffset),
+        didMutate,
+      };
+    };
+
+    if (typeof document.caretPositionFromPoint === 'function') {
+      const caretPosition = document.caretPositionFromPoint(clientX, clientY);
+      if (caretPosition?.offsetNode && editorNode.contains(caretPosition.offsetNode)) {
+        return buildPoint(caretPosition.offsetNode, caretPosition.offset);
+      }
+    }
+
+    if (typeof document.caretRangeFromPoint === 'function') {
+      const caretRange = document.caretRangeFromPoint(clientX, clientY);
+      if (caretRange?.startContainer && editorNode.contains(caretRange.startContainer)) {
+        return buildPoint(caretRange.startContainer, caretRange.startOffset);
+      }
+    }
+
+    const editorRect = editorNode.getBoundingClientRect();
+    const movableNodes = getMovableEditorNodes(editorNode);
+    const firstMovableNode = movableNodes[0] || null;
+    const lastMovableNode = movableNodes[movableNodes.length - 1] || null;
+
+    if (firstMovableNode) {
+      const firstRect = firstMovableNode.getBoundingClientRect?.() || null;
+      if (clientY <= (firstRect?.top ?? editorRect.top) + 6) {
+        const point = collapseNodeToPoint(firstMovableNode, true);
+        return point ? { pageIndex, ...point, didMutate: false } : null;
+      }
+    }
+
+    if (lastMovableNode) {
+      const lastRect = lastMovableNode.getBoundingClientRect?.() || null;
+      if (clientY >= (lastRect?.bottom ?? editorRect.bottom) - 6) {
+        const point = collapseNodeToPoint(lastMovableNode, false);
+        return point ? { pageIndex, ...point, didMutate: false } : null;
+      }
+    }
+
+    if (firstMovableNode && lastMovableNode) {
+      const firstRect = firstMovableNode.getBoundingClientRect?.() || null;
+      const lastRect = lastMovableNode.getBoundingClientRect?.() || null;
+      const useLastNode = clientY > (((firstRect?.top ?? editorRect.top) + (lastRect?.bottom ?? editorRect.bottom)) / 2);
+      const point = collapseNodeToPoint(useLastNode ? lastMovableNode : firstMovableNode, !useLastNode);
+      return point ? { pageIndex, ...point, didMutate: false } : null;
+    }
+
+    const prefersStart = clientY <= editorRect.top + (editorRect.height / 2);
+    const trailingParagraph = ensureEditorTrailingParagraph(editorNode);
+    const point = collapseNodeToPoint(trailingParagraph, prefersStart);
+    return point ? { pageIndex, ...point, didMutate: true } : null;
+  }, [collapseNodeToPoint, ensureEditorTrailingParagraph, getMovableEditorNodes]);
+
+  const compareSelectionPoints = useCallback((leftPoint, rightPoint) => {
+    if (!leftPoint?.node || !rightPoint?.node) {
+      return 0;
+    }
+
+    if (leftPoint.node === rightPoint.node) {
+      return leftPoint.offset - rightPoint.offset;
+    }
+
+    const position = leftPoint.node.compareDocumentPosition(rightPoint.node);
+    if (position & Node.DOCUMENT_POSITION_PRECEDING) {
+      return 1;
+    }
+    if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+      return -1;
+    }
+
+    return (leftPoint.pageIndex || 0) - (rightPoint.pageIndex || 0);
+  }, []);
+
+  const applySelectionBetweenPoints = useCallback((anchorPoint, focusPoint) => {
+    if (!anchorPoint?.node || !focusPoint?.node) {
+      return false;
+    }
+
+    const selection = window.getSelection();
+    if (!selection) {
+      return false;
+    }
+
+    const range = document.createRange();
+    if (compareSelectionPoints(anchorPoint, focusPoint) <= 0) {
+      range.setStart(anchorPoint.node, anchorPoint.offset);
+      range.setEnd(focusPoint.node, focusPoint.offset);
+    } else {
+      range.setStart(focusPoint.node, focusPoint.offset);
+      range.setEnd(anchorPoint.node, anchorPoint.offset);
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    const isCollapsed = anchorPoint.node === focusPoint.node && anchorPoint.offset === focusPoint.offset;
+    if (!isCollapsed && typeof selection.setBaseAndExtent === 'function') {
+      try {
+        selection.setBaseAndExtent(
+          anchorPoint.node,
+          anchorPoint.offset,
+          focusPoint.node,
+          focusPoint.offset
+        );
+      } catch (error) {
+        // Ignore browsers that reject cross-host selection direction updates.
+      }
+    }
+
+    savedSelectionRangeRef.current = range.cloneRange();
+    savedSelectionPageIndexRef.current = anchorPoint.pageIndex;
+    return true;
+  }, [compareSelectionPoints]);
+
+  const getEditorNodeFromPoint = useCallback((clientX, clientY) => {
+    const directTarget = document.elementFromPoint(clientX, clientY);
+    const directEditorNode = directTarget?.closest?.('.admin-word-editable');
+    if (directEditorNode instanceof HTMLElement) {
+      return directEditorNode;
+    }
+
+    return Object.values(editorRefs.current).reduce((closestNode, currentNode) => {
+      if (!(currentNode instanceof HTMLElement)) {
+        return closestNode;
+      }
+
+      const rect = currentNode.getBoundingClientRect();
+      const withinHorizontalReach = clientX >= rect.left - 48 && clientX <= rect.right + 48;
+      if (!withinHorizontalReach) {
+        return closestNode;
+      }
+
+      const verticalDistance = clientY < rect.top
+        ? rect.top - clientY
+        : clientY > rect.bottom
+          ? clientY - rect.bottom
+          : 0;
+
+      if (!closestNode || verticalDistance < closestNode.distance) {
+        return {
+          node: currentNode,
+          distance: verticalDistance,
+        };
+      }
+
+      return closestNode;
+    }, null)?.node || null;
+  }, []);
+
   const getSelectionEditorContext = useCallback((preferredPageIndex = activePageIndex) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -1783,52 +1972,23 @@ export default function AdminLearningMaterialEditor() {
 
     focusEditorHost(pageIndex);
 
-    if (typeof document.caretPositionFromPoint === 'function') {
-      const caretPosition = document.caretPositionFromPoint(clientX, clientY);
-      if (caretPosition?.offsetNode && editorNode.contains(caretPosition.offsetNode)) {
-        const range = document.createRange();
-        const maxOffset = caretPosition.offsetNode.nodeType === Node.TEXT_NODE
-          ? (caretPosition.offsetNode.textContent?.length || 0)
-          : (caretPosition.offsetNode.childNodes?.length || 0);
-        range.setStart(caretPosition.offsetNode, Math.min(caretPosition.offset, maxOffset));
-        range.collapse(true);
-        return setSelectionRange(range);
-      }
+    const point = resolveSelectionPointFromEditorPoint(editorNode, pageIndex, clientX, clientY);
+    if (!point) {
+      return false;
     }
 
-    if (typeof document.caretRangeFromPoint === 'function') {
-      const caretRange = document.caretRangeFromPoint(clientX, clientY);
-      if (caretRange?.startContainer && editorNode.contains(caretRange.startContainer)) {
-        caretRange.collapse(true);
-        return setSelectionRange(caretRange);
-      }
+    if (point.didMutate) {
+      persistActivePageContent(editorNode.innerHTML, pageIndex, 'typing');
     }
 
-    const movableNodes = getMovableEditorNodes(editorNode);
-    const lastMovableNode = movableNodes[movableNodes.length - 1] || null;
-    if (lastMovableNode) {
-      const lastRect = lastMovableNode.getBoundingClientRect?.() || null;
-      if (!lastRect || clientY >= lastRect.bottom - 6) {
-        const trailingParagraph = ensureEditorTrailingParagraph(editorNode);
-        persistActivePageContent(editorNode.innerHTML, pageIndex, 'typing');
-        return placeCaretInsideNode(trailingParagraph, false);
-      }
-    }
-
-    const firstMovableNode = movableNodes[0] || null;
-    if (firstMovableNode) {
-      return placeCaretInsideNode(firstMovableNode, true);
-    }
-
-    const trailingParagraph = ensureEditorTrailingParagraph(editorNode);
-    persistActivePageContent(editorNode.innerHTML, pageIndex, 'typing');
-    return placeCaretInsideNode(trailingParagraph, false);
+    const range = document.createRange();
+    range.setStart(point.node, point.offset);
+    range.collapse(true);
+    return setSelectionRange(range);
   }, [
-    ensureEditorTrailingParagraph,
     focusEditorHost,
-    getMovableEditorNodes,
     persistActivePageContent,
-    placeCaretInsideNode,
+    resolveSelectionPointFromEditorPoint,
     setSelectionRange,
   ]);
 
@@ -3389,14 +3549,31 @@ export default function AdminLearningMaterialEditor() {
     }
 
     const editorNode = event.target.closest?.('.admin-word-editable');
-    if (!(editorNode instanceof HTMLElement) || event.target !== editorNode) {
+    if (!(editorNode instanceof HTMLElement)) {
+      return;
+    }
+
+    const pageIndex = Number(editorNode.dataset.pageIndex || 0);
+    const anchorPoint = resolveSelectionPointFromEditorPoint(editorNode, pageIndex, event.clientX, event.clientY);
+    textSelectionDragRef.current = anchorPoint
+      ? {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          anchorPoint,
+          hasCrossedPageBoundary: false,
+        }
+      : null;
+
+    if (event.target !== editorNode) {
+      clearSelectedImageFigure();
+      closeImageContextMenu();
       return;
     }
 
     event.preventDefault();
     clearSelectedImageFigure();
     closeImageContextMenu();
-    const pageIndex = Number(editorNode.dataset.pageIndex || 0);
     activatePage(pageIndex);
     placeCaretFromEditorPoint(editorNode, pageIndex, event.clientX, event.clientY);
     requestAnimationFrame(() => {
@@ -3411,6 +3588,7 @@ export default function AdminLearningMaterialEditor() {
     getImageFigureMetrics,
     normalizeImageFigureSize,
     placeCaretFromEditorPoint,
+    resolveSelectionPointFromEditorPoint,
     rememberCurrentSelection,
     selectImageFigure,
     syncEditorFormatState,
@@ -3447,6 +3625,87 @@ export default function AdminLearningMaterialEditor() {
     document.addEventListener('selectionchange', handleSelectionChange);
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
   }, [activatePage, activePageIndex, rememberCurrentSelection, syncEditorFormatState, updateActiveParagraphMetrics]);
+
+  useEffect(() => {
+    const handlePointerMove = (event) => {
+      const dragState = textSelectionDragRef.current;
+      if (!dragState || event.pointerId !== dragState.pointerId || (event.buttons & 1) !== 1) {
+        return;
+      }
+
+      const movedEnough = Math.abs(event.clientX - dragState.startX) > 3 || Math.abs(event.clientY - dragState.startY) > 3;
+      if (!movedEnough) {
+        return;
+      }
+
+      const targetEditorNode = getEditorNodeFromPoint(event.clientX, event.clientY);
+      if (!(targetEditorNode instanceof HTMLElement)) {
+        return;
+      }
+
+      const targetPageIndex = Number(targetEditorNode.dataset.pageIndex || dragState.anchorPoint.pageIndex || 0);
+      if (targetPageIndex !== dragState.anchorPoint.pageIndex) {
+        dragState.hasCrossedPageBoundary = true;
+      }
+
+      if (!dragState.hasCrossedPageBoundary) {
+        return;
+      }
+
+      const focusPoint = resolveSelectionPointFromEditorPoint(
+        targetEditorNode,
+        targetPageIndex,
+        event.clientX,
+        event.clientY
+      );
+      if (!focusPoint) {
+        return;
+      }
+
+      if (focusPoint.didMutate) {
+        persistActivePageContent(targetEditorNode.innerHTML, targetPageIndex, 'typing');
+      }
+
+      focusEditorHost(dragState.anchorPoint.pageIndex);
+      applySelectionBetweenPoints(dragState.anchorPoint, focusPoint);
+      activatePage(targetPageIndex);
+    };
+
+    const handlePointerUp = () => {
+      const dragState = textSelectionDragRef.current;
+      if (!dragState) {
+        return;
+      }
+
+      if (dragState.hasCrossedPageBoundary) {
+        const selection = window.getSelection();
+        const pageBounds = getSelectionPageBounds(selection, dragState.anchorPoint.pageIndex);
+        rememberCurrentSelection(pageBounds.anchorPageIndex);
+        updateActiveParagraphMetrics(pageBounds.focusPageIndex);
+        syncEditorFormatState(pageBounds.focusPageIndex);
+      }
+
+      textSelectionDragRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [
+    activatePage,
+    applySelectionBetweenPoints,
+    focusEditorHost,
+    getEditorNodeFromPoint,
+    persistActivePageContent,
+    rememberCurrentSelection,
+    resolveSelectionPointFromEditorPoint,
+    syncEditorFormatState,
+    updateActiveParagraphMetrics,
+  ]);
 
   useEffect(() => {
     const handlePointerMove = (event) => {

@@ -3446,7 +3446,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .learning-page-document-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.9rem;
@@ -3459,7 +3459,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .learning-page-brand {
   flex: 0 0 auto;
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-end;
 }
 
@@ -3468,6 +3468,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   width: clamp(74px, 9vw, 104px);
   height: auto;
   object-fit: contain;
+  opacity: 0.5;
 }
 
 .learning-page:hover,

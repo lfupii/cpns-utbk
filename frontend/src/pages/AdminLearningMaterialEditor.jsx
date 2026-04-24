@@ -1128,6 +1128,11 @@ export default function AdminLearningMaterialEditor() {
     editorNode.appendChild(paragraph);
     return paragraph;
   }, [isEmptyEditorBreakNode]);
+
+  const getMovableEditorNodes = useCallback((editorNode) => (
+    [...editorNode.childNodes].filter((childNode) => isMeaningfulEditorNode(childNode))
+  ), [isMeaningfulEditorNode]);
+
   const resolveSelectionPointFromEditorPoint = useCallback((editorNode, pageIndex, clientX, clientY) => {
     if (!editorNode) {
       return null;
@@ -1380,10 +1385,6 @@ export default function AdminLearningMaterialEditor() {
       editorNode.innerHTML = '<p><br></p>';
     }
   }, [isMeaningfulEditorNode]);
-
-  const getMovableEditorNodes = useCallback((editorNode) => (
-    [...editorNode.childNodes].filter((childNode) => isMeaningfulEditorNode(childNode))
-  ), [isMeaningfulEditorNode]);
 
   const getDirectListItems = useCallback((listNode) => (
     listNode instanceof HTMLElement

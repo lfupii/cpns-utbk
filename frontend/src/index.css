@@ -7626,6 +7626,30 @@ html[data-theme='dark'] .theme-toggle-thumb {
   line-height: 1.55;
 }
 
+.admin-lexical-surface-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.2rem;
+}
+
+.admin-lexical-surface-switch-button {
+  min-height: 34px;
+  padding: 0 0.82rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.admin-lexical-surface-switch-button-active {
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.98) 0%, rgba(219, 234, 254, 0.98) 100%);
+  color: #1d4ed8;
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
 .admin-lexical-shell {
   display: grid;
   gap: 0.8rem;
@@ -7666,6 +7690,33 @@ html[data-theme='dark'] .theme-toggle-thumb {
   color: #ffffff;
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.admin-lexical-toolbar select {
+  min-width: 88px;
+}
+
+.admin-lexical-toolbar-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 34px;
+  padding: 0 0.72rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.admin-lexical-toolbar-color input {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
 }
 
 .admin-lexical-toolbar-button-active {
@@ -7748,6 +7799,113 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .admin-lexical-link {
   color: #2563eb;
   text-decoration: underline;
+}
+
+.admin-lexical-preview-root {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-lexical-preview-copy {
+  display: grid;
+  gap: 0.32rem;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.admin-lexical-preview-copy span {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-lexical-preview-copy strong {
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.admin-lexical-preview-copy p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.admin-lexical-preview-stack {
+  display: grid;
+  gap: 1.35rem;
+  justify-items: center;
+}
+
+.admin-lexical-preview-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 18mm 16mm 20mm;
+  border-radius: 0.65rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.995) 0%, rgba(250, 252, 255, 0.995) 100%);
+  box-shadow:
+    0 22px 42px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(214, 226, 240, 0.94);
+}
+
+.admin-lexical-preview-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.admin-lexical-preview-page-label {
+  color: #1f6fd7;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.admin-lexical-preview-page-brand {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.admin-lexical-preview-page-logo {
+  display: block;
+  width: clamp(74px, 9vw, 104px);
+  height: auto;
+  object-fit: contain;
+  opacity: 0.5;
+}
+
+.admin-lexical-preview-page-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  color: #526178;
+}
+
+.admin-lexical-preview-page-body.learning-rich-content {
+  margin-top: 0;
+}
+
+.admin-lexical-preview-measure {
+  position: absolute;
+  left: -99999px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.admin-lexical-preview-page-measure {
+  max-width: none;
+  box-shadow: none;
 }
 
 .admin-word-statusbar-note {

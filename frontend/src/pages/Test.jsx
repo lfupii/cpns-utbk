@@ -197,6 +197,18 @@ export default function Test() {
       return Boolean(savedValue);
     }).length
   ), [activeQuestions, savedAnswers]);
+  const pendingReviewQuestionNumbers = useMemo(() => (
+    orderedQuestions.reduce((numbers, question, index) => {
+      if (reviewFlags[String(question.id)] || reviewFlags[question.id]) {
+        numbers.push(index + 1);
+      }
+      return numbers;
+    }, [])
+  ), [orderedQuestions, reviewFlags]);
+  const pendingReviewQuestionNumberLabel = useMemo(
+    () => pendingReviewQuestionNumbers.join(', '),
+    [pendingReviewQuestionNumbers]
+  );
 
   const pickInitialQuestionId = useCallback((nextQuestions, nextSavedAnswers, nextWorkflow, nextElapsedSeconds) => {
     const initialState = computeAttemptState(nextWorkflow, nextElapsedSeconds);
@@ -661,13 +673,6 @@ export default function Test() {
   const isCurrentQuestionMarkedForReview = Boolean(
     reviewFlags[String(currentQuestion.id)] || reviewFlags[currentQuestion.id]
   );
-  const pendingReviewQuestionNumbers = orderedQuestions.reduce((numbers, question, index) => {
-    if (reviewFlags[String(question.id)] || reviewFlags[question.id]) {
-      numbers.push(index + 1);
-    }
-    return numbers;
-  }, []);
-  const pendingReviewQuestionNumberLabel = pendingReviewQuestionNumbers.join(', ');
 
   return (
     <div className="min-h-screen test-shell">

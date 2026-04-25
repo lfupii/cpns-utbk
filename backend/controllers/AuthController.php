@@ -423,11 +423,37 @@ class AuthController {
         $data = json_decode(file_get_contents('php://input'), true);
 
         $userId = $tokenData['userId'];
-        $full_name = $data['full_name'] ?? null;
-        $phone = $data['phone'] ?? null;
-        $birth_date = $data['birth_date'] ?? null;
+        $full_name = isset($data['full_name']) ? trim((string) $data['full_name']) : '';
+        $phone = array_key_exists('phone', $data) ? trim((string) ($data['phone'] ?? '')) : '';
+        $birth_date = array_key_exists('birth_date', $data) ? trim((string) ($data['birth_date'] ?? '')) : '';
 
-        $query = "UPDATE users SET full_name = COALESCE(?, full_name), phone = COALESCE(?, phone), birth_date = COALESCE(?, birth_date) WHERE id = ?";
+        if ($full_name === '') {
+            sendResponse('error', 'Nama lengkap wajib diisi', null, 422);
+        }
+
+        if ($phone === '') {
+            $phone = null;
+        }
+
+        if ($birth_date === '') {
+            $birth_date = null;
+        }
+
+        if ($birth_date !== null) {
+            $parsedBirthDate = DateTime::createFromFormat('Y-m-d', $birth_date);
+            $birthDateErrors = DateTime::getLastErrors();
+            $hasBirthDateErrors = $birthDateErrors !== false
+                && (
+                    ((int) ($birthDateErrors['warning_count'] ?? 0)) > 0
+                    || ((int) ($birthDateErrors['error_count'] ?? 0)) > 0
+                );
+
+            if (!$parsedBirthDate || $hasBirthDateErrors || $parsedBirthDate->format('Y-m-d') !== $birth_date) {
+                sendResponse('error', 'Format tanggal lahir tidak valid', null, 422);
+            }
+        }
+
+        $query = "UPDATE users SET full_name = ?, phone = ?, birth_date = ? WHERE id = ?";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('sssi', $full_name, $phone, $birth_date, $userId);
 

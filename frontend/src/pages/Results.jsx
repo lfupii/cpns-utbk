@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api';
+import { formatDate, formatDurationSeconds } from '../utils/date';
 
 const RESULT_EMAIL_STATUS_KEY = 'resultEmailStatusMessage';
 
@@ -67,7 +68,7 @@ export default function Results() {
   }
 
   if (!results) {
-    return <div className="min-h-screen flex items-center justify-center">No results found</div>;
+    return <div className="min-h-screen flex items-center justify-center">Hasil tryout tidak ditemukan.</div>;
   }
 
   const percentage = Number.isFinite(results.percentage) ? results.percentage : 0;
@@ -185,7 +186,7 @@ export default function Results() {
               Kembali ke Beranda
             </button>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/#paket')}
               className="btn-outline flex-1"
             >
               Lihat Paket Lain
@@ -199,12 +200,12 @@ export default function Results() {
           <div className="space-y-3 text-sm">
             <div className="flex flex-col gap-1 pb-3 border-b border-gray-200 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-gray-600">Tanggal Test:</span>
-              <span className="font-semibold sm:text-right">{new Date(results.created_at).toLocaleDateString('id-ID')}</span>
+              <span className="font-semibold sm:text-right">{formatDate(results.created_at)}</span>
             </div>
             <div className="flex flex-col gap-1 pb-3 border-b border-gray-200 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-gray-600">Waktu Pengerjaan:</span>
               <span className="font-semibold sm:text-right">
-                {results.time_taken ? `${Math.floor(results.time_taken / 60)} menit ${results.time_taken % 60} detik` : '-'}
+                {formatDurationSeconds(results.time_taken)}
               </span>
             </div>
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">

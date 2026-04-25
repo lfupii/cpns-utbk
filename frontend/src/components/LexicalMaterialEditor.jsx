@@ -27,6 +27,7 @@ import {
   ListItemNode,
   ListNode,
   REMOVE_LIST_COMMAND,
+  $createListNode,
   $isListNode,
 } from '@lexical/list';
 import { $setBlocksType } from '@lexical/selection';
@@ -42,6 +43,8 @@ import {
   $createParagraphNode,
   $getRoot,
   $getSelection,
+  $isDecoratorNode,
+  $isElementNode,
   $isRangeSelection,
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
@@ -251,6 +254,207 @@ function $createMaterialImageNode({ src, layout = 'center' }) {
   return $applyNodeReplacement(new MaterialImageNode(src, layout));
 }
 
+function isMeaningfulTextNode(node) {
+  return node?.nodeType === Node.TEXT_NODE && Boolean(node.textContent?.trim());
+}
+
+function isInlineDomElement(node) {
+  if (!(node instanceof HTMLElement)) {
+    return false;
+  }
+
+  const blockTags = new Set([
+    'ADDRESS',
+    'ARTICLE',
+    'ASIDE',
+    'BLOCKQUOTE',
+    'DIV',
+    'DL',
+    'FIELDSET',
+    'FIGCAPTION',
+    'FIGURE',
+    'FOOTER',
+    'FORM',
+    'H1',
+    'H2',
+    'H3',
+    'H4',
+    'H5',
+    'H6',
+    'HEADER',
+    'HR',
+    'LI',
+    'MAIN',
+    'NAV',
+    'OL',
+    'P',
+    'PRE',
+    'SECTION',
+    'TABLE',
+    'TBODY',
+    'TD',
+    'TFOOT',
+    'TH',
+    'THEAD',
+    'TR',
+    'UL',
+  ]);
+
+  return !blockTags.has(node.tagName);
+}
+
+function normalizeListDomNodes(root) {
+  const documentRef = root.ownerDocument;
+  if (!documentRef) {
+    return;
+  }
+
+  root.querySelectorAll('ul, ol').forEach((listNode) => {
+    [...listNode.childNodes].forEach((childNode) => {
+      if (childNode.nodeType === Node.TEXT_NODE) {
+        if (!childNode.textContent?.trim()) {
+          childNode.remove();
+          return;
+        }
+
+        const listItem = documentRef.createElement('li');
+        listItem.textContent = childNode.textContent.trim();
+        childNode.replaceWith(listItem);
+        return;
+      }
+
+      if (!(childNode instanceof HTMLElement)) {
+        childNode.remove();
+        return;
+      }
+
+      if (childNode.tagName === 'LI') {
+        return;
+      }
+
+      const listItem = documentRef.createElement('li');
+      childNode.replaceWith(listItem);
+      listItem.appendChild(childNode);
+    });
+  });
+
+  root.querySelectorAll('li').forEach((listItemNode) => {
+    const parentTagName = listItemNode.parentElement?.tagName;
+    if (parentTagName === 'UL' || parentTagName === 'OL') {
+      return;
+    }
+
+    const wrapperList = documentRef.createElement('ul');
+    listItemNode.replaceWith(wrapperList);
+    wrapperList.appendChild(listItemNode);
+
+    let nextSibling = wrapperList.nextSibling;
+    while (nextSibling instanceof HTMLElement && nextSibling.tagName === 'LI') {
+      const currentNode = nextSibling;
+      nextSibling = nextSibling.nextSibling;
+      wrapperList.appendChild(currentNode);
+    }
+  });
+}
+
+function normalizeRootDomNodes(root) {
+  const documentRef = root.ownerDocument;
+  if (!documentRef) {
+    return;
+  }
+
+  let currentParagraph = null;
+  [...root.childNodes].forEach((childNode) => {
+    const isInlineNode = isMeaningfulTextNode(childNode)
+      || (childNode instanceof HTMLElement && (childNode.tagName === 'BR' || isInlineDomElement(childNode)));
+
+    if (!isInlineNode) {
+      currentParagraph = null;
+      return;
+    }
+
+    if (!currentParagraph) {
+      currentParagraph = documentRef.createElement('p');
+      childNode.before(currentParagraph);
+    }
+
+    currentParagraph.appendChild(childNode);
+  });
+}
+
+function normalizeHtmlForLexical(dom) {
+  const root = dom?.body || dom;
+  if (!root) {
+    return dom;
+  }
+
+  normalizeListDomNodes(root);
+  normalizeRootDomNodes(root);
+  return dom;
+}
+
+function normalizeLexicalTopLevelNodes(nodes) {
+  const normalizedNodes = [];
+  let currentParagraph = null;
+  let currentList = null;
+
+  const flushParagraph = () => {
+    if (currentParagraph && currentParagraph.getChildrenSize() > 0) {
+      normalizedNodes.push(currentParagraph);
+    }
+    currentParagraph = null;
+  };
+
+  const flushList = () => {
+    if (currentList && currentList.getChildrenSize() > 0) {
+      normalizedNodes.push(currentList);
+    }
+    currentList = null;
+  };
+
+  nodes.forEach((node) => {
+    if ($isListNode(node)) {
+      flushParagraph();
+      flushList();
+      normalizedNodes.push(node);
+      return;
+    }
+
+    if (node.getType?.() === 'listitem') {
+      flushParagraph();
+      if (!currentList) {
+        currentList = $createListNode('bullet');
+      }
+      currentList.append(node);
+      return;
+    }
+
+    flushList();
+    if ($isDecoratorNode(node) || ($isElementNode(node) && !node.isInline())) {
+      flushParagraph();
+      normalizedNodes.push(node);
+      return;
+    }
+
+    if (!currentParagraph) {
+      currentParagraph = $createParagraphNode();
+    }
+    currentParagraph.append(node);
+  });
+
+  flushParagraph();
+  flushList();
+
+  return normalizedNodes.length > 0 ? normalizedNodes : [$createParagraphNode()];
+}
+
+function createLexicalNodesFromHtml(editor, html) {
+  const parser = new DOMParser();
+  const dom = parser.parseFromString(String(html || ''), 'text/html');
+  normalizeHtmlForLexical(dom);
+  return normalizeLexicalTopLevelNodes($generateNodesFromDOM(editor, dom));
+}
+
 function LexicalInitialHtmlPlugin({ initialHtml }) {
   const [editor] = useLexicalComposerContext();
   const initializedRef = useRef(false);
@@ -266,9 +470,7 @@ function LexicalInitialHtmlPlugin({ initialHtml }) {
       root.clear();
 
       if (initialHtml) {
-        const parser = new DOMParser();
-        const dom = parser.parseFromString(initialHtml, 'text/html');
-        const nodes = $generateNodesFromDOM(editor, dom);
+        const nodes = createLexicalNodesFromHtml(editor, initialHtml);
         root.append(...nodes);
       }
 
@@ -356,9 +558,7 @@ function LexicalEditorBridge({ editorRef }) {
           return;
         }
 
-        const parser = new DOMParser();
-        const dom = parser.parseFromString(String(html || ''), 'text/html');
-        const nodes = $generateNodesFromDOM(editor, dom);
+        const nodes = createLexicalNodesFromHtml(editor, html);
         selection.insertNodes(nodes);
       });
       editor.focus();

@@ -3547,14 +3547,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .learning-rich-content::after,
-.admin-word-editable::after {
+.admin-word-editable::after,
+.admin-lexical-editor::after {
   content: '';
   display: block;
   clear: both;
 }
 
 .learning-rich-content .material-image-frame,
-.admin-word-editable .material-image-frame {
+.admin-word-editable .material-image-frame,
+.admin-lexical-editor .material-image-frame,
+.admin-lexical-image-node .material-image-frame {
   position: relative;
   width: min(100%, var(--image-width, 520px));
   margin-top: var(--image-margin-top, 16px);
@@ -3570,7 +3573,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .learning-rich-content .material-image-frame img,
-.admin-word-editable .material-image-frame img {
+.admin-word-editable .material-image-frame img,
+.admin-lexical-editor .material-image-frame img,
+.admin-lexical-image-node .material-image-frame img {
   display: block;
   width: 100%;
   max-width: none;
@@ -3582,7 +3587,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .learning-rich-content .material-image-wrap-inline,
-.admin-word-editable .material-image-wrap-inline {
+.admin-word-editable .material-image-wrap-inline,
+.admin-lexical-editor .material-image-wrap-inline,
+.admin-lexical-image-node .material-image-wrap-inline {
   display: inline-block;
   vertical-align: top;
   max-width: min(45%, 320px);
@@ -3591,7 +3598,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .learning-rich-content .material-image-wrap-left,
-.admin-word-editable .material-image-wrap-left {
+.admin-word-editable .material-image-wrap-left,
+.admin-lexical-editor .material-image-wrap-left,
+.admin-lexical-image-node .material-image-wrap-left {
   float: left;
   max-width: min(45%, 360px);
   margin-left: 0;
@@ -3599,7 +3608,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .learning-rich-content .material-image-wrap-right,
-.admin-word-editable .material-image-wrap-right {
+.admin-word-editable .material-image-wrap-right,
+.admin-lexical-editor .material-image-wrap-right,
+.admin-lexical-image-node .material-image-wrap-right {
   float: right;
   max-width: min(45%, 360px);
   margin-left: 1rem;
@@ -3607,13 +3618,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .learning-rich-content .material-image-wrap-center,
-.admin-word-editable .material-image-wrap-center {
+.admin-word-editable .material-image-wrap-center,
+.admin-lexical-editor .material-image-wrap-center,
+.admin-lexical-image-node .material-image-wrap-center {
   display: block;
   max-width: min(100%, 560px);
 }
 
 .learning-rich-content .material-image-wrap-full,
-.admin-word-editable .material-image-wrap-full {
+.admin-word-editable .material-image-wrap-full,
+.admin-lexical-editor .material-image-wrap-full,
+.admin-lexical-image-node .material-image-wrap-full {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -3621,7 +3636,8 @@ html[data-theme='dark'] .theme-toggle-thumb {
   margin-right: 0;
 }
 
-.learning-rich-content table {
+.learning-rich-content table,
+.admin-lexical-editor table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
@@ -3629,20 +3645,24 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .learning-rich-content th,
-.learning-rich-content td {
+.learning-rich-content td,
+.admin-lexical-editor th,
+.admin-lexical-editor td {
   padding: 0.7rem 0.8rem;
   border: 1px solid rgba(203, 213, 225, 0.95);
   text-align: left;
 }
 
-.learning-rich-content blockquote {
+.learning-rich-content blockquote,
+.admin-lexical-editor blockquote {
   padding: 0.9rem 1rem;
   border-left: 4px solid #60a5fa;
   background: #f8fbff;
   border-radius: 0.85rem;
 }
 
-.learning-rich-content a {
+.learning-rich-content a,
+.admin-lexical-editor a {
   color: #1b5fbf;
   font-weight: 800;
 }
@@ -7353,6 +7373,21 @@ html[data-theme='dark'] .theme-toggle-thumb {
 .admin-word-engine-switch-button-active {
   background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
+}
+
+.admin-word-engine-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.36);
+  background: rgba(59, 130, 246, 0.14);
+  color: #dbeafe;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .admin-word-ribbon-action-button-primary {

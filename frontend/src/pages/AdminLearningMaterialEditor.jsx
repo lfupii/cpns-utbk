@@ -5,6 +5,7 @@ import LexicalMaterialEditor from '../components/LexicalMaterialEditor';
 import LexicalPaginatedPreview from '../components/LexicalPaginatedPreview';
 import apiClient from '../api';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
+import { paginateMaterialHtml } from '../utils/materialPagination';
 
 const APP_BASE_PATH = import.meta.env.BASE_URL || '/';
 const PDF_WORKER_PATH = `${APP_BASE_PATH.replace(/\/$/, '')}/pdfjs/pdf.worker.min.js`;
@@ -317,19 +318,23 @@ function mergeTopicPagesIntoSingleHtml(topic) {
   return htmlChunks.length > 0 ? htmlChunks.join('<p><br></p><p><br></p>') : '<p><br></p>';
 }
 
-function buildSinglePageTopicFromHtml(topic, html) {
+function buildPaginatedTopicFromHtml(topic, html, orientation = 'portrait') {
   const contentHtml = sanitizeEditorHtml(html || '<p><br></p>');
-  const firstPage = topic?.pages?.[0] || createEmptyMaterialPage(1);
+  const existingPages = Array.isArray(topic?.pages) ? topic.pages : [];
+  const paginatedHtmlPages = paginateMaterialHtml(contentHtml, { orientation });
 
   return {
     ...topic,
-    pages: renumberMaterialPages([{
-      ...firstPage,
-      title: shouldAutoRenameMaterialPage(firstPage?.title) ? 'Halaman 1' : firstPage?.title || 'Halaman 1',
-      points: extractPointsFromHtml(contentHtml),
-      closing: '',
-      content_html: contentHtml,
-    }]),
+    pages: renumberMaterialPages(paginatedHtmlPages.map((pageHtml, pageIndex) => {
+      const currentPage = existingPages[pageIndex] || createEmptyMaterialPage(pageIndex + 1);
+      return {
+        ...currentPage,
+        title: shouldAutoRenameMaterialPage(currentPage?.title) ? `Halaman ${pageIndex + 1}` : currentPage?.title || `Halaman ${pageIndex + 1}`,
+        points: extractPointsFromHtml(pageHtml),
+        closing: '',
+        content_html: pageHtml,
+      };
+    })),
   };
 }
 
@@ -598,6 +603,7 @@ export default function AdminLearningMaterialEditor() {
   const pdfImportInputRef = useRef(null);
   const pdfOcrWorkerRef = useRef(null);
   const paginationFrameRef = useRef(null);
+  const lexicalEditorRef = useRef(null);
   const [learningContent, setLearningContent] = useState([]);
   const [materialForm, setMaterialForm] = useState({ title: '', topics: [] });
   const [materialMeta, setMaterialMeta] = useState({
@@ -625,10 +631,11 @@ export default function AdminLearningMaterialEditor() {
   const [pageZoom, setPageZoom] = useState('100');
   const [editorView, setEditorView] = useState('page');
   const [focusMode, setFocusMode] = useState(false);
-  const [editorEngine, setEditorEngine] = useState('legacy');
+  const editorEngine = 'lexical';
   const [lexicalDrafts, setLexicalDrafts] = useState({});
   const [lexicalSurfaceMode, setLexicalSurfaceMode] = useState('edit');
   const [lexicalPreviewPageCount, setLexicalPreviewPageCount] = useState(1);
+  const [lexicalEditorNonce, setLexicalEditorNonce] = useState(0);
   const [editorRenderNonce, setEditorRenderNonce] = useState(0);
   const selectedImageFigureRef = useRef(null);
   const imageInteractionRef = useRef(null);
@@ -2782,6 +2789,11 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
+    if (editorEngine === 'lexical') {
+      lexicalEditorRef.current?.insertImage?.(uploadedUrl.trim());
+      return;
+    }
+
     insertHtmlBlock(getImageFigureHtml(uploadedUrl.trim()));
     persistActivePageContent(getEditorNode()?.innerHTML || '');
     schedulePaginationRebalance(activePageIndex);
@@ -2825,6 +2837,30 @@ export default function AdminLearningMaterialEditor() {
       nextActivePage = insertIndex;
     }
 
+    if (editorEngine === 'lexical') {
+      const nextTopic = { ...currentTopic, pages: nextPages };
+      const nextHtml = mergeTopicPagesIntoSingleHtml(nextTopic);
+
+      markHistorySource('structure');
+      setMaterialForm((current) => ({
+        ...current,
+        topics: current.topics.map((topic, topicIndex) => (
+          topicIndex === activeTopicIndex ? nextTopic : topic
+        )),
+      }));
+      setLexicalDrafts((current) => ({
+        ...current,
+        [activeTopicIndex]: {
+          html: nextHtml,
+          json: current[activeTopicIndex]?.json || null,
+          dirty: true,
+        },
+      }));
+      setLexicalPreviewPageCount(nextPages.length);
+      setLexicalEditorNonce((current) => current + 1);
+      return;
+    }
+
     markHistorySource('structure');
     editorRefs.current = {};
     setMaterialForm((current) => ({
@@ -2838,7 +2874,7 @@ export default function AdminLearningMaterialEditor() {
     setActivePageIndex(nextActivePage);
     syncSelectionInUrl(activeTopicIndex, nextActivePage);
     setEditorRenderNonce((current) => current + 1);
-  }, [activeTopicIndex, markHistorySource, readTopicsFromEditor, syncSelectionInUrl]);
+  }, [activeTopicIndex, editorEngine, markHistorySource, readTopicsFromEditor, syncSelectionInUrl]);
 
   const getPdfJsLib = useCallback(async () => {
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -3057,10 +3093,20 @@ export default function AdminLearningMaterialEditor() {
       return;
     }
 
+    if (editorEngine === 'lexical') {
+      lexicalEditorRef.current?.insertHtml?.(`<p><a href="${url.trim()}">${url.trim()}</a></p>`);
+      return;
+    }
+
     runCommand('createLink', url.trim());
   };
 
   const insertTable = () => {
+    if (editorEngine === 'lexical') {
+      lexicalEditorRef.current?.insertTable?.();
+      return;
+    }
+
     insertHtmlBlock(`
       <table style="width:100%; border-collapse:collapse; margin:1rem 0;">
         <tbody>
@@ -3078,6 +3124,15 @@ export default function AdminLearningMaterialEditor() {
   };
 
   const insertInfoBox = () => {
+    if (editorEngine === 'lexical') {
+      lexicalEditorRef.current?.insertHtml?.(`
+        <p style="margin:1rem 0; padding:1rem 1.1rem; border-radius:16px; border:1px solid #bfdbfe; background:linear-gradient(180deg,#eff6ff 0%,#ffffff 100%);">
+          <strong>Catatan Penting:</strong> Tulis penekanan materi di sini.
+        </p>
+      `);
+      return;
+    }
+
     insertHtmlBlock(`
       <div style="margin:1rem 0; padding:1rem 1.1rem; border-radius:16px; border:1px solid #bfdbfe; background:linear-gradient(180deg,#eff6ff 0%,#ffffff 100%);">
         <strong style="display:block; margin-bottom:0.45rem;">Catatan Penting</strong>
@@ -3087,6 +3142,11 @@ export default function AdminLearningMaterialEditor() {
   };
 
   const insertQuoteBlock = () => {
+    if (editorEngine === 'lexical') {
+      lexicalEditorRef.current?.insertHtml?.('<blockquote>Kutipan atau rangkuman penting ditulis di sini.</blockquote>');
+      return;
+    }
+
     insertHtmlBlock(`
       <blockquote style="margin:1rem 0; padding:0.9rem 1rem; border-left:4px solid #60a5fa; background:#f8fbff; border-radius:12px;">
         Kutipan atau rangkuman penting ditulis di sini.
@@ -3095,10 +3155,20 @@ export default function AdminLearningMaterialEditor() {
   };
 
   const insertDivider = () => {
+    if (editorEngine === 'lexical') {
+      lexicalEditorRef.current?.insertDivider?.();
+      return;
+    }
+
     insertHtmlBlock('<hr style="border:none; border-top:1px solid #cbd5e1; margin:1.2rem 0;" />');
   };
 
   const setLineHeight = useCallback((value) => {
+    if (editorEngine === 'lexical') {
+      lexicalEditorRef.current?.setLineHeight?.(value);
+      return;
+    }
+
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
       return;
@@ -3162,7 +3232,7 @@ export default function AdminLearningMaterialEditor() {
     const selectionPageIndex = getEditorPageIndexFromNode(selection.anchorNode) ?? activePageIndex;
     rememberCurrentSelection(selectionPageIndex);
     syncEditorFormatState(selectionPageIndex);
-  }, [activePageIndex, markHistorySource, persistActivePageContent, rememberCurrentSelection, schedulePaginationRebalance, syncEditorFormatState]);
+  }, [activePageIndex, editorEngine, markHistorySource, persistActivePageContent, rememberCurrentSelection, schedulePaginationRebalance, syncEditorFormatState]);
 
   const closeImageContextMenu = useCallback(() => {
     setImageContextMenu((current) => (
@@ -4126,9 +4196,10 @@ export default function AdminLearningMaterialEditor() {
       topicIndex === activeTopicIndex
         ? (
             editorEngine === 'lexical'
-              ? buildSinglePageTopicFromHtml(
+              ? buildPaginatedTopicFromHtml(
                   topic,
-                  lexicalDrafts[topicIndex]?.html || mergeTopicPagesIntoSingleHtml(topic)
+                  lexicalDrafts[topicIndex]?.html || mergeTopicPagesIntoSingleHtml(topic),
+                  pageOrientation
                 )
               : { ...topic, pages: paginateTopicPagesForPersistence(topicIndex) }
           )
@@ -4160,11 +4231,12 @@ export default function AdminLearningMaterialEditor() {
         setLexicalDrafts((current) => ({
           ...current,
           [activeTopicIndex]: {
-            html: topics[activeTopicIndex]?.pages?.[0]?.content_html || '<p><br></p>',
+            html: lexicalDrafts[activeTopicIndex]?.html || mergeTopicPagesIntoSingleHtml(topics[activeTopicIndex]),
             json: current[activeTopicIndex]?.json || null,
             dirty: false,
           },
         }));
+        setLexicalPreviewPageCount(topics[activeTopicIndex]?.pages?.length || 1);
       }
       if (savedMaterial) {
         setMaterialMeta({
@@ -4190,29 +4262,6 @@ export default function AdminLearningMaterialEditor() {
     }
   };
 
-  const switchEditorEngine = useCallback((nextEngine) => {
-    if (nextEngine === editorEngine) {
-      return;
-    }
-
-    if (nextEngine === 'lexical') {
-      const nextTopics = readTopicsFromEditor();
-      const nextTopic = nextTopics[activeTopicIndex] || null;
-      setMaterialForm((current) => ({ ...current, topics: nextTopics }));
-      setLexicalSurfaceMode('edit');
-      setLexicalDrafts((current) => ({
-        ...current,
-        [activeTopicIndex]: {
-          html: mergeTopicPagesIntoSingleHtml(nextTopic),
-          json: current[activeTopicIndex]?.json || null,
-          dirty: false,
-        },
-      }));
-    }
-
-    setEditorEngine(nextEngine);
-  }, [activeTopicIndex, editorEngine, readTopicsFromEditor]);
-
   useEffect(() => {
     setLexicalPreviewPageCount(1);
     setLexicalSurfaceMode('edit');
@@ -4235,9 +4284,10 @@ export default function AdminLearningMaterialEditor() {
       return false;
     }
 
-    const nextTopic = buildSinglePageTopicFromHtml(
+    const nextTopic = buildPaginatedTopicFromHtml(
       currentTopic,
-      lexicalDrafts[activeTopicIndex]?.html || mergeTopicPagesIntoSingleHtml(currentTopic)
+      lexicalDrafts[activeTopicIndex]?.html || mergeTopicPagesIntoSingleHtml(currentTopic),
+      pageOrientation
     );
 
     markHistorySource('structure');
@@ -4251,7 +4301,7 @@ export default function AdminLearningMaterialEditor() {
     setLexicalDrafts((current) => ({
       ...current,
       [activeTopicIndex]: {
-        html: nextTopic.pages[0]?.content_html || '<p><br></p>',
+        html: lexicalDrafts[activeTopicIndex]?.html || mergeTopicPagesIntoSingleHtml(nextTopic),
         json: current[activeTopicIndex]?.json || null,
         dirty: false,
       },
@@ -4259,8 +4309,9 @@ export default function AdminLearningMaterialEditor() {
     setActivePageIndex(0);
     syncSelectionInUrl(activeTopicIndex, 0);
     setEditorRenderNonce((current) => current + 1);
+    setLexicalPreviewPageCount(nextTopic.pages.length || 1);
     return true;
-  }, [activeTopicIndex, lexicalDrafts, markHistorySource, materialForm.topics, syncSelectionInUrl]);
+  }, [activeTopicIndex, lexicalDrafts, markHistorySource, materialForm.topics, pageOrientation, syncSelectionInUrl]);
 
   const currentTopicLabel = activeTopic?.title?.trim() || `Document ${Math.max(1, activeTopicIndex + 1)}`;
   const totalTopicPages = Math.max(1, activeTopic?.pages?.length || 0);
@@ -4356,32 +4407,15 @@ export default function AdminLearningMaterialEditor() {
               </div>
 
               <div className="admin-ribbon-tabs-right">
-                <div className="admin-word-engine-switch">
-                  <button
-                    type="button"
-                    className={editorEngine === 'legacy' ? 'admin-word-engine-switch-button admin-word-engine-switch-button-active' : 'admin-word-engine-switch-button'}
-                    onClick={() => switchEditorEngine('legacy')}
-                  >
-                    Legacy
-                  </button>
-                  <button
-                    type="button"
-                    className={editorEngine === 'lexical' ? 'admin-word-engine-switch-button admin-word-engine-switch-button-active' : 'admin-word-engine-switch-button'}
-                    onClick={() => switchEditorEngine('lexical')}
-                  >
-                    Lexical Beta
-                  </button>
-                </div>
-                {editorEngine === 'lexical' && (
-                  <button
-                    type="button"
-                    className="admin-word-ribbon-action-button"
-                    onClick={applyLexicalDraftToTopic}
-                    disabled={!activeTopic}
-                  >
-                    Terapkan 1 Dokumen
-                  </button>
-                )}
+                <span className="admin-word-engine-badge">Lexical</span>
+                <button
+                  type="button"
+                  className="admin-word-ribbon-action-button"
+                  onClick={applyLexicalDraftToTopic}
+                  disabled={!activeTopic}
+                >
+                  Sinkronkan Halaman
+                </button>
                 <Link
                   to={`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`}
                   className="admin-word-ribbon-action-button"
@@ -4403,24 +4437,21 @@ export default function AdminLearningMaterialEditor() {
               className="admin-word-ribbon admin-ribbon-panel"
               aria-label="Toolbar format materi"
               onMouseDown={(event) => {
-                if (editorEngine !== 'legacy') {
-                  return;
-                }
-
-                rememberCurrentSelection();
-                if (event.target.closest?.('button')) {
-                  event.preventDefault();
+                if (editorEngine === 'legacy') {
+                  rememberCurrentSelection();
+                  if (event.target.closest?.('button')) {
+                    event.preventDefault();
+                  }
                 }
               }}
             >
-                  {editorEngine === 'lexical' ? (
+              {editorEngine === 'lexical' && activeRibbonTab === 'home' ? (
                 <div className="admin-lexical-mode-banner">
-                  <strong>Lexical Beta aktif</strong>
+                  <strong>Editor Lexical aktif</strong>
                   <p>
-                    Mode ini mengedit topik aktif sebagai satu dokumen scrollable.
-                    Saat kamu klik `Terapkan 1 Dokumen` atau `Simpan`, halaman-halaman topik aktif
-                    akan digabung menjadi satu dokumen yang lebih stabil untuk proses migrasi awal. Kamu
-                    juga bisa pindah ke `Preview A4` untuk melihat hasil pagination tanpa mode edit legacy.
+                    Dokumen aktif sekarang diedit langsung dengan Lexical. Tombol `Sinkronkan Halaman` dan `Simpan`
+                    akan membagi dokumen ini menjadi halaman A4 dari state Lexical yang sama, jadi mode legacy tidak
+                    lagi jadi jalur utama editor.
                   </p>
                 </div>
               ) : activeRibbonTab === 'home' && (
@@ -5017,11 +5048,11 @@ export default function AdminLearningMaterialEditor() {
               ) : (
                 <div className="admin-lexical-workspace">
                   <div className="admin-lexical-workspace-copy">
-                    <span>Lexical Beta</span>
+                    <span>Editor Utama</span>
                     <strong>{activeTopic?.title || currentTopicLabel}</strong>
                     <p>
-                      Topik aktif sekarang diedit sebagai satu dokumen scrollable.
-                      Ini sengaja dipakai sebagai jalur migrasi yang lebih stabil sebelum pagination dibangun ulang di atas editor state.
+                      Topik aktif sekarang diedit sebagai satu dokumen Lexical.
+                      Hasil preview dan hasil save mengambil pagination dari dokumen ini langsung.
                     </p>
                     <div className="admin-lexical-surface-switch">
                       <button
@@ -5043,7 +5074,8 @@ export default function AdminLearningMaterialEditor() {
                   </div>
                   {lexicalSurfaceMode === 'edit' ? (
                     <LexicalMaterialEditor
-                      key={`lexical-topic-${activeTopicIndex}`}
+                      ref={lexicalEditorRef}
+                      key={`lexical-topic-${activeTopicIndex}-${lexicalEditorNonce}`}
                       documentKey={`${activeTopicIndex}-${activeTopic?.pages?.length || 0}`}
                       initialHtml={activeLexicalHtml}
                       onChange={handleLexicalDraftChange}
@@ -5051,6 +5083,7 @@ export default function AdminLearningMaterialEditor() {
                   ) : (
                     <LexicalPaginatedPreview
                       html={activeLexicalHtml}
+                      orientation={pageOrientation}
                       onPageCountChange={setLexicalPreviewPageCount}
                     />
                   )}
@@ -5063,8 +5096,8 @@ export default function AdminLearningMaterialEditor() {
                 <span>
                   {editorEngine === 'lexical'
                     ? (lexicalSurfaceMode === 'preview'
-                        ? `Lexical Beta - Preview ${lexicalPreviewPageCount} halaman`
-                        : 'Lexical Beta - 1 dokumen aktif')
+                        ? `Lexical - Preview ${lexicalPreviewPageCount} halaman`
+                        : 'Lexical - 1 dokumen aktif')
                     : `Page ${activePageNumber} of ${totalTopicPages}`}
                 </span>
                 <span>{`${activeTopicWordCount} words`}</span>

@@ -9,6 +9,7 @@ import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
+import { $getSelectionStyleValueForProperty, $patchStyleText } from '@lexical/selection';
 import { HeadingNode, QuoteNode, $createHeadingNode, $createQuoteNode } from '@lexical/rich-text';
 import { LinkNode, TOGGLE_LINK_COMMAND, $isLinkNode } from '@lexical/link';
 import {
@@ -34,6 +35,76 @@ import {
   SELECTION_CHANGE_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
+
+const DEFAULT_FONT_SIZE = '16px';
+const DEFAULT_TEXT_COLOR = '#16243c';
+const DEFAULT_LINE_HEIGHT = '1.75';
+const FONT_SIZE_OPTIONS = ['12px', '14px', '16px', '20px', '28px', '36px'];
+const LINE_HEIGHT_OPTIONS = [
+  { value: '1.4', label: 'Rapat' },
+  { value: '1.75', label: 'Normal' },
+  { value: '2', label: 'Longgar' },
+];
+
+function parseStyleString(styleValue) {
+  return String(styleValue || '')
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce((accumulator, entry) => {
+      const [propertyName, ...propertyValueParts] = entry.split(':');
+      const key = propertyName?.trim();
+      const value = propertyValueParts.join(':').trim();
+
+      if (key && value) {
+        accumulator[key] = value;
+      }
+
+      return accumulator;
+    }, {});
+}
+
+function stringifyStyleObject(styleObject) {
+  return Object.entries(styleObject)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map(([propertyName, value]) => `${propertyName}: ${String(value).trim()}`)
+    .join('; ');
+}
+
+function mergeStyleString(styleValue, nextStyles) {
+  const mergedStyles = {
+    ...parseStyleString(styleValue),
+  };
+
+  Object.entries(nextStyles).forEach(([propertyName, propertyValue]) => {
+    if (propertyValue === null || propertyValue === undefined || String(propertyValue).trim() === '') {
+      delete mergedStyles[propertyName];
+      return;
+    }
+
+    mergedStyles[propertyName] = String(propertyValue).trim();
+  });
+
+  return stringifyStyleObject(mergedStyles);
+}
+
+function getTopLevelBlocks(selection) {
+  if (!$isRangeSelection(selection)) {
+    return [];
+  }
+
+  const blockMap = new Map();
+  selection.getNodes().forEach((node) => {
+    const topLevelElement = node.getTopLevelElementOrThrow();
+    blockMap.set(topLevelElement.getKey(), topLevelElement);
+  });
+
+  return [...blockMap.values()];
+}
+
+function getBlockStyleValue(block, propertyName, fallbackValue = '') {
+  return parseStyleString(block?.getStyle?.() || '')[propertyName] || fallbackValue;
+}
 
 function LexicalInitialHtmlPlugin({ initialHtml }) {
   const [editor] = useLexicalComposerContext();
@@ -135,8 +206,12 @@ function LexicalToolbarPlugin() {
     bold: false,
     italic: false,
     underline: false,
+    strikeThrough: false,
     link: false,
     align: 'left',
+    fontSize: DEFAULT_FONT_SIZE,
+    textColor: DEFAULT_TEXT_COLOR,
+    lineHeight: DEFAULT_LINE_HEIGHT,
   });
 
   const updateToolbar = useCallback(() => {
@@ -147,13 +222,27 @@ function LexicalToolbarPlugin() {
 
     const anchorNode = selection.anchor.getNode();
     const parentNode = anchorNode.getParent();
+    const selectedBlocks = getTopLevelBlocks(selection);
+    const firstLineHeight = selectedBlocks.length > 0
+      ? getBlockStyleValue(selectedBlocks[0], 'line-height', DEFAULT_LINE_HEIGHT)
+      : DEFAULT_LINE_HEIGHT;
+    const lineHeight = selectedBlocks.every((block) => (
+      getBlockStyleValue(block, 'line-height', DEFAULT_LINE_HEIGHT) === firstLineHeight
+    ))
+      ? firstLineHeight
+      : '';
+
     setCurrentBlockType(resolveBlockTypeFromSelection(selection));
     setFormatState({
       bold: selection.hasFormat('bold'),
       italic: selection.hasFormat('italic'),
       underline: selection.hasFormat('underline'),
+      strikeThrough: selection.hasFormat('strikethrough'),
       link: $isLinkNode(anchorNode) || $isLinkNode(parentNode),
       align: anchorNode.getTopLevelElementOrThrow().getFormatType() || 'left',
+      fontSize: $getSelectionStyleValueForProperty(selection, 'font-size', DEFAULT_FONT_SIZE) || DEFAULT_FONT_SIZE,
+      textColor: $getSelectionStyleValueForProperty(selection, 'color', DEFAULT_TEXT_COLOR) || DEFAULT_TEXT_COLOR,
+      lineHeight,
     });
   }, []);
 
@@ -211,6 +300,69 @@ function LexicalToolbarPlugin() {
     }
   };
 
+  const applyTextStyle = (stylePatch) => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) {
+        return;
+      }
+
+      $patchStyleText(selection, stylePatch);
+    });
+  };
+
+  const applyLineHeight = (value) => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) {
+        return;
+      }
+
+      getTopLevelBlocks(selection).forEach((block) => {
+        block.setStyle(mergeStyleString(block.getStyle(), {
+          'line-height': value,
+        }));
+      });
+    });
+  };
+
+  const resetFormatting = () => {
+    if (formatState.bold) {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold');
+    }
+    if (formatState.italic) {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic');
+    }
+    if (formatState.underline) {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
+    }
+    if (formatState.strikeThrough) {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough');
+    }
+    if (formatState.link) {
+      editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
+    }
+
+    editor.update(() => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) {
+        return;
+      }
+
+      $patchStyleText(selection, {
+        color: null,
+        'font-size': null,
+        'background-color': null,
+      });
+
+      getTopLevelBlocks(selection).forEach((block) => {
+        block.setStyle(mergeStyleString(block.getStyle(), {
+          'line-height': null,
+        }));
+      });
+    });
+  };
+
   return (
     <div className="admin-lexical-toolbar">
       <div className="admin-lexical-toolbar-group">
@@ -227,6 +379,28 @@ function LexicalToolbarPlugin() {
           <option value="bullet">Bullet</option>
           <option value="number">Nomor</option>
         </select>
+      </div>
+
+      <div className="admin-lexical-toolbar-group">
+        <label className="admin-lexical-toolbar-label" htmlFor="lexical-font-size">Ukuran</label>
+        <select
+          id="lexical-font-size"
+          value={formatState.fontSize}
+          onChange={(event) => applyTextStyle({ 'font-size': event.target.value })}
+        >
+          {FONT_SIZE_OPTIONS.map((option) => (
+            <option key={option} value={option}>{option.replace('px', '')}</option>
+          ))}
+        </select>
+        <label className="admin-lexical-toolbar-color" htmlFor="lexical-text-color">
+          <span>Warna</span>
+          <input
+            id="lexical-text-color"
+            type="color"
+            value={formatState.textColor}
+            onChange={(event) => applyTextStyle({ color: event.target.value })}
+          />
+        </label>
       </div>
 
       <div className="admin-lexical-toolbar-group">
@@ -253,18 +427,66 @@ function LexicalToolbarPlugin() {
         </button>
         <button
           type="button"
+          className={formatState.strikeThrough ? 'admin-lexical-toolbar-button admin-lexical-toolbar-button-active' : 'admin-lexical-toolbar-button'}
+          onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')}
+        >
+          S
+        </button>
+        <button
+          type="button"
           className={formatState.link ? 'admin-lexical-toolbar-button admin-lexical-toolbar-button-active' : 'admin-lexical-toolbar-button'}
           onClick={toggleLink}
         >
           Link
         </button>
+        <button type="button" className="admin-lexical-toolbar-button" onClick={resetFormatting}>
+          Reset
+        </button>
       </div>
 
       <div className="admin-lexical-toolbar-group">
-        <button type="button" className="admin-lexical-toolbar-button" onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'left')}>Kiri</button>
-        <button type="button" className="admin-lexical-toolbar-button" onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'center')}>Tengah</button>
-        <button type="button" className="admin-lexical-toolbar-button" onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'right')}>Kanan</button>
-        <button type="button" className="admin-lexical-toolbar-button" onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'justify')}>Justify</button>
+        <label className="admin-lexical-toolbar-label" htmlFor="lexical-line-height">Spasi</label>
+        <select
+          id="lexical-line-height"
+          value={formatState.lineHeight || ''}
+          onChange={(event) => applyLineHeight(event.target.value)}
+        >
+          <option value="">Campuran</option>
+          {LINE_HEIGHT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="admin-lexical-toolbar-group">
+        <button
+          type="button"
+          className={formatState.align === 'left' ? 'admin-lexical-toolbar-button admin-lexical-toolbar-button-active' : 'admin-lexical-toolbar-button'}
+          onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'left')}
+        >
+          Kiri
+        </button>
+        <button
+          type="button"
+          className={formatState.align === 'center' ? 'admin-lexical-toolbar-button admin-lexical-toolbar-button-active' : 'admin-lexical-toolbar-button'}
+          onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'center')}
+        >
+          Tengah
+        </button>
+        <button
+          type="button"
+          className={formatState.align === 'right' ? 'admin-lexical-toolbar-button admin-lexical-toolbar-button-active' : 'admin-lexical-toolbar-button'}
+          onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'right')}
+        >
+          Kanan
+        </button>
+        <button
+          type="button"
+          className={formatState.align === 'justify' ? 'admin-lexical-toolbar-button admin-lexical-toolbar-button-active' : 'admin-lexical-toolbar-button'}
+          onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'justify')}
+        >
+          Justify
+        </button>
       </div>
 
       <div className="admin-lexical-toolbar-group">

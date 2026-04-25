@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import LexicalMaterialEditor from '../components/LexicalMaterialEditor';
+import LexicalPaginatedPreview from '../components/LexicalPaginatedPreview';
 import apiClient from '../api';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
 
@@ -626,6 +627,8 @@ export default function AdminLearningMaterialEditor() {
   const [focusMode, setFocusMode] = useState(false);
   const [editorEngine, setEditorEngine] = useState('legacy');
   const [lexicalDrafts, setLexicalDrafts] = useState({});
+  const [lexicalSurfaceMode, setLexicalSurfaceMode] = useState('edit');
+  const [lexicalPreviewPageCount, setLexicalPreviewPageCount] = useState(1);
   const [editorRenderNonce, setEditorRenderNonce] = useState(0);
   const selectedImageFigureRef = useRef(null);
   const imageInteractionRef = useRef(null);
@@ -4196,6 +4199,7 @@ export default function AdminLearningMaterialEditor() {
       const nextTopics = readTopicsFromEditor();
       const nextTopic = nextTopics[activeTopicIndex] || null;
       setMaterialForm((current) => ({ ...current, topics: nextTopics }));
+      setLexicalSurfaceMode('edit');
       setLexicalDrafts((current) => ({
         ...current,
         [activeTopicIndex]: {
@@ -4208,6 +4212,11 @@ export default function AdminLearningMaterialEditor() {
 
     setEditorEngine(nextEngine);
   }, [activeTopicIndex, editorEngine, readTopicsFromEditor]);
+
+  useEffect(() => {
+    setLexicalPreviewPageCount(1);
+    setLexicalSurfaceMode('edit');
+  }, [activeTopicIndex]);
 
   const handleLexicalDraftChange = useCallback((nextDocument) => {
     setLexicalDrafts((current) => ({
@@ -4257,23 +4266,26 @@ export default function AdminLearningMaterialEditor() {
   const totalTopicPages = Math.max(1, activeTopic?.pages?.length || 0);
   const activePageNumber = Math.min(totalTopicPages, Math.max(1, activePageIndex + 1));
   const activeTopicWordCount = useMemo(() => {
-    if (!activeTopic?.pages?.length) {
+    const sourceHtml = editorEngine === 'lexical'
+      ? activeLexicalHtml
+      : (activeTopic?.pages || []).map((page) => page?.content_html || '').join(' ');
+
+    if (!sourceHtml) {
       return 0;
     }
 
-    return activeTopic.pages.reduce((total, page) => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(String(page?.content_html || ''), 'text/html');
-      const plainText = String(doc.body.textContent || '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (!plainText) {
-        return total;
-      }
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(String(sourceHtml), 'text/html');
+    const plainText = String(doc.body.textContent || '')
+      .replace(/\s+/g, ' ')
+      .trim();
 
-      return total + plainText.split(' ').filter(Boolean).length;
-    }, 0);
-  }, [activeTopic]);
+    if (!plainText) {
+      return 0;
+    }
+
+    return plainText.split(' ').filter(Boolean).length;
+  }, [activeLexicalHtml, activeTopic?.pages, editorEngine]);
   const handleZoomChange = useCallback((nextZoom) => {
     const safeZoom = Math.min(140, Math.max(70, Number(nextZoom) || 100));
     markHistorySource('layout');
@@ -4401,13 +4413,14 @@ export default function AdminLearningMaterialEditor() {
                 }
               }}
             >
-              {editorEngine === 'lexical' ? (
+                  {editorEngine === 'lexical' ? (
                 <div className="admin-lexical-mode-banner">
                   <strong>Lexical Beta aktif</strong>
                   <p>
                     Mode ini mengedit topik aktif sebagai satu dokumen scrollable.
                     Saat kamu klik `Terapkan 1 Dokumen` atau `Simpan`, halaman-halaman topik aktif
-                    akan digabung menjadi satu dokumen yang lebih stabil untuk proses migrasi awal.
+                    akan digabung menjadi satu dokumen yang lebih stabil untuk proses migrasi awal. Kamu
+                    juga bisa pindah ke `Preview A4` untuk melihat hasil pagination tanpa mode edit legacy.
                   </p>
                 </div>
               ) : activeRibbonTab === 'home' && (
@@ -5010,21 +5023,50 @@ export default function AdminLearningMaterialEditor() {
                       Topik aktif sekarang diedit sebagai satu dokumen scrollable.
                       Ini sengaja dipakai sebagai jalur migrasi yang lebih stabil sebelum pagination dibangun ulang di atas editor state.
                     </p>
+                    <div className="admin-lexical-surface-switch">
+                      <button
+                        type="button"
+                        className={lexicalSurfaceMode === 'edit' ? 'admin-lexical-surface-switch-button admin-lexical-surface-switch-button-active' : 'admin-lexical-surface-switch-button'}
+                        onClick={() => setLexicalSurfaceMode('edit')}
+                      >
+                        Editor
+                      </button>
+                      <button
+                        type="button"
+                        className={lexicalSurfaceMode === 'preview' ? 'admin-lexical-surface-switch-button admin-lexical-surface-switch-button-active' : 'admin-lexical-surface-switch-button'}
+                        onClick={() => setLexicalSurfaceMode('preview')}
+                      >
+                        Preview A4
+                      </button>
+                    </div>
                     {activeLexicalDraft?.dirty && <small>Perubahan Lexical belum diterapkan ke struktur topik.</small>}
                   </div>
-                  <LexicalMaterialEditor
-                    key={`lexical-topic-${activeTopicIndex}`}
-                    documentKey={`${activeTopicIndex}-${activeTopic?.pages?.length || 0}`}
-                    initialHtml={activeLexicalHtml}
-                    onChange={handleLexicalDraftChange}
-                  />
+                  {lexicalSurfaceMode === 'edit' ? (
+                    <LexicalMaterialEditor
+                      key={`lexical-topic-${activeTopicIndex}`}
+                      documentKey={`${activeTopicIndex}-${activeTopic?.pages?.length || 0}`}
+                      initialHtml={activeLexicalHtml}
+                      onChange={handleLexicalDraftChange}
+                    />
+                  ) : (
+                    <LexicalPaginatedPreview
+                      html={activeLexicalHtml}
+                      onPageCountChange={setLexicalPreviewPageCount}
+                    />
+                  )}
                 </div>
               )}
             </div>
 
             <div className="admin-word-statusbar">
               <div className="admin-word-statusbar-left">
-                <span>{editorEngine === 'lexical' ? 'Lexical Beta - 1 dokumen aktif' : `Page ${activePageNumber} of ${totalTopicPages}`}</span>
+                <span>
+                  {editorEngine === 'lexical'
+                    ? (lexicalSurfaceMode === 'preview'
+                        ? `Lexical Beta - Preview ${lexicalPreviewPageCount} halaman`
+                        : 'Lexical Beta - 1 dokumen aktif')
+                    : `Page ${activePageNumber} of ${totalTopicPages}`}
+                </span>
                 <span>{`${activeTopicWordCount} words`}</span>
                 <span>Bahasa Indonesia</span>
                 <span>Accessibility: Siap digunakan</span>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
+import { formatDateTime } from '../utils/date';
 
 export default function TestHistory() {
   const [history, setHistory] = useState([]);
@@ -59,8 +60,8 @@ export default function TestHistory() {
                     Dikerjakan pada{' '}
                     <strong>
                       {item.end_time
-                        ? new Date(item.end_time).toLocaleString('id-ID')
-                        : new Date(item.start_time).toLocaleString('id-ID')}
+                        ? formatDateTime(item.end_time)
+                        : formatDateTime(item.start_time)}
                     </strong>
                   </p>
                 </div>

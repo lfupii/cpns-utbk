@@ -82,7 +82,7 @@ export default function ProfileDropdown({
             </Link>
           )}
           <Link to="/profile" className="profile-dropdown-item">
-            Rincian Profile
+            Rincian Profil
           </Link>
           <Link to="/active-packages" className="profile-dropdown-item">
             Paket Aktif

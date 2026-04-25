@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
+import { formatDate } from '../utils/date';
 
 export default function ActivePackages() {
   const [packages, setPackages] = useState([]);
@@ -64,9 +65,9 @@ export default function ActivePackages() {
           </div>
 
           <div className="account-package-meta">
-            <p>Dibeli: <strong>{new Date(pkg.purchased_at).toLocaleDateString('id-ID')}</strong></p>
+            <p>Dibeli: <strong>{formatDate(pkg.purchased_at)}</strong></p>
             <p>
-              Aktif sampai: <strong>{pkg.access_expires_at ? new Date(pkg.access_expires_at).toLocaleDateString('id-ID') : 'Tanpa batas'}</strong>
+              Aktif sampai: <strong>{pkg.access_expires_at ? formatDate(pkg.access_expires_at) : 'Tanpa batas'}</strong>
             </p>
           </div>
 

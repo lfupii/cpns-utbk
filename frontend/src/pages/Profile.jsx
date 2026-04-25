@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import AccountShell from '../components/AccountShell';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
+import { formatDate } from '../utils/date';
 
 export default function Profile() {
   const { refreshProfile } = useAuth();
@@ -16,28 +17,34 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
+
+  const fetchProfile = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await apiClient.get('/auth/profile');
+      const data = response.data.data;
+      setProfile({
+        email: data.email || '',
+        full_name: data.full_name || '',
+        phone: data.phone || '',
+        birth_date: data.birth_date || '',
+        created_at: data.created_at || '',
+      });
+      setHasLoadedProfile(true);
+    } catch (err) {
+      setHasLoadedProfile(false);
+      setError(err.response?.data?.message || 'Gagal memuat profil');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const response = await apiClient.get('/auth/profile');
-        const data = response.data.data;
-        setProfile({
-          email: data.email || '',
-          full_name: data.full_name || '',
-          phone: data.phone || '',
-          birth_date: data.birth_date || '',
-          created_at: data.created_at || '',
-        });
-      } catch (err) {
-        setError(err.response?.data?.message || 'Gagal memuat profil');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchProfile();
-  }, []);
+  }, [fetchProfile]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -49,17 +56,32 @@ export default function Profile() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!hasLoadedProfile) {
+      setError('Profil belum berhasil dimuat. Coba muat ulang lalu simpan kembali.');
+      return;
+    }
+
     setSaving(true);
     setError('');
     setSuccess('');
 
     try {
       await apiClient.put('/auth/profile', {
-        full_name: profile.full_name,
+        full_name: profile.full_name.trim(),
         phone: profile.phone || null,
         birth_date: profile.birth_date || null,
       });
-      await refreshProfile();
+      const nextProfile = await refreshProfile();
+      if (nextProfile) {
+        setProfile((current) => ({
+          ...current,
+          email: nextProfile.email || '',
+          full_name: nextProfile.full_name || '',
+          phone: nextProfile.phone || '',
+          birth_date: nextProfile.birth_date || '',
+          created_at: nextProfile.created_at || current.created_at,
+        }));
+      }
       setSuccess('Profil berhasil diperbarui.');
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal memperbarui profil');
@@ -70,12 +92,21 @@ export default function Profile() {
 
   return (
     <AccountShell
-      title="Rincian Profile"
+      title="Rincian Profil"
       subtitle="Kelola data akunmu supaya pembelian paket dan riwayat belajar tetap rapi."
     >
       <div className="account-card">
         {loading ? (
           <p>Memuat profil...</p>
+        ) : !hasLoadedProfile ? (
+          <div className="account-form-grid">
+            {error && <div className="alert">{error}</div>}
+            <div className="account-form-actions">
+              <button type="button" className="btn btn-primary" onClick={fetchProfile}>
+                Coba Lagi
+              </button>
+            </div>
+          </div>
         ) : (
           <form onSubmit={handleSubmit} className="account-form-grid">
             {error && <div className="alert">{error}</div>}
@@ -121,7 +152,7 @@ export default function Profile() {
             <div className="account-meta-box">
               <span>Bergabung sejak</span>
               <strong>
-                {profile.created_at ? new Date(profile.created_at).toLocaleDateString('id-ID') : '-'}
+                {formatDate(profile.created_at)}
               </strong>
             </div>
 

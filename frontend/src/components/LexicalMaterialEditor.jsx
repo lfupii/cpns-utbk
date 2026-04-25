@@ -1,4 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -6,6 +14,7 @@ import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
+import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
@@ -22,6 +31,14 @@ import {
 } from '@lexical/list';
 import { $setBlocksType } from '@lexical/selection';
 import {
+  TableCellNode,
+  TableNode,
+  TableRowNode,
+  INSERT_TABLE_COMMAND,
+} from '@lexical/table';
+import { HorizontalRuleNode, INSERT_HORIZONTAL_RULE_COMMAND } from '@lexical/extension';
+import {
+  $applyNodeReplacement,
   $createParagraphNode,
   $getRoot,
   $getSelection,
@@ -29,6 +46,7 @@ import {
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
   COMMAND_PRIORITY_LOW,
+  DecoratorNode,
   FORMAT_ELEMENT_COMMAND,
   FORMAT_TEXT_COMMAND,
   REDO_COMMAND,
@@ -104,6 +122,133 @@ function getTopLevelBlocks(selection) {
 
 function getBlockStyleValue(block, propertyName, fallbackValue = '') {
   return parseStyleString(block?.getStyle?.() || '')[propertyName] || fallbackValue;
+}
+
+function MaterialImageComponent({ src, layout = 'center' }) {
+  return (
+    <figure
+      className={`material-image-frame material-image-wrap-${layout}`}
+      style={{
+        '--image-width': '320px',
+        '--image-margin-top': '16px',
+        '--image-margin-bottom': '16px',
+      }}
+    >
+      <img src={src} alt="Gambar materi" />
+    </figure>
+  );
+}
+
+class MaterialImageNode extends DecoratorNode {
+  static getType() {
+    return 'material-image';
+  }
+
+  static clone(node) {
+    return new MaterialImageNode(node.__src, node.__layout, node.__key);
+  }
+
+  static importJSON(serializedNode) {
+    return $createMaterialImageNode({
+      src: serializedNode.src,
+      layout: serializedNode.layout,
+    });
+  }
+
+  static importDOM() {
+    return {
+      figure: (domNode) => {
+        if (!domNode.classList.contains('material-image-frame')) {
+          return null;
+        }
+
+        return {
+          conversion: () => {
+            const imageNode = domNode.querySelector('img');
+            if (!(imageNode instanceof HTMLImageElement) || !imageNode.src) {
+              return { node: null };
+            }
+
+            const layoutClass = [...domNode.classList].find((className) => className.startsWith('material-image-wrap-'));
+            const layout = layoutClass?.replace('material-image-wrap-', '') || 'center';
+
+            return {
+              node: $createMaterialImageNode({
+                src: imageNode.getAttribute('src') || imageNode.src,
+                layout,
+              }),
+            };
+          },
+          priority: 3,
+        };
+      },
+      img: (domNode) => ({
+        conversion: () => ({
+          node: $createMaterialImageNode({
+            src: domNode.getAttribute('src') || domNode.src,
+            layout: 'center',
+          }),
+        }),
+        priority: 1,
+      }),
+    };
+  }
+
+  constructor(src, layout = 'center', key) {
+    super(key);
+    this.__src = src;
+    this.__layout = layout;
+  }
+
+  exportJSON() {
+    return {
+      type: 'material-image',
+      version: 1,
+      src: this.__src,
+      layout: this.__layout,
+    };
+  }
+
+  exportDOM() {
+    const figure = document.createElement('figure');
+    figure.className = `material-image-frame material-image-wrap-${this.__layout}`;
+    figure.style.setProperty('--image-width', '320px');
+    figure.style.setProperty('--image-margin-top', '16px');
+    figure.style.setProperty('--image-margin-bottom', '16px');
+
+    const image = document.createElement('img');
+    image.src = this.__src;
+    image.alt = 'Gambar materi';
+
+    figure.appendChild(image);
+    return { element: figure };
+  }
+
+  createDOM() {
+    const container = document.createElement('div');
+    container.className = 'admin-lexical-image-node';
+    return container;
+  }
+
+  updateDOM() {
+    return false;
+  }
+
+  decorate() {
+    return <MaterialImageComponent src={this.__src} layout={this.__layout} />;
+  }
+
+  isInline() {
+    return false;
+  }
+
+  getTextContent() {
+    return '';
+  }
+}
+
+function $createMaterialImageNode({ src, layout = 'center' }) {
+  return $applyNodeReplacement(new MaterialImageNode(src, layout));
 }
 
 function LexicalInitialHtmlPlugin({ initialHtml }) {
@@ -195,6 +340,73 @@ function setBlockType(editor, blockType) {
       $setBlocksType(selection, () => $createHeadingNode(blockType));
     }
   });
+}
+
+function LexicalEditorBridge({ editorRef }) {
+  const [editor] = useLexicalComposerContext();
+
+  useImperativeHandle(editorRef, () => ({
+    focus() {
+      editor.focus();
+    },
+    insertHtml(html) {
+      editor.update(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return;
+        }
+
+        const parser = new DOMParser();
+        const dom = parser.parseFromString(String(html || ''), 'text/html');
+        const nodes = $generateNodesFromDOM(editor, dom);
+        selection.insertNodes(nodes);
+      });
+      editor.focus();
+    },
+    insertImage(src, layout = 'center') {
+      editor.update(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection) || !src) {
+          return;
+        }
+
+        selection.insertNodes([
+          $createMaterialImageNode({ src, layout }),
+          $createParagraphNode(),
+        ]);
+      });
+      editor.focus();
+    },
+    insertTable() {
+      editor.dispatchCommand(INSERT_TABLE_COMMAND, {
+        columns: '2',
+        rows: '2',
+        includeHeaders: false,
+      });
+      editor.focus();
+    },
+    insertDivider() {
+      editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
+      editor.focus();
+    },
+    setLineHeight(value) {
+      editor.update(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return;
+        }
+
+        getTopLevelBlocks(selection).forEach((block) => {
+          block.setStyle(mergeStyleString(block.getStyle(), {
+            'line-height': value,
+          }));
+        });
+      });
+      editor.focus();
+    },
+  }), [editor]);
+
+  return null;
 }
 
 function LexicalToolbarPlugin() {
@@ -497,17 +709,29 @@ function LexicalToolbarPlugin() {
   );
 }
 
-export default function LexicalMaterialEditor({
+const LexicalMaterialEditor = forwardRef(function LexicalMaterialEditor({
   documentKey,
   initialHtml,
   onChange,
-}) {
+}, ref) {
+  const bridgeRef = useRef(null);
   const initialConfig = useMemo(() => ({
     namespace: `material-lexical-editor-${documentKey}`,
     onError: (error) => {
       throw error;
     },
-    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode],
+    nodes: [
+      HeadingNode,
+      QuoteNode,
+      ListNode,
+      ListItemNode,
+      LinkNode,
+      MaterialImageNode,
+      TableNode,
+      TableRowNode,
+      TableCellNode,
+      HorizontalRuleNode,
+    ],
     theme: {
       paragraph: 'admin-lexical-paragraph',
       quote: 'admin-lexical-quote',
@@ -526,8 +750,34 @@ export default function LexicalMaterialEditor({
         listitem: 'admin-lexical-list-item',
       },
       link: 'admin-lexical-link',
+      table: 'admin-lexical-table',
+      tableRow: 'admin-lexical-table-row',
+      tableCell: 'admin-lexical-table-cell',
+      tableCellHeader: 'admin-lexical-table-cell-header',
+      hr: 'admin-lexical-divider',
     },
   }), [documentKey]);
+
+  useImperativeHandle(ref, () => ({
+    focus() {
+      bridgeRef.current?.focus?.();
+    },
+    insertHtml(html) {
+      bridgeRef.current?.insertHtml?.(html);
+    },
+    insertImage(src, layout) {
+      bridgeRef.current?.insertImage?.(src, layout);
+    },
+    insertTable() {
+      bridgeRef.current?.insertTable?.();
+    },
+    insertDivider() {
+      bridgeRef.current?.insertDivider?.();
+    },
+    setLineHeight(value) {
+      bridgeRef.current?.setLineHeight?.(value);
+    },
+  }), []);
 
   return (
     <LexicalComposer initialConfig={initialConfig}>
@@ -542,6 +792,8 @@ export default function LexicalMaterialEditor({
           <HistoryPlugin />
           <ListPlugin />
           <LinkPlugin />
+          <TablePlugin />
+          <LexicalEditorBridge editorRef={bridgeRef} />
           <LexicalInitialHtmlPlugin initialHtml={initialHtml} />
           <OnChangePlugin
             onChange={(editorState, editor) => {
@@ -557,4 +809,6 @@ export default function LexicalMaterialEditor({
       </div>
     </LexicalComposer>
   );
-}
+});
+
+export default LexicalMaterialEditor;

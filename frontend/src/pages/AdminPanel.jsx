@@ -70,13 +70,6 @@ const createDefaultOptionSet = () => ([
   createOption(3),
 ]);
 
-const QUESTION_IMAGE_LAYOUT_OPTIONS = [
-  { value: 'top', label: 'Atas' },
-  { value: 'bottom', label: 'Bawah' },
-  { value: 'left', label: 'Kiri' },
-  { value: 'right', label: 'Kanan' },
-];
-
 const TEST_MODE_OPTIONS = [
   { value: 'standard', label: 'Standard' },
   { value: 'cpns_cat', label: 'CPNS CAT' },
@@ -91,15 +84,6 @@ const createEmptyLearningQuestion = (order = 1) => ({
   question_order: order,
   options: createDefaultOptionSet(),
 });
-
-function buildOptionImageEditorState(options) {
-  return (options || []).reduce((accumulator, option, index) => {
-    if (option?.image_url) {
-      accumulator[index] = true;
-    }
-    return accumulator;
-  }, {});
-}
 
 function computeMiniTestDurationSeconds(section, questionCount) {
   const totalQuestions = Math.max(0, Number(questionCount || 0));
@@ -149,22 +133,6 @@ function createSectionClone(section, sections) {
     code,
     name,
     order: (sections?.length || 0) + 1,
-  };
-}
-
-function createEmptyMaterialPage(pageNumber) {
-  return {
-    title: `Halaman ${pageNumber}`,
-    points: [''],
-    closing: '',
-    content_html: '',
-  };
-}
-
-function createEmptyMaterialTopic(topicNumber, firstPageNumber = 1) {
-  return {
-    title: `Topik ${topicNumber}`,
-    pages: firstPageNumber ? [createEmptyMaterialPage(firstPageNumber)] : [],
   };
 }
 
@@ -397,7 +365,6 @@ export default function AdminPanel() {
   const [questionSaving, setQuestionSaving] = useState(false);
   const [importingQuestions, setImportingQuestions] = useState(false);
   const [workflowSaving, setWorkflowSaving] = useState(false);
-  const [mediaUploading, setMediaUploading] = useState({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [packageForm, setPackageForm] = useState(null);
@@ -409,8 +376,6 @@ export default function AdminPanel() {
   const [questionSectionFilter, setQuestionSectionFilter] = useState('');
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState('');
-  const [showQuestionImageTools, setShowQuestionImageTools] = useState(false);
-  const [openOptionImageEditors, setOpenOptionImageEditors] = useState({});
   const [learningContent, setLearningContent] = useState([]);
   const [loadingLearningContent, setLoadingLearningContent] = useState(false);
   const [learningSectionCode, setLearningSectionCode] = useState('');
@@ -424,8 +389,6 @@ export default function AdminPanel() {
   ]);
   const [learningQuestionsSaving, setLearningQuestionsSaving] = useState(false);
   const [activeLearningQuestionIndex, setActiveLearningQuestionIndex] = useState(0);
-  const [showLearningQuestionImageTools, setShowLearningQuestionImageTools] = useState(false);
-  const [openLearningOptionImageEditors, setOpenLearningOptionImageEditors] = useState({});
   const [expandedLearningQuestionKey, setExpandedLearningQuestionKey] = useState('');
   const [adminView, setAdminView] = useState('dashboard');
   const [savingWorkspaceDraft, setSavingWorkspaceDraft] = useState(false);
@@ -478,10 +441,6 @@ export default function AdminPanel() {
     ),
     [activeMaterialTopicIndex, activeMaterialTopics]
   );
-  const activeLearningQuestion = useMemo(
-    () => learningQuestionsForm[activeLearningQuestionIndex] || null,
-    [activeLearningQuestionIndex, learningQuestionsForm]
-  );
   const selectedPackageSummary = useMemo(() => ({
     sectionCount: packageSections.length,
     materialPageCount: learningContent.reduce((total, section) => total + getMaterialTopics(section.material).length, 0),
@@ -502,16 +461,6 @@ export default function AdminPanel() {
 
     return Math.round(((completedMaterialSections + completedQuizSections) / (packageSections.length * 2)) * 100);
   }, [completedMaterialSections, completedQuizSections, packageSections.length]);
-  const syncLearningQuestionPanels = useCallback((question) => {
-    setShowLearningQuestionImageTools(Boolean(question?.question_image_url));
-    setOpenLearningOptionImageEditors(buildOptionImageEditorState(question?.options || []));
-  }, []);
-  const selectLearningQuestion = useCallback((questionIndex) => {
-    const nextQuestion = learningQuestionsForm[questionIndex] || null;
-    setActiveLearningQuestionIndex(questionIndex);
-    syncLearningQuestionPanels(nextQuestion);
-  }, [learningQuestionsForm, syncLearningQuestionPanels]);
-
   const fetchAdminQuestions = useCallback(async (packageId) => {
     const response = await apiClient.get(`/admin/questions?package_id=${packageId}&workspace=${adminWorkspace}&_=${Date.now()}`);
     return response.data.data || [];
@@ -587,8 +536,6 @@ export default function AdminPanel() {
       return haystack.includes(needle);
     });
   }, [questionQuery, questionSectionFilter, questions]);
-  const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
-  const learningQuestionImagePanelVisible = showLearningQuestionImageTools || Boolean(activeLearningQuestion?.question_image_url);
   const miniTestDurationSeconds = useMemo(
     () => computeMiniTestDurationSeconds(activeLearningSection, learningQuestionsForm.length),
     [activeLearningSection, learningQuestionsForm.length]
@@ -808,9 +755,8 @@ export default function AdminPanel() {
 
     setLearningQuestionsForm(normalizedQuestions);
     setActiveLearningQuestionIndex(0);
-    syncLearningQuestionPanels(normalizedQuestions[0] || null);
     setExpandedLearningQuestionKey('');
-  }, [activeLearningSection, syncLearningQuestionPanels]);
+  }, [activeLearningSection]);
 
   useEffect(() => {
     setQuestionForm((current) => {
@@ -841,7 +787,7 @@ export default function AdminPanel() {
 
     const topics = getMaterialTopics(activeLearningSection.material);
     setActiveMaterialTopicIndex(topics.length > 0 ? 0 : null);
-  }, [activeLearningSection?.code]);
+  }, [activeLearningSection]);
 
   useEffect(() => {
     if (!activeLearningSection) {
@@ -860,7 +806,7 @@ export default function AdminPanel() {
 
       return current;
     });
-  }, [activeLearningSection?.material]);
+  }, [activeLearningSection]);
 
   useEffect(() => {
     if (['dashboard', 'paket', 'materi', 'soal'].includes(requestedAdminView)) {
@@ -914,8 +860,6 @@ export default function AdminPanel() {
   const resetQuestionForm = () => {
     setQuestionForm(createEmptyQuestionForm(preferredSectionCode));
     setShowQuestionEditor(false);
-    setShowQuestionImageTools(false);
-    setOpenOptionImageEditors({});
   };
 
   const handlePackageChange = (event) => {
@@ -1112,30 +1056,6 @@ export default function AdminPanel() {
     }));
   };
 
-  const toggleOptionImageEditor = (index) => {
-    setOpenOptionImageEditors((current) => ({
-      ...current,
-      [index]: !current[index],
-    }));
-  };
-
-  const clearQuestionImage = () => {
-    setQuestionForm((current) => ({
-      ...current,
-      question_image_url: '',
-      question_image_layout: 'top',
-    }));
-  };
-
-  const clearOptionImage = (index) => {
-    setQuestionForm((current) => ({
-      ...current,
-      options: current.options.map((option, optionIndex) => (
-        optionIndex === index ? { ...option, image_url: '' } : option
-      )),
-    }));
-  };
-
   const handleCorrectOptionChange = (index) => {
     setQuestionForm((current) => ({
       ...current,
@@ -1158,16 +1078,6 @@ export default function AdminPanel() {
 
   const removeOption = (index) => {
     if (questionForm.options.length <= 2) return;
-
-    setOpenOptionImageEditors((current) => Object.entries(current).reduce((nextState, [key, value]) => {
-      const numericKey = Number(key);
-      if (numericKey === index) {
-        return nextState;
-      }
-
-      nextState[numericKey > index ? numericKey - 1 : numericKey] = value;
-      return nextState;
-    }, {}));
 
     setQuestionForm((current) => {
       const nextOptions = current.options
@@ -1292,107 +1202,6 @@ export default function AdminPanel() {
     }
   };
 
-  const uploadAdminMedia = async (file, context, uploadKey) => {
-    if (!file) {
-      return null;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('context', context);
-
-    setMediaUploading((current) => ({
-      ...current,
-      [uploadKey]: true,
-    }));
-
-    try {
-      const response = await apiClient.post('/admin/media-upload', formData);
-      return response.data?.data?.url || '';
-    } catch (err) {
-      setError(err.response?.data?.message || 'Gagal mengupload gambar');
-      return null;
-    } finally {
-      setMediaUploading((current) => ({
-        ...current,
-        [uploadKey]: false,
-      }));
-    }
-  };
-
-  const handleQuestionImageUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    const uploadedUrl = await uploadAdminMedia(file, 'tryout-question', 'tryout-question');
-    if (uploadedUrl) {
-      setQuestionForm((current) => ({
-        ...current,
-        question_image_url: uploadedUrl,
-      }));
-      setShowQuestionImageTools(true);
-    }
-
-    event.target.value = '';
-  };
-
-  const handleQuestionOptionImageUpload = async (index, event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    const uploadedUrl = await uploadAdminMedia(file, 'tryout-option', `tryout-option-${index}`);
-    if (uploadedUrl) {
-      handleOptionFieldChange(index, 'image_url', uploadedUrl);
-      setOpenOptionImageEditors((current) => ({
-        ...current,
-        [index]: true,
-      }));
-    }
-
-    event.target.value = '';
-  };
-
-  const handleLearningQuestionImageUpload = async (questionIndex, event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    const uploadedUrl = await uploadAdminMedia(file, 'mini-test-question', `learning-question-${questionIndex}`);
-    if (uploadedUrl) {
-      updateLearningQuestion(questionIndex, 'question_image_url', uploadedUrl);
-      if (questionIndex === activeLearningQuestionIndex) {
-        setShowLearningQuestionImageTools(true);
-      }
-    }
-
-    event.target.value = '';
-  };
-
-  const handleLearningOptionImageUpload = async (questionIndex, optionIndex, event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    const uploadedUrl = await uploadAdminMedia(file, 'mini-test-option', `learning-option-${questionIndex}-${optionIndex}`);
-    if (uploadedUrl) {
-      updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', uploadedUrl);
-      if (questionIndex === activeLearningQuestionIndex) {
-        setOpenLearningOptionImageEditors((current) => ({
-          ...current,
-          [optionIndex]: true,
-        }));
-      }
-    }
-
-    event.target.value = '';
-  };
-
   const updateLearningQuestion = (questionIndex, field, value) => {
     setLearningQuestionsForm((current) => current.map((question, index) => (
       index === questionIndex
@@ -1417,30 +1226,6 @@ export default function AdminPanel() {
     )));
   };
 
-  const toggleLearningOptionImageEditor = (optionIndex) => {
-    setOpenLearningOptionImageEditors((current) => ({
-      ...current,
-      [optionIndex]: !current[optionIndex],
-    }));
-  };
-
-  const clearLearningQuestionImage = (questionIndex) => {
-    updateLearningQuestion(questionIndex, 'question_image_url', '');
-    if (questionIndex === activeLearningQuestionIndex) {
-      setShowLearningQuestionImageTools(false);
-    }
-  };
-
-  const clearLearningOptionImage = (questionIndex, optionIndex) => {
-    updateLearningQuestionOption(questionIndex, optionIndex, 'image_url', '');
-    if (questionIndex === activeLearningQuestionIndex) {
-      setOpenLearningOptionImageEditors((current) => ({
-        ...current,
-        [optionIndex]: false,
-      }));
-    }
-  };
-
   const setLearningQuestionCorrectOption = (questionIndex, optionIndex) => {
     setLearningQuestionsForm((current) => current.map((question, index) => (
       index === questionIndex
@@ -1455,66 +1240,10 @@ export default function AdminPanel() {
     )));
   };
 
-  const addLearningQuestionOption = (questionIndex) => {
-    setLearningQuestionsForm((current) => current.map((question, index) => {
-      if (index !== questionIndex || question.options.length >= 5) {
-        return question;
-      }
-
-      return {
-        ...question,
-        options: [...question.options, createOption(question.options.length)],
-      };
-    }));
-  };
-
-  const removeLearningQuestionOption = (questionIndex, optionIndex) => {
-    const targetQuestion = learningQuestionsForm[questionIndex];
-    if (!targetQuestion || targetQuestion.options.length <= 2) {
-      return;
-    }
-
-    setLearningQuestionsForm((current) => current.map((question, index) => {
-      if (index !== questionIndex) {
-        return question;
-      }
-
-      const nextOptions = question.options
-        .filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex)
-        .map((option, currentOptionIndex) => ({
-          ...option,
-          letter: String.fromCharCode(65 + currentOptionIndex),
-        }));
-
-      if (!nextOptions.some((option) => option.is_correct) && nextOptions[0]) {
-        nextOptions[0].is_correct = true;
-      }
-
-      return {
-        ...question,
-        options: nextOptions,
-      };
-    }));
-
-    if (questionIndex === activeLearningQuestionIndex) {
-      setOpenLearningOptionImageEditors((current) => Object.entries(current).reduce((nextState, [key, value]) => {
-        const numericKey = Number(key);
-        if (numericKey === optionIndex) {
-          return nextState;
-        }
-
-        nextState[numericKey > optionIndex ? numericKey - 1 : numericKey] = value;
-        return nextState;
-      }, {}));
-    }
-  };
-
   const addLearningQuestion = () => {
     const nextQuestionIndex = learningQuestionsForm.length;
     setLearningQuestionsForm((current) => [...current, createEmptyLearningQuestion(current.length + 1)]);
     setActiveLearningQuestionIndex(nextQuestionIndex);
-    setShowLearningQuestionImageTools(false);
-    setOpenLearningOptionImageEditors({});
   };
 
   const removeLearningQuestion = (questionIndex) => {
@@ -1530,7 +1259,6 @@ export default function AdminPanel() {
 
     setLearningQuestionsForm(nextQuestions);
     setActiveLearningQuestionIndex(nextActiveIndex);
-    syncLearningQuestionPanels(nextQuestions[nextActiveIndex] || null);
     setExpandedLearningQuestionKey('');
   };
 
@@ -1670,15 +1398,6 @@ export default function AdminPanel() {
     setAdminView('soal');
     setLearningEditorMode('');
     setEditingSectionActionsCode('');
-  };
-
-  const openMaterialTopicEditor = (sectionCode, topicIndex = 0) => {
-    if (!selectedPackageId || !sectionCode) {
-      return;
-    }
-
-    const resolvedTopic = topicIndex === 'new' ? 'new' : Math.max(0, Number(topicIndex) || 0);
-    navigate(`/admin/learning-material/${selectedPackageId}/${sectionCode}?topic=${resolvedTopic}&workspace=${adminWorkspace}`);
   };
 
   const openMaterialTopicPreview = (sectionCode, topicIndex = 0) => {
@@ -3501,7 +3220,7 @@ export default function AdminPanel() {
                     <span>Opsi</span>
                     <span>Aksi</span>
                   </div>
-                  {filteredQuestions.map((question, index) => {
+                  {filteredQuestions.map((question) => {
                     const isExpanded = Number(expandedQuestionId) === Number(question.id);
                     return (
                       <div key={question.id} className={`admin-question-row-wrap admin-question-row-wrap-modern ${isExpanded ? 'admin-question-row-wrap-expanded' : ''}`}>

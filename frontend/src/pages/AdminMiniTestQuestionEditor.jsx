@@ -86,7 +86,6 @@ export default function AdminMiniTestQuestionEditor() {
   const { packageId, sectionCode, questionId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [packages, setPackages] = useState([]);
   const [sections, setSections] = useState([]);
   const [sectionQuestions, setSectionQuestions] = useState([]);
   const [questionForm, setQuestionForm] = useState(createEmptyLearningQuestion());
@@ -105,10 +104,6 @@ export default function AdminMiniTestQuestionEditor() {
   const createdFlag = searchParams.get('created') || '';
   const workspace = searchParams.get('workspace') === 'draft' ? 'draft' : 'published';
   const isDraftWorkspace = workspace === 'draft';
-  const selectedPackage = useMemo(
-    () => packages.find((pkg) => Number(pkg.id) === numericPackageId) || null,
-    [numericPackageId, packages]
-  );
   const activeSection = useMemo(
     () => sections.find((section) => String(section.code) === String(sectionCode)) || null,
     [sectionCode, sections]
@@ -131,15 +126,10 @@ export default function AdminMiniTestQuestionEditor() {
     setError('');
 
     try {
-      const [packagesResponse, learningResponse] = await Promise.all([
-        apiClient.get(`/admin/packages?workspace=${workspace}`),
-        apiClient.get(`/admin/learning-content?package_id=${numericPackageId}&workspace=${workspace}&_=${Date.now()}`),
-      ]);
-      const nextPackages = packagesResponse.data.data || [];
+      const learningResponse = await apiClient.get(`/admin/learning-content?package_id=${numericPackageId}&workspace=${workspace}&_=${Date.now()}`);
       const nextSections = learningResponse.data.data?.sections || [];
       const nextSection = nextSections.find((section) => String(section.code) === String(sectionCode));
 
-      setPackages(nextPackages);
       setSections(nextSections);
       setSectionQuestions(nextSection?.questions || []);
 

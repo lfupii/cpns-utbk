@@ -8052,7 +8052,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-lexical-preview-page-header {
   position: absolute;
-  top: 9mm;
+  top: 6mm;
   left: 16mm;
   right: 16mm;
   z-index: 2;
@@ -8107,7 +8107,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-lexical-preview-page-pdf-visual .admin-lexical-preview-page-header {
-  top: 9mm;
+  top: 6mm;
 }
 
 .admin-lexical-preview-page-pdf-visual .admin-lexical-preview-page-body {

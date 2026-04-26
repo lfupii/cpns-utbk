@@ -2285,6 +2285,22 @@ export default function AdminLearningMaterialEditor() {
   ]);
 
   const applyParagraphMetrics = useCallback((pageIndex, { leftIndent, firstLineIndent }) => {
+    if (editorEngine === 'lexical') {
+      const safeLeftIndent = Math.max(0, Math.min(PARAGRAPH_INDENT_LIMIT, Math.round(leftIndent)));
+      const safeFirstLineIndent = Math.max(-FIRST_LINE_INDENT_LIMIT, Math.min(FIRST_LINE_INDENT_LIMIT, Math.round(firstLineIndent)));
+
+      lexicalEditorRef.current?.setParagraphMetrics?.({
+        leftIndent: safeLeftIndent,
+        firstLineIndent: safeFirstLineIndent,
+      });
+      setActiveParagraphMetrics({
+        pageIndex: 0,
+        leftIndent: safeLeftIndent,
+        firstLineIndent: safeFirstLineIndent,
+      });
+      return true;
+    }
+
     const context = getSelectionEditorContext(pageIndex);
     if (!context) {
       return false;
@@ -2309,7 +2325,7 @@ export default function AdminLearningMaterialEditor() {
     });
     schedulePaginationRebalance(resolvedPageIndex);
     return true;
-  }, [getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance]);
+  }, [editorEngine, getSelectionEditorContext, persistActivePageContent, schedulePaginationRebalance]);
 
   const applyParagraphIndent = useCallback((pageIndex, direction = 1) => {
     const context = getSelectionEditorContext(pageIndex);
@@ -4278,6 +4294,14 @@ export default function AdminLearningMaterialEditor() {
     }));
   }, [activeTopicIndex]);
 
+  const handleLexicalSelectionMetricsChange = useCallback((metrics) => {
+    setActiveParagraphMetrics({
+      pageIndex: 0,
+      leftIndent: Math.max(0, Math.min(PARAGRAPH_INDENT_LIMIT, Math.round(metrics?.leftIndent || 0))),
+      firstLineIndent: Math.max(-FIRST_LINE_INDENT_LIMIT, Math.min(FIRST_LINE_INDENT_LIMIT, Math.round(metrics?.firstLineIndent || 0))),
+    });
+  }, []);
+
   const applyLexicalDraftToTopic = useCallback(() => {
     const currentTopic = materialForm.topics[activeTopicIndex];
     if (!currentTopic) {
@@ -4723,15 +4747,19 @@ export default function AdminLearningMaterialEditor() {
                 </>
               )}
             </div>
-          {activeTopic && editorEngine === 'legacy' && (
+          {activeTopic && (
             <div className="admin-learning-ruler-dock">
               <div
                 className={rulerShellClassName}
                 style={{ '--doc-page-zoom': `${Number(pageZoom) / 100}` }}
               >
                 <div className="admin-learning-ruler-meta">
-                  <span>Ruler Aktif</span>
-                  <strong>{`Halaman ${Math.max(1, activeParagraphMetrics.pageIndex + 1)}`}</strong>
+                  <span>{editorEngine === 'lexical' ? 'Ruler Dokumen' : 'Ruler Aktif'}</span>
+                  <strong>
+                    {editorEngine === 'lexical'
+                      ? `Dokumen ${activeTopicIndex + 1}`
+                      : `Halaman ${Math.max(1, activeParagraphMetrics.pageIndex + 1)}`}
+                  </strong>
                 </div>
                 <div className="admin-word-ruler" aria-hidden="true">
                   <div
@@ -4741,7 +4769,7 @@ export default function AdminLearningMaterialEditor() {
                     {currentRulerMarks.map((mark) => (
                       <span key={`global-ruler-${mark}`}>{mark}</span>
                     ))}
-                    {activePage && (
+                    {(editorEngine === 'lexical' || activePage) && (
                       <div className="admin-word-ruler-markers">
                         <button
                           type="button"
@@ -4749,10 +4777,14 @@ export default function AdminLearningMaterialEditor() {
                           style={{ left: activeRulerLeftPercent }}
                           onPointerDown={(event) => {
                             event.preventDefault();
-                            activatePage(activeParagraphMetrics.pageIndex);
+                            if (editorEngine === 'legacy') {
+                              activatePage(activeParagraphMetrics.pageIndex);
+                            } else {
+                              lexicalEditorRef.current?.focus?.();
+                            }
                             paragraphRulerDragRef.current = {
                               marker: 'left',
-                              pageIndex: activeParagraphMetrics.pageIndex,
+                              pageIndex: editorEngine === 'lexical' ? 0 : activeParagraphMetrics.pageIndex,
                               startLeftIndent: activeParagraphMetrics.leftIndent,
                               startFirstLineIndent: activeParagraphMetrics.firstLineIndent,
                             };
@@ -4765,10 +4797,14 @@ export default function AdminLearningMaterialEditor() {
                           style={{ left: activeRulerFirstLinePercent }}
                           onPointerDown={(event) => {
                             event.preventDefault();
-                            activatePage(activeParagraphMetrics.pageIndex);
+                            if (editorEngine === 'legacy') {
+                              activatePage(activeParagraphMetrics.pageIndex);
+                            } else {
+                              lexicalEditorRef.current?.focus?.();
+                            }
                             paragraphRulerDragRef.current = {
                               marker: 'first-line',
-                              pageIndex: activeParagraphMetrics.pageIndex,
+                              pageIndex: editorEngine === 'lexical' ? 0 : activeParagraphMetrics.pageIndex,
                               startLeftIndent: activeParagraphMetrics.leftIndent,
                               startFirstLineIndent: activeParagraphMetrics.firstLineIndent,
                             };
@@ -5079,6 +5115,7 @@ export default function AdminLearningMaterialEditor() {
                       documentKey={`${activeTopicIndex}-${activeTopic?.pages?.length || 0}`}
                       initialHtml={activeLexicalHtml}
                       onChange={handleLexicalDraftChange}
+                      onSelectionMetricsChange={handleLexicalSelectionMetricsChange}
                     />
                   ) : (
                     <LexicalPaginatedPreview

@@ -6012,46 +6012,74 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-word-editable ul,
-.admin-word-editable ol {
+.admin-word-editable ol,
+.admin-lexical-editor ul,
+.admin-lexical-editor ol,
+.learning-rich-content ul,
+.learning-rich-content ol {
   padding-left: 1.35rem;
 }
 
 .admin-word-editable .material-list-preset-decimal-alpha-roman,
 .admin-word-editable .material-list-preset-decimal-decimal-decimal,
-.admin-word-editable .material-list-preset-disc-circle-square {
+.admin-word-editable .material-list-preset-disc-circle-square,
+.admin-lexical-editor [style*="--material-list-preset: decimal-alpha-roman"],
+.admin-lexical-editor [style*="--material-list-preset: decimal-decimal-decimal"],
+.admin-lexical-editor [style*="--material-list-preset: disc-circle-square"],
+.learning-rich-content [style*="--material-list-preset: decimal-alpha-roman"],
+.learning-rich-content [style*="--material-list-preset: decimal-decimal-decimal"],
+.learning-rich-content [style*="--material-list-preset: disc-circle-square"] {
   list-style-position: outside;
 }
 
-.admin-word-editable .material-list-preset-decimal-alpha-roman {
+.admin-word-editable .material-list-preset-decimal-alpha-roman,
+.admin-lexical-editor [style*="--material-list-preset: decimal-alpha-roman"],
+.learning-rich-content [style*="--material-list-preset: decimal-alpha-roman"] {
   list-style-type: decimal;
 }
 
-.admin-word-editable .material-list-preset-decimal-alpha-roman ol {
+.admin-word-editable .material-list-preset-decimal-alpha-roman ol,
+.admin-lexical-editor [style*="--material-list-preset: decimal-alpha-roman"] ol,
+.learning-rich-content [style*="--material-list-preset: decimal-alpha-roman"] ol {
   list-style-type: lower-alpha;
 }
 
-.admin-word-editable .material-list-preset-decimal-alpha-roman ol ol {
+.admin-word-editable .material-list-preset-decimal-alpha-roman ol ol,
+.admin-lexical-editor [style*="--material-list-preset: decimal-alpha-roman"] ol ol,
+.learning-rich-content [style*="--material-list-preset: decimal-alpha-roman"] ol ol {
   list-style-type: lower-roman;
 }
 
-.admin-word-editable .material-list-preset-decimal-decimal-decimal {
+.admin-word-editable .material-list-preset-decimal-decimal-decimal,
+.admin-lexical-editor [style*="--material-list-preset: decimal-decimal-decimal"],
+.learning-rich-content [style*="--material-list-preset: decimal-decimal-decimal"] {
   list-style-type: decimal;
 }
 
 .admin-word-editable .material-list-preset-decimal-decimal-decimal ol,
-.admin-word-editable .material-list-preset-decimal-decimal-decimal ol ol {
+.admin-word-editable .material-list-preset-decimal-decimal-decimal ol ol,
+.admin-lexical-editor [style*="--material-list-preset: decimal-decimal-decimal"] ol,
+.admin-lexical-editor [style*="--material-list-preset: decimal-decimal-decimal"] ol ol,
+.learning-rich-content [style*="--material-list-preset: decimal-decimal-decimal"] ol,
+.learning-rich-content [style*="--material-list-preset: decimal-decimal-decimal"] ol ol {
   list-style-type: decimal;
 }
 
-.admin-word-editable .material-list-preset-disc-circle-square {
+.admin-word-editable .material-list-preset-disc-circle-square,
+.admin-lexical-editor [style*="--material-list-preset: disc-circle-square"],
+.learning-rich-content [style*="--material-list-preset: disc-circle-square"] {
   list-style-type: disc;
 }
 
-.admin-word-editable .material-list-preset-disc-circle-square ul {
+.admin-word-editable .material-list-preset-disc-circle-square ul,
+.admin-lexical-editor [style*="--material-list-preset: disc-circle-square"] ul,
+.learning-rich-content [style*="--material-list-preset: disc-circle-square"] ul {
   list-style-type: circle;
 }
 
-.admin-word-editable .material-list-preset-disc-circle-square ul ul {
+.admin-word-editable .material-list-preset-disc-circle-square ul ul,
+.admin-lexical-editor [style*="--material-list-preset: disc-circle-square"] ul ul,
+.learning-rich-content [style*="--material-list-preset: disc-circle-square"] ul ul {
   list-style-type: square;
 }
 
@@ -6064,18 +6092,24 @@ html[data-theme='dark'] .theme-toggle-thumb {
   border: 1px solid rgba(214, 226, 240, 0.95);
 }
 
-.admin-word-editable .material-image-frame {
+.admin-word-editable .material-image-frame,
+.admin-lexical-editor .material-image-frame,
+.admin-lexical-image-node .material-image-frame {
   cursor: pointer;
 }
 
-.admin-word-editable .material-image-frame.is-selected {
+.admin-word-editable .material-image-frame.is-selected,
+.admin-lexical-editor .material-image-frame.is-selected,
+.admin-lexical-image-node .material-image-frame.is-selected {
   box-shadow:
     0 22px 36px rgba(31, 63, 109, 0.14),
     0 0 0 3px rgba(59, 130, 246, 0.24);
 }
 
 .admin-word-editable .material-image-frame.is-selected,
-.admin-word-editable .material-image-frame.is-dragging {
+.admin-word-editable .material-image-frame.is-dragging,
+.admin-lexical-editor .material-image-frame.is-selected,
+.admin-lexical-image-node .material-image-frame.is-selected {
   cursor: move;
 }
 
@@ -6083,7 +6117,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
   cursor: se-resize;
 }
 
-.admin-word-editable .material-image-frame::after {
+.admin-word-editable .material-image-frame::after,
+.admin-lexical-editor .material-image-frame::after,
+.admin-lexical-image-node .material-image-frame::after {
   content: '';
   position: absolute;
   right: 0.6rem;
@@ -6100,7 +6136,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-word-editable .material-image-frame.is-selected::after,
-.admin-word-editable .material-image-frame.is-resizing::after {
+.admin-word-editable .material-image-frame.is-resizing::after,
+.admin-lexical-editor .material-image-frame.is-selected::after,
+.admin-lexical-image-node .material-image-frame.is-selected::after {
   opacity: 1;
 }
 
@@ -7532,6 +7570,26 @@ html[data-theme='dark'] .theme-toggle-thumb {
   top: 6.8rem;
   display: grid;
   gap: 0.85rem;
+  max-height: calc(100dvh - 8.4rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.2rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.42) rgba(255, 255, 255, 0.08);
+}
+
+.admin-word-sidepane::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-word-sidepane::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.admin-word-sidepane::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
 }
 
 .admin-word-sidepane-section,
@@ -7774,10 +7832,50 @@ html[data-theme='dark'] .theme-toggle-thumb {
   cursor: not-allowed;
 }
 
+.admin-lexical-page-jump-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.admin-lexical-page-jump-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+}
+
+.admin-lexical-page-jump-button {
+  min-height: 30px;
+  padding: 0 0.72rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.admin-lexical-page-jump-button-active {
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.98) 0%, rgba(219, 234, 254, 0.98) 100%);
+  color: #1d4ed8;
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
 .admin-lexical-surface {
   position: relative;
   min-height: 520px;
   padding: 1.2rem 1.3rem;
+  width: min(100%, var(--lexical-page-width, 794px));
+  margin: 0 auto;
   border-radius: 1.2rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
@@ -7786,7 +7884,38 @@ html[data-theme='dark'] .theme-toggle-thumb {
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
+.admin-lexical-page-guide-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.admin-lexical-page-break {
+  position: absolute;
+  left: 1.3rem;
+  right: 1.3rem;
+  height: 0;
+  border-top: 2px dashed rgba(148, 163, 184, 0.42);
+}
+
+.admin-lexical-page-break span {
+  position: absolute;
+  top: -0.78rem;
+  right: 0;
+  padding: 0.16rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.62);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .admin-lexical-editor {
+  position: relative;
+  z-index: 1;
   min-height: 480px;
   color: #16243c;
   font-size: 1rem;
@@ -8087,6 +8216,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
   .admin-word-sidepane {
     position: static;
     top: auto;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 }
 
@@ -8132,6 +8264,9 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
   .admin-word-sidepane {
     top: auto;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 
   .admin-word-statusbar {

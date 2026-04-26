@@ -17,6 +17,7 @@ import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { useLexicalNodeSelection } from '@lexical/react/useLexicalNodeSelection';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $getSelectionStyleValueForProperty, $patchStyleText } from '@lexical/selection';
 import { HeadingNode, QuoteNode, $createHeadingNode, $createQuoteNode } from '@lexical/rich-text';
@@ -45,6 +46,7 @@ import {
   $getSelection,
   $isDecoratorNode,
   $isElementNode,
+  $isNodeSelection,
   $isRangeSelection,
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
@@ -67,11 +69,37 @@ const DEFAULT_LINE_HEIGHT = '1.75';
 const PARAGRAPH_INDENT_STEP = 36;
 const FIRST_LINE_INDENT_LIMIT = 72;
 const PARAGRAPH_INDENT_LIMIT = 240;
+const PAGE_DIMENSIONS = {
+  portrait: { width: 794, height: 1123 },
+  landscape: { width: 1123, height: 794 },
+};
+const IMAGE_LAYOUT_OPTIONS = [
+  ['inline', 'Inline'],
+  ['left', 'Kiri'],
+  ['center', 'Tengah'],
+  ['right', 'Kanan'],
+];
 const FONT_SIZE_OPTIONS = ['12px', '14px', '16px', '20px', '28px', '36px'];
 const LINE_HEIGHT_OPTIONS = [
   { value: '1.4', label: 'Rapat' },
   { value: '1.75', label: 'Normal' },
   { value: '2', label: 'Longgar' },
+];
+const BULLET_LIST_STYLE_OPTIONS = [
+  { value: 'disc', label: 'Bullet' },
+  { value: 'circle', label: 'Lingkaran' },
+  { value: 'square', label: 'Kotak' },
+];
+const ORDERED_LIST_STYLE_OPTIONS = [
+  { value: 'decimal', label: '1. 2. 3.' },
+  { value: 'lower-alpha', label: 'a. b. c.' },
+  { value: 'upper-alpha', label: 'A. B. C.' },
+  { value: 'upper-roman', label: 'I. II. III.' },
+];
+const MULTILEVEL_LIST_STYLE_OPTIONS = [
+  { value: 'decimal-alpha-roman', label: '1. a. i.' },
+  { value: 'decimal-decimal-decimal', label: '1.1.1.' },
+  { value: 'disc-circle-square', label: 'Bullet Bertingkat' },
 ];
 
 function parseStyleString(styleValue) {
@@ -171,15 +199,121 @@ function getPrimarySelectedBlock(selection) {
   return getTopLevelBlocks(selection)[0] || null;
 }
 
-function MaterialImageComponent({ src, layout = 'center' }) {
+function getNearestListNode(node) {
+  let currentNode = node;
+
+  while (currentNode) {
+    if ($isListNode(currentNode)) {
+      return currentNode;
+    }
+
+    currentNode = currentNode.getParent?.() || null;
+  }
+
+  return null;
+}
+
+function getRootListNode(listNode) {
+  let currentListNode = listNode;
+  let parentNode = currentListNode?.getParent?.() || null;
+
+  while ($isListNode(parentNode)) {
+    currentListNode = parentNode;
+    parentNode = currentListNode.getParent?.() || null;
+  }
+
+  return currentListNode;
+}
+
+function getListStyleValue(listNode) {
+  if (!$isListNode(listNode)) {
+    return '';
+  }
+
+  const currentStyles = parseStyleString(listNode.getStyle?.() || '');
+  if (currentStyles['list-style-type']) {
+    return currentStyles['list-style-type'];
+  }
+
+  return listNode.getListType?.() === 'number' ? 'decimal' : 'disc';
+}
+
+function getListPresetValue(listNode) {
+  if (!$isListNode(listNode)) {
+    return '';
+  }
+
+  return parseStyleString(listNode.getStyle?.() || '')['--material-list-preset'] || '';
+}
+
+function getListStylePresetForDepth(presetValue, depth) {
+  const presetMap = {
+    'decimal-alpha-roman': ['decimal', 'lower-alpha', 'lower-roman'],
+    'decimal-decimal-decimal': ['decimal', 'decimal', 'decimal'],
+    'disc-circle-square': ['disc', 'circle', 'square'],
+  };
+
+  const styleSequence = presetMap[presetValue];
+  if (!styleSequence) {
+    return '';
+  }
+
+  return styleSequence[Math.min(depth, styleSequence.length - 1)] || styleSequence[0];
+}
+
+function applySingleListStyle(listNode, styleValue, { presetValue = '' } = {}) {
+  if (!$isListNode(listNode)) {
+    return;
+  }
+
+  listNode.setStyle(mergeStyleString(listNode.getStyle(), {
+    'list-style-type': styleValue || null,
+    '--material-list-preset': presetValue || null,
+  }));
+}
+
+function applyListPresetRecursively(listNode, presetValue, depth = 0) {
+  if (!$isListNode(listNode)) {
+    return;
+  }
+
+  const styleValue = getListStylePresetForDepth(presetValue, depth);
+  applySingleListStyle(listNode, styleValue, {
+    presetValue: depth === 0 ? presetValue : '',
+  });
+
+  listNode.getChildren().forEach((childNode) => {
+    childNode.getChildren?.().forEach((nestedNode) => {
+      if ($isListNode(nestedNode)) {
+        applyListPresetRecursively(nestedNode, presetValue, depth + 1);
+      }
+    });
+  });
+}
+
+function MaterialImageComponent({ nodeKey, src, layout = 'center' }) {
+  const [editor] = useLexicalComposerContext();
+  const [isSelected, setSelected, clearSelection] = useLexicalNodeSelection(nodeKey);
+
+  const handlePointerDown = useCallback((event) => {
+    event.preventDefault();
+    if (!event.shiftKey) {
+      clearSelection();
+    }
+    setSelected(true);
+    editor.focus();
+  }, [clearSelection, editor, setSelected]);
+
   return (
     <figure
-      className={`material-image-frame material-image-wrap-${layout}`}
+      className={isSelected ? `material-image-frame material-image-wrap-${layout} is-selected` : `material-image-frame material-image-wrap-${layout}`}
       style={{
         '--image-width': '320px',
         '--image-margin-top': '16px',
         '--image-margin-bottom': '16px',
       }}
+      onPointerDown={handlePointerDown}
+      onContextMenu={handlePointerDown}
     >
       <img src={src} alt="Gambar materi" />
     </figure>
@@ -247,6 +381,20 @@ class MaterialImageNode extends DecoratorNode {
     this.__layout = layout;
   }
 
+  getLayout() {
+    return this.getLatest().__layout || 'center';
+  }
+
+  setLayout(layout) {
+    const writable = this.getWritable();
+    writable.__layout = layout || 'center';
+    return writable;
+  }
+
+  getSrc() {
+    return this.getLatest().__src || '';
+  }
+
   exportJSON() {
     return {
       type: 'material-image',
@@ -282,7 +430,7 @@ class MaterialImageNode extends DecoratorNode {
   }
 
   decorate() {
-    return <MaterialImageComponent src={this.__src} layout={this.__layout} />;
+    return <MaterialImageComponent nodeKey={this.getKey()} src={this.__src} layout={this.__layout} />;
   }
 
   isInline() {
@@ -804,11 +952,34 @@ function LexicalToolbarPlugin() {
     fontSize: DEFAULT_FONT_SIZE,
     textColor: DEFAULT_TEXT_COLOR,
     lineHeight: DEFAULT_LINE_HEIGHT,
+    listStyle: '',
+    listPreset: '',
+    imageSelected: false,
+    imageLayout: 'center',
   });
 
   const updateToolbar = useCallback(() => {
     const selection = $getSelection();
+    if ($isNodeSelection(selection)) {
+      const selectedNodes = selection.getNodes();
+      const selectedImageNode = selectedNodes.find((node) => node instanceof MaterialImageNode) || null;
+
+      setFormatState((current) => ({
+        ...current,
+        imageSelected: Boolean(selectedImageNode),
+        imageLayout: selectedImageNode?.getLayout?.() || 'center',
+      }));
+      return;
+    }
+
     if (!$isRangeSelection(selection)) {
+      setFormatState((current) => ({
+        ...current,
+        listStyle: '',
+        listPreset: '',
+        imageSelected: false,
+        imageLayout: 'center',
+      }));
       return;
     }
 
@@ -823,6 +994,8 @@ function LexicalToolbarPlugin() {
     ))
       ? firstLineHeight
       : '';
+    const nearestListNode = getNearestListNode(anchorNode);
+    const rootListNode = getRootListNode(nearestListNode);
 
     setCurrentBlockType(resolveBlockTypeFromSelection(selection));
     setFormatState({
@@ -835,6 +1008,10 @@ function LexicalToolbarPlugin() {
       fontSize: $getSelectionStyleValueForProperty(selection, 'font-size', DEFAULT_FONT_SIZE) || DEFAULT_FONT_SIZE,
       textColor: $getSelectionStyleValueForProperty(selection, 'color', DEFAULT_TEXT_COLOR) || DEFAULT_TEXT_COLOR,
       lineHeight,
+      listStyle: getListStyleValue(nearestListNode),
+      listPreset: getListPresetValue(rootListNode),
+      imageSelected: false,
+      imageLayout: 'center',
     });
   }, []);
 
@@ -916,6 +1093,89 @@ function LexicalToolbarPlugin() {
         }));
       });
     });
+  };
+
+  const ensureListThenRun = (kind, runner) => {
+    const desiredBlockType = kind === 'unordered' ? 'bullet' : 'number';
+    const selection = editor.getEditorState().read(() => $getSelection());
+    const hasList = $isRangeSelection(selection) && Boolean(getNearestListNode(selection.anchor.getNode()));
+
+    if (hasList) {
+      runner();
+      return;
+    }
+
+    setBlockType(editor, desiredBlockType);
+    requestAnimationFrame(runner);
+  };
+
+  const applyListStyle = (kind, styleValue) => {
+    ensureListThenRun(kind, () => {
+      editor.update(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return;
+        }
+
+        const listNode = getNearestListNode(selection.anchor.getNode());
+        if (!listNode) {
+          return;
+        }
+
+        applySingleListStyle(listNode, styleValue, { presetValue: '' });
+      });
+    });
+  };
+
+  const applyMultilevelListPreset = (presetValue) => {
+    const kind = presetValue === 'disc-circle-square' ? 'unordered' : 'ordered';
+    ensureListThenRun(kind, () => {
+      editor.update(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return;
+        }
+
+        const listNode = getNearestListNode(selection.anchor.getNode());
+        const rootListNode = getRootListNode(listNode);
+        if (!rootListNode) {
+          return;
+        }
+
+        applyListPresetRecursively(rootListNode, presetValue);
+      });
+    });
+  };
+
+  const updateSelectedImageLayout = (layout) => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if (!$isNodeSelection(selection)) {
+        return;
+      }
+
+      selection.getNodes().forEach((node) => {
+        if (node instanceof MaterialImageNode) {
+          node.setLayout(layout);
+        }
+      });
+    });
+  };
+
+  const removeSelectedImage = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if (!$isNodeSelection(selection)) {
+        return;
+      }
+
+      selection.getNodes().forEach((node) => {
+        if (node instanceof MaterialImageNode) {
+          node.remove();
+        }
+      });
+    });
+    editor.focus();
   };
 
   const resetFormatting = () => {
@@ -1051,6 +1311,55 @@ function LexicalToolbarPlugin() {
       </div>
 
       <div className="admin-lexical-toolbar-group">
+        <label className="admin-lexical-toolbar-label" htmlFor="lexical-bullet-style">List</label>
+        <select
+          id="lexical-bullet-style"
+          value={formatState.listStyle && formatState.listStyle !== 'decimal' ? formatState.listStyle : ''}
+          onChange={(event) => {
+            if (!event.target.value) {
+              return;
+            }
+            applyListStyle('unordered', event.target.value);
+          }}
+        >
+          <option value="">Bullet</option>
+          {BULLET_LIST_STYLE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <select
+          id="lexical-number-style"
+          value={formatState.listStyle && !['disc', 'circle', 'square'].includes(formatState.listStyle) ? formatState.listStyle : ''}
+          onChange={(event) => {
+            if (!event.target.value) {
+              return;
+            }
+            applyListStyle('ordered', event.target.value);
+          }}
+        >
+          <option value="">Nomor</option>
+          {ORDERED_LIST_STYLE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <select
+          id="lexical-list-preset"
+          value={formatState.listPreset || ''}
+          onChange={(event) => {
+            if (!event.target.value) {
+              return;
+            }
+            applyMultilevelListPreset(event.target.value);
+          }}
+        >
+          <option value="">Bertingkat</option>
+          {MULTILEVEL_LIST_STYLE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="admin-lexical-toolbar-group">
         <button
           type="button"
           className={formatState.align === 'left' ? 'admin-lexical-toolbar-button admin-lexical-toolbar-button-active' : 'admin-lexical-toolbar-button'}
@@ -1085,6 +1394,24 @@ function LexicalToolbarPlugin() {
         <button type="button" className="admin-lexical-toolbar-button" onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)} disabled={!canUndo}>Undo</button>
         <button type="button" className="admin-lexical-toolbar-button" onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)} disabled={!canRedo}>Redo</button>
       </div>
+
+      {formatState.imageSelected && (
+        <div className="admin-lexical-toolbar-group">
+          <label className="admin-lexical-toolbar-label" htmlFor="lexical-image-layout">Gambar</label>
+          <select
+            id="lexical-image-layout"
+            value={formatState.imageLayout}
+            onChange={(event) => updateSelectedImageLayout(event.target.value)}
+          >
+            {IMAGE_LAYOUT_OPTIONS.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <button type="button" className="admin-lexical-toolbar-button" onClick={removeSelectedImage}>
+            Hapus Gambar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1094,8 +1421,16 @@ const LexicalMaterialEditor = forwardRef(function LexicalMaterialEditor({
   initialHtml,
   onChange,
   onSelectionMetricsChange,
+  pageOrientation = 'portrait',
+  estimatedPageCount = 1,
 }, ref) {
   const bridgeRef = useRef(null);
+  const surfaceRef = useRef(null);
+  const pageSize = useMemo(
+    () => PAGE_DIMENSIONS[pageOrientation] || PAGE_DIMENSIONS.portrait,
+    [pageOrientation]
+  );
+  const [currentVirtualPage, setCurrentVirtualPage] = useState(1);
   const initialConfig = useMemo(() => ({
     namespace: `material-lexical-editor-${documentKey}`,
     onError: (error) => {
@@ -1163,11 +1498,96 @@ const LexicalMaterialEditor = forwardRef(function LexicalMaterialEditor({
     },
   }), []);
 
+  const pageJumpTargets = useMemo(() => {
+    const totalPages = Math.max(1, Number(estimatedPageCount) || 1);
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    return [1, 2, 3, 4, 5, totalPages - 1, totalPages];
+  }, [estimatedPageCount]);
+
+  const scrollToVirtualPage = useCallback((pageNumber) => {
+    const safePageNumber = Math.max(1, Math.min(Number(estimatedPageCount) || 1, Number(pageNumber) || 1));
+    const surfaceNode = surfaceRef.current;
+    if (!surfaceNode) {
+      return;
+    }
+
+    const rect = surfaceNode.getBoundingClientRect();
+    const targetY = window.scrollY + rect.top + ((safePageNumber - 1) * pageSize.height) - 156;
+    window.scrollTo({
+      top: Math.max(0, targetY),
+      behavior: 'smooth',
+    });
+  }, [estimatedPageCount, pageSize.height]);
+
+  useEffect(() => {
+    const updateCurrentVirtualPage = () => {
+      const surfaceNode = surfaceRef.current;
+      if (!surfaceNode) {
+        return;
+      }
+
+      const rect = surfaceNode.getBoundingClientRect();
+      const relativeTop = Math.max(0, (window.scrollY + 196) - (window.scrollY + rect.top));
+      const nextPage = Math.max(1, Math.min(
+        Math.max(1, Number(estimatedPageCount) || 1),
+        Math.floor(relativeTop / pageSize.height) + 1
+      ));
+      setCurrentVirtualPage(nextPage);
+    };
+
+    updateCurrentVirtualPage();
+    window.addEventListener('scroll', updateCurrentVirtualPage, { passive: true });
+    window.addEventListener('resize', updateCurrentVirtualPage);
+    return () => {
+      window.removeEventListener('scroll', updateCurrentVirtualPage);
+      window.removeEventListener('resize', updateCurrentVirtualPage);
+    };
+  }, [estimatedPageCount, pageSize.height]);
+
   return (
     <LexicalComposer initialConfig={initialConfig}>
       <div className="admin-lexical-shell">
         <LexicalToolbarPlugin />
-        <div className="admin-lexical-surface">
+        <div className="admin-lexical-page-jump-bar">
+          <span>Mode edit dokumen • estimasi {Math.max(1, estimatedPageCount)} halaman A4</span>
+          {pageJumpTargets.length > 1 && (
+            <div className="admin-lexical-page-jump-actions">
+              {pageJumpTargets.map((pageNumber) => (
+                <button
+                  key={`virtual-page-${pageNumber}`}
+                  type="button"
+                  className={pageNumber === currentVirtualPage ? 'admin-lexical-page-jump-button admin-lexical-page-jump-button-active' : 'admin-lexical-page-jump-button'}
+                  onClick={() => scrollToVirtualPage(pageNumber)}
+                >
+                  Page {pageNumber}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div
+          ref={surfaceRef}
+          className="admin-lexical-surface"
+          style={{
+            '--lexical-page-height': `${pageSize.height}px`,
+            '--lexical-page-width': `${pageSize.width}px`,
+            minHeight: `${Math.max(pageSize.height, pageSize.height * Math.max(1, estimatedPageCount))}px`,
+          }}
+        >
+          <div className="admin-lexical-page-guide-layer" aria-hidden="true">
+            {Array.from({ length: Math.max(0, (Number(estimatedPageCount) || 1) - 1) }, (_, index) => (
+              <div
+                key={`lexical-page-break-${index + 1}`}
+                className="admin-lexical-page-break"
+                style={{ top: `${pageSize.height * (index + 1)}px` }}
+              >
+                <span>Page {index + 2}</span>
+              </div>
+            ))}
+          </div>
           <RichTextPlugin
             contentEditable={<ContentEditable className="admin-lexical-editor" />}
             placeholder={<div className="admin-lexical-placeholder">Mulai tulis materi di sini...</div>}

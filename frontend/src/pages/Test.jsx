@@ -589,7 +589,7 @@ export default function Test() {
       await saveAnswer(questionId, currentDraftAnswerValue);
     }
 
-    const nextMarkedReview = !Boolean(reviewFlags[questionKey] || reviewFlags[questionId]);
+    const nextMarkedReview = !(reviewFlags[questionKey] || reviewFlags[questionId]);
 
     setReviewFlags((current) => {
       const next = { ...current };

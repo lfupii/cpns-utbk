@@ -22,7 +22,7 @@ module.exports = {
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
   ],
-  ignorePatterns: ['dist/', 'node_modules/'],
+  ignorePatterns: ['dist/', 'node_modules/', 'public/'],
   rules: {
     'react/react-in-jsx-scope': 'off',
     'react/prop-types': 'off',

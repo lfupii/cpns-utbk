@@ -9,11 +9,6 @@ import { paginateMaterialHtml } from '../utils/materialPagination';
 
 const APP_BASE_PATH = import.meta.env.BASE_URL || '/';
 const PDF_WORKER_PATH = `${APP_BASE_PATH.replace(/\/$/, '')}/pdfjs/pdf.worker.min.js`;
-const OCR_ASSET_ROOT = `${APP_BASE_PATH.replace(/\/$/, '')}/tesseract`;
-const OCR_WORKER_PATH = `${OCR_ASSET_ROOT}/worker/worker.min.js`;
-const OCR_CORE_PATH = `${OCR_ASSET_ROOT}/core/tesseract-core-lstm.wasm.js`;
-const OCR_LANG_PATH = `${OCR_ASSET_ROOT}/lang-data`;
-const OCR_LANGUAGE = 'eng';
 const PARAGRAPH_INDENT_STEP = 36;
 const FIRST_LINE_INDENT_LIMIT = 72;
 const PARAGRAPH_INDENT_LIMIT = 240;
@@ -370,62 +365,12 @@ function buildDefaultPdfImportOptions() {
   };
 }
 
-function extractPdfTextFromItems(items = []) {
-  let buffer = '';
-  let previousY = null;
+function buildImportedPdfPageHtml(imageUrl = '') {
+  if (!imageUrl) {
+    return '<p><br></p>';
+  }
 
-  items.forEach((item) => {
-    const nextText = String(item?.str || '');
-    if (!nextText) {
-      return;
-    }
-
-    const currentY = Array.isArray(item?.transform) ? Number(item.transform[5] || 0) : null;
-    if (buffer && currentY !== null && previousY !== null && Math.abs(currentY - previousY) > 6) {
-      buffer += '\n';
-    } else if (buffer && !buffer.endsWith('\n') && !buffer.endsWith(' ')) {
-      buffer += ' ';
-    }
-
-    buffer += nextText;
-    if (item?.hasEOL) {
-      buffer += '\n';
-    }
-
-    previousY = currentY;
-  });
-
-  return String(buffer)
-    .replaceAll('\u0000', '')
-    .replace(/\u00a0/g, ' ')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function buildImportedPdfPageHtml(text, imageUrl = '', { pageNumber = 1, usedOcr = false } = {}) {
-  const paragraphs = String(text || '')
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.replace(/\n/g, ' ').trim())
-    .filter(Boolean);
-
-  const textHtml = paragraphs.length > 0
-    ? paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')
-    : `<p><em>${usedOcr ? 'OCR tidak menemukan teks yang cukup jelas.' : 'Teks halaman PDF tidak terbaca otomatis.'}</em></p>`;
-
-  const imageHtml = imageUrl
-    ? `
-      <div style="margin-top:1rem;">
-        <p style="margin-bottom:0.5rem; color:#5b6f8d; font-size:0.92rem; font-weight:700;">
-          Visual halaman PDF ${pageNumber}
-        </p>
-        ${getImageFigureHtml(imageUrl, 'full')}
-      </div>
-    `
-    : '';
-
-  return sanitizeEditorHtml(`${textHtml}${imageHtml}`);
+  return sanitizeEditorHtml(getImageFigureHtml(imageUrl, 'full'));
 }
 
 function getClosestEditableBlock(node, root) {
@@ -601,7 +546,6 @@ export default function AdminLearningMaterialEditor() {
   const rulerScaleRef = useRef(null);
   const imageUploadInputRef = useRef(null);
   const pdfImportInputRef = useRef(null);
-  const pdfOcrWorkerRef = useRef(null);
   const paginationFrameRef = useRef(null);
   const lexicalEditorRef = useRef(null);
   const [learningContent, setLearningContent] = useState([]);
@@ -2898,37 +2842,6 @@ export default function AdminLearningMaterialEditor() {
     return pdfjsLib;
   }, []);
 
-  const getPdfOcrWorker = useCallback(async () => {
-    if (pdfOcrWorkerRef.current) {
-      return pdfOcrWorkerRef.current;
-    }
-
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker(OCR_LANGUAGE, 1, {
-      workerPath: OCR_WORKER_PATH,
-      corePath: OCR_CORE_PATH,
-      langPath: OCR_LANG_PATH,
-      gzip: true,
-      logger: (message) => {
-        if (!message?.status) {
-          return;
-        }
-
-        const progressPercent = Number.isFinite(message.progress)
-          ? Math.round(Number(message.progress) * 100)
-          : null;
-        setPdfImportProgress(
-          progressPercent !== null
-            ? `${message.status} ${progressPercent}%`
-            : String(message.status)
-        );
-      },
-    });
-
-    pdfOcrWorkerRef.current = worker;
-    return worker;
-  }, []);
-
   const renderPdfPageToCanvas = useCallback(async (page, scale = 1.5) => {
     const viewport = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
@@ -2941,6 +2854,8 @@ export default function AdminLearningMaterialEditor() {
       throw new Error('Canvas tidak tersedia untuk render PDF.');
     }
 
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: context, viewport }).promise;
     return canvas;
   }, []);
@@ -3019,63 +2934,31 @@ export default function AdminLearningMaterialEditor() {
       const pdfPageFrom = Math.min(requestedPdfPageFrom, maxPdfPage);
       const rawPdfPageTo = Math.max(1, Math.floor(Number(pdfImportOptions.pdfPageTo || maxPdfPage)) || maxPdfPage);
       const pdfPageTo = Math.max(pdfPageFrom, Math.min(rawPdfPageTo, maxPdfPage));
-      const imageOps = new Set([
-        pdfjsLib.OPS.paintImageXObject,
-        pdfjsLib.OPS.paintInlineImageXObject,
-        pdfjsLib.OPS.paintJpegXObject,
-      ]);
       const importedPages = [];
 
       for (let pageNumber = pdfPageFrom; pageNumber <= pdfPageTo; pageNumber += 1) {
-        setPdfImportProgress(`Memproses halaman ${pageNumber} dari ${maxPdfPage}...`);
+        setPdfImportProgress(`Merender halaman PDF ${pageNumber} dari ${maxPdfPage} sesuai tampilan asli...`);
         const page = await pdfDocument.getPage(pageNumber);
-        const textContent = await page.getTextContent();
-        let extractedText = extractPdfTextFromItems(textContent.items || []);
-        const operatorList = await page.getOperatorList();
-        const hasEmbeddedImages = (operatorList.fnArray || []).some((fn) => imageOps.has(fn));
-        const shouldRenderCanvas = hasEmbeddedImages || extractedText.replace(/\s+/g, '').length < 80;
+        const canvas = await renderPdfPageToCanvas(page, 2);
 
-        let canvas = null;
-        if (shouldRenderCanvas) {
-          canvas = await renderPdfPageToCanvas(page, 1.65);
+        setPdfImportProgress(`Mengupload visual halaman ${pageNumber} dari ${maxPdfPage}...`);
+        const pageBlob = await canvasToBlob(canvas);
+        const pageImageFile = new File(
+          [pageBlob],
+          `${selectedPdfImportFile.name.replace(/\.pdf$/i, '')}-page-${pageNumber}.png`,
+          { type: 'image/png' }
+        );
+        const snapshotUrl = await uploadAdminMedia(pageImageFile, { trackImageUpload: false }) || '';
+
+        if (!snapshotUrl) {
+          throw new Error(`Gagal mengupload visual halaman PDF ${pageNumber}.`);
         }
 
-        let usedOcr = false;
-        if (canvas && extractedText.replace(/\s+/g, '').length < 80) {
-          setPdfImportProgress(`Menjalankan OCR halaman ${pageNumber} dari ${maxPdfPage}...`);
-          try {
-            const worker = await getPdfOcrWorker();
-            const ocrResult = await worker.recognize(canvas);
-            const ocrText = String(ocrResult?.data?.text || '').trim();
-            if (ocrText.length > extractedText.length) {
-              extractedText = ocrText;
-              usedOcr = true;
-            }
-          } catch (ocrError) {
-            console.error('OCR import PDF gagal:', ocrError);
-          }
-        }
-
-        let snapshotUrl = '';
-        if (canvas && (hasEmbeddedImages || usedOcr)) {
-          setPdfImportProgress(`Mengupload visual halaman ${pageNumber} dari ${maxPdfPage}...`);
-          const pageBlob = await canvasToBlob(canvas);
-          const pageImageFile = new File(
-            [pageBlob],
-            `${selectedPdfImportFile.name.replace(/\.pdf$/i, '')}-page-${pageNumber}.png`,
-            { type: 'image/png' }
-          );
-          snapshotUrl = await uploadAdminMedia(pageImageFile, { trackImageUpload: false }) || '';
-        }
-
-        const contentHtml = buildImportedPdfPageHtml(extractedText, snapshotUrl, {
-          pageNumber,
-          usedOcr,
-        });
+        const contentHtml = buildImportedPdfPageHtml(snapshotUrl);
 
         importedPages.push({
           title: `Halaman ${importedPages.length + 1}`,
-          points: extractPointsFromHtml(contentHtml),
+          points: [],
           closing: '',
           content_html: contentHtml,
         });
@@ -3092,8 +2975,8 @@ export default function AdminLearningMaterialEditor() {
       closePdfImportOptions();
       setSuccess(
         importMode === 'append'
-          ? `PDF halaman ${pdfPageFrom}-${pdfPageTo} berhasil ditambahkan mulai halaman ${startPage} pada topik "${activeTopic.title || `Topik ${activeTopicIndex + 1}`}". Klik "Simpan Materi" untuk menyimpan permanen.`
-          : `PDF halaman ${pdfPageFrom}-${pdfPageTo} berhasil mengganti isi topik "${activeTopic.title || `Topik ${activeTopicIndex + 1}`}". Klik "Simpan Materi" untuk menyimpan permanen.`
+          ? `PDF halaman ${pdfPageFrom}-${pdfPageTo} berhasil ditambahkan sebagai visual sesuai file asli mulai halaman ${startPage} pada topik "${activeTopic.title || `Topik ${activeTopicIndex + 1}`}". Klik "Simpan Materi" untuk menyimpan permanen.`
+          : `PDF halaman ${pdfPageFrom}-${pdfPageTo} berhasil mengganti isi topik sebagai visual sesuai file asli "${activeTopic.title || `Topik ${activeTopicIndex + 1}`}". Klik "Simpan Materi" untuk menyimpan permanen.`
       );
     } catch (importError) {
       setError(importError?.message || 'Gagal mengimpor PDF ke materi.');
@@ -3101,7 +2984,7 @@ export default function AdminLearningMaterialEditor() {
       setPdfImporting(false);
       setPdfImportProgress('');
     }
-  }, [activeTopic, activeTopicIndex, applyImportedTopicPages, canvasToBlob, closePdfImportOptions, getPdfJsLib, getPdfOcrWorker, pdfImportOptions.mode, pdfImportOptions.pdfPageFrom, pdfImportOptions.pdfPageTo, pdfImportOptions.startPage, renderPdfPageToCanvas, selectedPdfImportFile, uploadAdminMedia]);
+  }, [activeTopic, activeTopicIndex, applyImportedTopicPages, canvasToBlob, closePdfImportOptions, getPdfJsLib, pdfImportOptions.mode, pdfImportOptions.pdfPageFrom, pdfImportOptions.pdfPageTo, pdfImportOptions.startPage, renderPdfPageToCanvas, selectedPdfImportFile, uploadAdminMedia]);
 
   const insertLink = () => {
     const url = window.prompt('Masukkan URL link');
@@ -4075,13 +3958,6 @@ export default function AdminLearningMaterialEditor() {
     }
   }, []);
 
-  useEffect(() => () => {
-    if (pdfOcrWorkerRef.current) {
-      pdfOcrWorkerRef.current.terminate();
-      pdfOcrWorkerRef.current = null;
-    }
-  }, []);
-
   useEffect(() => {
     if (loading || !activeSection) {
       return;
@@ -4282,6 +4158,19 @@ export default function AdminLearningMaterialEditor() {
     setLexicalPreviewPageCount(1);
     setLexicalSurfaceMode('edit');
   }, [activeTopicIndex]);
+
+  useEffect(() => {
+    if (editorEngine !== 'lexical') {
+      return undefined;
+    }
+
+    const paginationTimer = window.setTimeout(() => {
+      const nextPageCount = paginateMaterialHtml(activeLexicalHtml, { orientation: pageOrientation }).length;
+      setLexicalPreviewPageCount(Math.max(1, nextPageCount));
+    }, 180);
+
+    return () => window.clearTimeout(paginationTimer);
+  }, [activeLexicalHtml, editorEngine, pageOrientation]);
 
   const handleLexicalDraftChange = useCallback((nextDocument) => {
     setLexicalDrafts((current) => ({
@@ -4899,6 +4788,7 @@ export default function AdminLearningMaterialEditor() {
                         <div className="admin-learning-pdf-import-copy">
                           <strong>Import PDF ke Topik Aktif</strong>
                           <p className="text-muted">
+                            Halaman PDF akan dirender sebagai visual penuh agar tampilan mengikuti file asli.
                             Pilih `Replace` untuk mengganti isi topik, atau `Append` untuk menyisipkan mulai halaman tertentu.
                           </p>
                         </div>
@@ -5116,6 +5006,8 @@ export default function AdminLearningMaterialEditor() {
                       initialHtml={activeLexicalHtml}
                       onChange={handleLexicalDraftChange}
                       onSelectionMetricsChange={handleLexicalSelectionMetricsChange}
+                      pageOrientation={pageOrientation}
+                      estimatedPageCount={lexicalPreviewPageCount}
                     />
                   ) : (
                     <LexicalPaginatedPreview

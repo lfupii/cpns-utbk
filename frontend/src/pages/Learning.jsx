@@ -5,6 +5,9 @@ import apiClient from '../api';
 import { useAuth } from '../AuthContext';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
 
+const EMPTY_ARRAY = [];
+const EMPTY_OBJECT = {};
+
 function formatTime(seconds) {
   const safeSeconds = Math.max(0, Number(seconds || 0));
   const hours = Math.floor(safeSeconds / 3600);
@@ -221,11 +224,26 @@ export default function Learning() {
   const isActiveDraftPreview = previewInfo.mode === 'draft' && previewInfo.section_code;
   const summary = learning?.summary || {};
   const packageData = learning?.package || null;
-  const currentSectionTest = activeSection ? sectionTests[activeSection.code] || {} : {};
-  const currentSectionQuestions = currentSectionTest.questions || [];
-  const currentSectionSavedAnswers = currentSectionTest.savedAnswers || {};
-  const currentSectionDraftAnswers = currentSectionTest.draftAnswers || {};
-  const currentSectionReviewFlags = currentSectionTest.reviewFlags || {};
+  const currentSectionTest = useMemo(
+    () => (activeSection ? sectionTests[activeSection.code] || EMPTY_OBJECT : EMPTY_OBJECT),
+    [activeSection, sectionTests]
+  );
+  const currentSectionQuestions = useMemo(
+    () => currentSectionTest.questions || EMPTY_ARRAY,
+    [currentSectionTest.questions]
+  );
+  const currentSectionSavedAnswers = useMemo(
+    () => currentSectionTest.savedAnswers || EMPTY_OBJECT,
+    [currentSectionTest.savedAnswers]
+  );
+  const currentSectionDraftAnswers = useMemo(
+    () => currentSectionTest.draftAnswers || EMPTY_OBJECT,
+    [currentSectionTest.draftAnswers]
+  );
+  const currentSectionReviewFlags = useMemo(
+    () => currentSectionTest.reviewFlags || EMPTY_OBJECT,
+    [currentSectionTest.reviewFlags]
+  );
   const currentSectionQuestion = useMemo(() => {
     if (!currentSectionQuestions.length) {
       return null;
@@ -295,14 +313,6 @@ export default function Learning() {
   const previousSectionQuestionId = currentSectionQuestionIndex > 0 ? currentSectionQuestions[currentSectionQuestionIndex - 1]?.id : null;
   const nextSectionQuestionId = currentSectionQuestionIndex >= 0 ? currentSectionQuestions[currentSectionQuestionIndex + 1]?.id : null;
   const hasOngoingSectionAttempt = Boolean(currentSectionTest.attemptId && !currentSectionTest.result);
-  const currentSectionUnsavedAnswers = useMemo(() => (
-    Object.entries(currentSectionDraftAnswers)
-      .filter(([questionId, optionId]) => Number(currentSectionSavedAnswers[questionId] || 0) !== Number(optionId || 0))
-      .map(([questionId, optionId]) => ({
-        question_id: Number(questionId),
-        option_id: Number(optionId),
-      }))
-  ), [currentSectionDraftAnswers, currentSectionSavedAnswers]);
   const isCurrentQuestionMarkedForReview = useMemo(
     () => Boolean(
       currentSectionReviewFlags[String(currentSectionQuestion?.id)] || currentSectionReviewFlags[currentSectionQuestion?.id]
@@ -320,16 +330,6 @@ export default function Learning() {
     [currentSectionDraftAnswers, currentSectionQuestion?.id, currentSectionSavedAnswers]
   );
   const hasCurrentSectionAnswerSelected = currentSectionCurrentAnswerValue > 0;
-  const pendingSectionReviewQuestionNumbers = useMemo(
-    () => currentSectionQuestions.reduce((numbers, question, index) => {
-      if (currentSectionReviewFlags[String(question.id)] || currentSectionReviewFlags[question.id]) {
-        numbers.push(index + 1);
-      }
-      return numbers;
-    }, []),
-    [currentSectionQuestions, currentSectionReviewFlags]
-  );
-  const pendingSectionReviewQuestionNumberLabel = pendingSectionReviewQuestionNumbers.join(', ');
   const completedTryout = Number(summary.completed_attempts || 0) > 0;
   const materialDoneCount = sections.filter((section) => section.progress.material_read).length;
   const subtestDoneCount = sections.filter((section) => section.progress.subtest_test_completed).length;
@@ -766,7 +766,7 @@ export default function Learning() {
       await saveSectionTestAnswer(sectionCode, questionId, currentDraftAnswerValue);
     }
 
-    const nextMarkedReview = !Boolean(testState.reviewFlags?.[questionKey] || testState.reviewFlags?.[questionId]);
+    const nextMarkedReview = !(testState.reviewFlags?.[questionKey] || testState.reviewFlags?.[questionId]);
 
     setSectionTests((current) => ({
       ...current,
@@ -962,7 +962,7 @@ export default function Learning() {
     } finally {
       setActionLoading('');
     }
-  }, [fetchLearning, numericPackageId, sectionTests]);
+  }, [fetchLearning, sectionTests]);
 
   const openTryoutView = () => {
     setContentView('tryout');

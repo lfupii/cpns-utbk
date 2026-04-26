@@ -48,10 +48,14 @@ import {
   $isRangeSelection,
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
+  COMMAND_PRIORITY_EDITOR,
   COMMAND_PRIORITY_LOW,
   DecoratorNode,
   FORMAT_ELEMENT_COMMAND,
   FORMAT_TEXT_COMMAND,
+  INDENT_CONTENT_COMMAND,
+  KEY_TAB_COMMAND,
+  OUTDENT_CONTENT_COMMAND,
   REDO_COMMAND,
   SELECTION_CHANGE_COMMAND,
   UNDO_COMMAND,
@@ -60,6 +64,9 @@ import {
 const DEFAULT_FONT_SIZE = '16px';
 const DEFAULT_TEXT_COLOR = '#16243c';
 const DEFAULT_LINE_HEIGHT = '1.75';
+const PARAGRAPH_INDENT_STEP = 36;
+const FIRST_LINE_INDENT_LIMIT = 72;
+const PARAGRAPH_INDENT_LIMIT = 240;
 const FONT_SIZE_OPTIONS = ['12px', '14px', '16px', '20px', '28px', '36px'];
 const LINE_HEIGHT_OPTIONS = [
   { value: '1.4', label: 'Rapat' },
@@ -125,6 +132,43 @@ function getTopLevelBlocks(selection) {
 
 function getBlockStyleValue(block, propertyName, fallbackValue = '') {
   return parseStyleString(block?.getStyle?.() || '')[propertyName] || fallbackValue;
+}
+
+function parseNumericStyleValue(styleValue) {
+  const parsed = Number.parseFloat(String(styleValue || '').replace('px', '').trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getBlockIndentMetrics(block) {
+  return {
+    leftIndent: parseNumericStyleValue(getBlockStyleValue(block, 'margin-left', '0')),
+    firstLineIndent: parseNumericStyleValue(getBlockStyleValue(block, 'text-indent', '0')),
+  };
+}
+
+function setBlockIndentMetrics(block, { leftIndent, firstLineIndent }) {
+  const safeLeftIndent = Math.max(0, Math.min(PARAGRAPH_INDENT_LIMIT, Math.round(leftIndent)));
+  const safeFirstLineIndent = Math.max(-FIRST_LINE_INDENT_LIMIT, Math.min(FIRST_LINE_INDENT_LIMIT, Math.round(firstLineIndent)));
+
+  block.setStyle(mergeStyleString(block.getStyle(), {
+    'margin-left': safeLeftIndent > 0 ? `${safeLeftIndent}px` : null,
+    'text-indent': safeFirstLineIndent !== 0 ? `${safeFirstLineIndent}px` : null,
+  }));
+
+  return {
+    leftIndent: safeLeftIndent,
+    firstLineIndent: safeFirstLineIndent,
+  };
+}
+
+function isListSelectionBlock(block) {
+  return block?.getType?.() === 'listitem'
+    || $isListNode(block)
+    || $isListNode(block?.getParent?.());
+}
+
+function getPrimarySelectedBlock(selection) {
+  return getTopLevelBlocks(selection)[0] || null;
 }
 
 function MaterialImageComponent({ src, layout = 'center' }) {
@@ -604,7 +648,143 @@ function LexicalEditorBridge({ editorRef }) {
       });
       editor.focus();
     },
+    setParagraphMetrics({ leftIndent = 0, firstLineIndent = 0 } = {}) {
+      editor.update(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return;
+        }
+
+        getTopLevelBlocks(selection).forEach((block) => {
+          if (isListSelectionBlock(block)) {
+            return;
+          }
+
+          setBlockIndentMetrics(block, {
+            leftIndent,
+            firstLineIndent,
+          });
+        });
+      });
+      editor.focus();
+    },
   }), [editor]);
+
+  return null;
+}
+
+function LexicalParagraphTabPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => editor.registerCommand(
+    KEY_TAB_COMMAND,
+    (event) => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) {
+        return false;
+      }
+
+      const selectedBlocks = getTopLevelBlocks(selection);
+      if (selectedBlocks.length === 0) {
+        return false;
+      }
+
+      event?.preventDefault();
+
+      if (selectedBlocks.some((block) => isListSelectionBlock(block))) {
+        editor.dispatchCommand(event?.shiftKey ? OUTDENT_CONTENT_COMMAND : INDENT_CONTENT_COMMAND, undefined);
+        return true;
+      }
+
+      let changed = false;
+      selectedBlocks.forEach((block) => {
+        const currentMetrics = getBlockIndentMetrics(block);
+        let nextLeftIndent = currentMetrics.leftIndent;
+        let nextFirstLineIndent = currentMetrics.firstLineIndent;
+
+        if (event?.shiftKey) {
+          if (currentMetrics.firstLineIndent > 0) {
+            nextFirstLineIndent = Math.max(0, currentMetrics.firstLineIndent - PARAGRAPH_INDENT_STEP);
+          } else if (currentMetrics.firstLineIndent < 0) {
+            nextFirstLineIndent = Math.min(0, currentMetrics.firstLineIndent + PARAGRAPH_INDENT_STEP);
+          } else if (currentMetrics.leftIndent > 0) {
+            nextLeftIndent = Math.max(0, currentMetrics.leftIndent - PARAGRAPH_INDENT_STEP);
+          } else {
+            return;
+          }
+        } else {
+          nextFirstLineIndent = Math.min(FIRST_LINE_INDENT_LIMIT, currentMetrics.firstLineIndent + PARAGRAPH_INDENT_STEP);
+        }
+
+        if (nextLeftIndent === currentMetrics.leftIndent && nextFirstLineIndent === currentMetrics.firstLineIndent) {
+          return;
+        }
+
+        setBlockIndentMetrics(block, {
+          leftIndent: nextLeftIndent,
+          firstLineIndent: nextFirstLineIndent,
+        });
+        changed = true;
+      });
+
+      return changed;
+    },
+    COMMAND_PRIORITY_EDITOR
+  ), [editor]);
+
+  return null;
+}
+
+function LexicalSelectionMetricsPlugin({ onSelectionMetricsChange }) {
+  const [editor] = useLexicalComposerContext();
+
+  const emitMetrics = useCallback(() => {
+    if (!onSelectionMetricsChange) {
+      return;
+    }
+
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) {
+      onSelectionMetricsChange({
+        leftIndent: 0,
+        firstLineIndent: 0,
+      });
+      return;
+    }
+
+    const primaryBlock = getPrimarySelectedBlock(selection);
+    if (!primaryBlock) {
+      onSelectionMetricsChange({
+        leftIndent: 0,
+        firstLineIndent: 0,
+      });
+      return;
+    }
+
+    onSelectionMetricsChange(getBlockIndentMetrics(primaryBlock));
+  }, [onSelectionMetricsChange]);
+
+  useEffect(() => {
+    const unregisterUpdate = editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        emitMetrics();
+      });
+    });
+
+    const unregisterSelection = editor.registerCommand(
+      SELECTION_CHANGE_COMMAND,
+      () => {
+        emitMetrics();
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
+    );
+
+    return () => {
+      unregisterUpdate();
+      unregisterSelection();
+    };
+  }, [editor, emitMetrics]);
 
   return null;
 }
@@ -913,6 +1093,7 @@ const LexicalMaterialEditor = forwardRef(function LexicalMaterialEditor({
   documentKey,
   initialHtml,
   onChange,
+  onSelectionMetricsChange,
 }, ref) {
   const bridgeRef = useRef(null);
   const initialConfig = useMemo(() => ({
@@ -977,6 +1158,9 @@ const LexicalMaterialEditor = forwardRef(function LexicalMaterialEditor({
     setLineHeight(value) {
       bridgeRef.current?.setLineHeight?.(value);
     },
+    setParagraphMetrics(metrics) {
+      bridgeRef.current?.setParagraphMetrics?.(metrics);
+    },
   }), []);
 
   return (
@@ -993,6 +1177,8 @@ const LexicalMaterialEditor = forwardRef(function LexicalMaterialEditor({
           <ListPlugin />
           <LinkPlugin />
           <TablePlugin />
+          <LexicalParagraphTabPlugin />
+          <LexicalSelectionMetricsPlugin onSelectionMetricsChange={onSelectionMetricsChange} />
           <LexicalEditorBridge editorRef={bridgeRef} />
           <LexicalInitialHtmlPlugin initialHtml={initialHtml} />
           <OnChangePlugin

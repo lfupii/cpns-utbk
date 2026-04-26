@@ -7702,6 +7702,15 @@ html[data-theme='dark'] .theme-toggle-thumb {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.account-shell-word-editor .admin-lexical-toolbar {
+  position: sticky;
+  top: 5.45rem;
+  z-index: 16;
+  background: rgba(52, 52, 52, 0.96);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+}
+
 .admin-lexical-toolbar-group {
   display: flex;
   flex-wrap: wrap;

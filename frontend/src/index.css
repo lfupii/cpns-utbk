@@ -3494,6 +3494,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
   padding: 0;
 }
 
+.learning-page-document-pdf-visual .learning-page-document-body > div {
+  width: 100%;
+  height: 100%;
+}
+
 .learning-page-document-pdf-visual .material-pdf-page-visual,
 .learning-page-document-pdf-visual .material-image-frame {
   width: 100%;

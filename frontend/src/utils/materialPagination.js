@@ -5,6 +5,62 @@ const PAGE_DIMENSIONS = {
   portrait: { width: 794, height: 1123 },
   landscape: { width: 1123, height: 794 },
 };
+const PDF_VISUAL_SELECTOR = 'figure.material-pdf-page-visual';
+const LEGACY_PDF_VISUAL_SELECTOR = 'figure.material-image-frame.material-image-wrap-full';
+
+function isMeaningfulTextNode(node) {
+  return node.nodeType === Node.TEXT_NODE && !!node.textContent?.trim();
+}
+
+function isSpacerElement(node) {
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return false;
+  }
+
+  if (!node.matches('p, div')) {
+    return false;
+  }
+
+  if (node.querySelector('img, figure, table, ul, ol, blockquote, video, iframe')) {
+    return false;
+  }
+
+  return [...node.childNodes].every((childNode) => (
+    (childNode.nodeType === Node.TEXT_NODE && !childNode.textContent?.trim())
+    || (childNode.nodeType === Node.ELEMENT_NODE && childNode.nodeName === 'BR')
+  ));
+}
+
+function isPdfVisualBlock(node) {
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return false;
+  }
+
+  if (node.matches(PDF_VISUAL_SELECTOR)) {
+    return true;
+  }
+
+  if (!node.matches(LEGACY_PDF_VISUAL_SELECTOR)) {
+    return false;
+  }
+
+  return node.querySelectorAll('img').length === 1 && !node.textContent?.trim();
+}
+
+export function isMaterialPdfVisualHtml(html) {
+  if (typeof document === 'undefined') {
+    return String(html || '').includes('material-pdf-page-visual');
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(String(html || ''), 'text/html');
+  const meaningfulNodes = [...doc.body.childNodes].filter((node) => (
+    isMeaningfulTextNode(node)
+    || (node.nodeType === Node.ELEMENT_NODE && !isSpacerElement(node))
+  ));
+
+  return meaningfulNodes.length === 1 && isPdfVisualBlock(meaningfulNodes[0]);
+}
 
 function normalizePreviewBlocks(html) {
   const parser = new DOMParser();
@@ -87,6 +143,7 @@ function createMeasureShell({ orientation = 'portrait' } = {}) {
     cleanup() {
       rootNode.remove();
     },
+    pageNode,
     bodyNode,
   };
 }
@@ -101,10 +158,14 @@ export function paginateMaterialHtml(html, { orientation = 'portrait' } = {}) {
   const nextPages = [];
   let currentPageNodes = [];
 
-  const { bodyNode, cleanup } = createMeasureShell({ orientation });
+  const { bodyNode, cleanup, pageNode } = createMeasureShell({ orientation });
 
   try {
     const renderMeasurePage = (nodes) => {
+      pageNode.classList.toggle(
+        'admin-lexical-preview-page-pdf-visual',
+        nodes.length === 1 && isPdfVisualBlock(nodes[0])
+      );
       bodyNode.innerHTML = '';
       nodes.forEach((node) => {
         bodyNode.appendChild(node.cloneNode(true));
@@ -112,6 +173,20 @@ export function paginateMaterialHtml(html, { orientation = 'portrait' } = {}) {
     };
 
     blocks.forEach((block) => {
+      if (isPdfVisualBlock(block)) {
+        if (currentPageNodes.length > 0) {
+          nextPages.push(serializePreviewNodes(currentPageNodes));
+          currentPageNodes = [];
+        }
+
+        nextPages.push(serializePreviewNodes([block]));
+        return;
+      }
+
+      if (isSpacerElement(block) && currentPageNodes.length === 0) {
+        return;
+      }
+
       const candidateNodes = [...currentPageNodes, block];
       renderMeasurePage(candidateNodes);
 

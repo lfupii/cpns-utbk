@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { paginateMaterialHtml } from '../utils/materialPagination';
+import { isMaterialPdfVisualHtml, paginateMaterialHtml } from '../utils/materialPagination';
 
 const PAGE_DIMENSIONS = {
   portrait: { width: 794, height: 1123 },
@@ -15,6 +15,13 @@ export default function LexicalPaginatedPreview({
   const pageSize = useMemo(
     () => PAGE_DIMENSIONS[orientation] || PAGE_DIMENSIONS.portrait,
     [orientation]
+  );
+  const pageEntries = useMemo(
+    () => pages.map((pageHtml) => ({
+      html: pageHtml,
+      isPdfVisualPage: isMaterialPdfVisualHtml(pageHtml),
+    })),
+    [pages]
   );
 
   useEffect(() => {
@@ -35,10 +42,10 @@ export default function LexicalPaginatedPreview({
       </div>
 
       <div className="admin-lexical-preview-stack">
-        {pages.map((pageHtml, pageIndex) => (
+        {pageEntries.map((pageEntry, pageIndex) => (
           <section
             key={`lexical-preview-page-${pageIndex}`}
-            className="admin-lexical-preview-page"
+            className={pageEntry.isPdfVisualPage ? 'admin-lexical-preview-page admin-lexical-preview-page-pdf-visual' : 'admin-lexical-preview-page'}
             style={{ maxWidth: `${pageSize.width}px`, minHeight: `${pageSize.height}px`, height: `${pageSize.height}px` }}
           >
             <div className="admin-lexical-preview-page-header">
@@ -49,7 +56,7 @@ export default function LexicalPaginatedPreview({
             </div>
             <div
               className="admin-lexical-preview-page-body learning-rich-content"
-              dangerouslySetInnerHTML={{ __html: pageHtml }}
+              dangerouslySetInnerHTML={{ __html: pageEntry.html }}
             />
           </section>
         ))}

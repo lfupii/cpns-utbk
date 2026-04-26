@@ -8040,7 +8040,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: 18mm 16mm 20mm;
+  padding: 0;
   border-radius: 0.65rem;
   overflow: hidden;
   background:
@@ -8051,11 +8051,16 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-lexical-preview-page-header {
+  position: absolute;
+  top: 9mm;
+  left: 16mm;
+  right: 16mm;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.9rem;
+  pointer-events: none;
 }
 
 .admin-lexical-preview-page-label {
@@ -8084,10 +8089,16 @@ html[data-theme='dark'] .theme-toggle-thumb {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  box-sizing: border-box;
+  padding: 19mm 16mm 20mm;
   color: #526178;
 }
 
 .admin-lexical-preview-page-body.learning-rich-content {
+  margin-top: 0;
+}
+
+.admin-lexical-preview-page-body > :first-child {
   margin-top: 0;
 }
 
@@ -8096,19 +8107,14 @@ html[data-theme='dark'] .theme-toggle-thumb {
 }
 
 .admin-lexical-preview-page-pdf-visual .admin-lexical-preview-page-header {
-  position: absolute;
-  top: 18mm;
-  left: 16mm;
-  right: 16mm;
-  z-index: 2;
-  margin-bottom: 0;
-  pointer-events: none;
+  top: 9mm;
 }
 
 .admin-lexical-preview-page-pdf-visual .admin-lexical-preview-page-body {
   height: 100%;
   min-height: 100%;
   overflow: hidden;
+  padding: 0;
 }
 
 .admin-lexical-preview-page-pdf-visual .material-pdf-page-visual {

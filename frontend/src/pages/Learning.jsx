@@ -4,6 +4,7 @@ import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
+import { isMaterialPdfVisualHtml } from '../utils/materialPagination';
 
 const EMPTY_ARRAY = [];
 const EMPTY_OBJECT = {};
@@ -1348,28 +1349,34 @@ export default function Learning() {
               {activeSectionView === 'material' && activeTopic ? (
                 <div className="learning-page-list">
                   {(activeTopic.pages || []).map((page, index) => (
-                    <section key={`${activeTopic.title || 'topic'}-${index}`} className="learning-page learning-page-document">
+                    <section
+                      key={`${activeTopic.title || 'topic'}-${index}`}
+                      className={page.content_html && isMaterialPdfVisualHtml(page.content_html)
+                        ? 'learning-page learning-page-document learning-page-document-pdf-visual'
+                        : 'learning-page learning-page-document'}
+                    >
                       <div className="learning-page-document-header">
                         <span className="learning-page-document-label">Halaman {index + 1}</span>
                         <div className="learning-page-brand" aria-hidden="true">
                           <img className="learning-page-brand-logo" src="/ujiin-logo.png" alt="Ujiin" />
                         </div>
                       </div>
-                      {page.content_html ? (
-                        <div
-                          className="learning-rich-content"
-                          dangerouslySetInnerHTML={{ __html: sanitizeMaterialHtml(page.content_html) }}
-                        />
-                      ) : (
-                        <>
-                          <ul>
-                            {(page.points || []).map((point) => (
-                              <li key={point}>{point}</li>
-                            ))}
-                          </ul>
-                          <p>{page.closing}</p>
-                        </>
-                      )}
+                      <div className="learning-page-document-body learning-rich-content">
+                        {page.content_html ? (
+                          <div
+                            dangerouslySetInnerHTML={{ __html: sanitizeMaterialHtml(page.content_html) }}
+                          />
+                        ) : (
+                          <>
+                            <ul>
+                              {(page.points || []).map((point) => (
+                                <li key={point}>{point}</li>
+                              ))}
+                            </ul>
+                            <p>{page.closing}</p>
+                          </>
+                        )}
+                      </div>
                     </section>
                   ))}
                 </div>

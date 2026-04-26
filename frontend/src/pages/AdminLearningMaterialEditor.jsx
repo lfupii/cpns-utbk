@@ -5,7 +5,7 @@ import LexicalMaterialEditor from '../components/LexicalMaterialEditor';
 import LexicalPaginatedPreview from '../components/LexicalPaginatedPreview';
 import apiClient from '../api';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
-import { paginateMaterialHtml } from '../utils/materialPagination';
+import { isMaterialPdfVisualHtml, paginateMaterialHtml } from '../utils/materialPagination';
 
 const APP_BASE_PATH = import.meta.env.BASE_URL || '/';
 const PDF_WORKER_PATH = `${APP_BASE_PATH.replace(/\/$/, '')}/pdfjs/pdf.worker.min.js`;
@@ -310,7 +310,19 @@ function mergeTopicPagesIntoSingleHtml(topic) {
     .map((page) => sanitizeEditorHtml(page?.content_html || pageToHtml(page)))
     .filter(Boolean);
 
-  return htmlChunks.length > 0 ? htmlChunks.join('<p><br></p><p><br></p>') : '<p><br></p>';
+  if (htmlChunks.length === 0) {
+    return '<p><br></p>';
+  }
+
+  return htmlChunks.reduce((combinedHtml, chunk, chunkIndex) => {
+    if (chunkIndex === 0) {
+      return chunk;
+    }
+
+    const previousChunk = htmlChunks[chunkIndex - 1];
+    const needsSpacer = !isMaterialPdfVisualHtml(previousChunk) && !isMaterialPdfVisualHtml(chunk);
+    return `${combinedHtml}${needsSpacer ? '<p><br></p><p><br></p>' : ''}${chunk}`;
+  }, '');
 }
 
 function buildPaginatedTopicFromHtml(topic, html, orientation = 'portrait') {
@@ -370,7 +382,15 @@ function buildImportedPdfPageHtml(imageUrl = '') {
     return '<p><br></p>';
   }
 
-  return sanitizeEditorHtml(getImageFigureHtml(imageUrl, 'full'));
+  return sanitizeEditorHtml(`
+    <figure
+      class="material-image-frame material-image-wrap-full material-pdf-page-visual"
+      data-material-page-type="pdf-visual"
+      style="width:100%; max-width:100%; --image-width:100%; --image-margin-top:0px; --image-margin-bottom:0px;"
+    >
+      <img class="material-pdf-page-visual-image" src="${escapeHtml(imageUrl)}" alt="Halaman PDF materi" />
+    </figure>
+  `);
 }
 
 function getClosestEditableBlock(node, root) {

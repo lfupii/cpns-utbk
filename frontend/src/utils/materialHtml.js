@@ -5,6 +5,8 @@ const ALLOWED_CLASS_NAMES = new Set([
   'material-image-wrap-right',
   'material-image-wrap-center',
   'material-image-wrap-full',
+  'material-pdf-page-visual',
+  'material-pdf-page-visual-image',
   'material-list-preset-decimal-alpha-roman',
   'material-list-preset-decimal-decimal-decimal',
   'material-list-preset-disc-circle-square',

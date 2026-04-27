@@ -59,8 +59,13 @@ function formatActiveTopicLabel(section) {
 
 function computeMiniTestDurationSeconds(section, questionCount) {
   const totalQuestions = Math.max(0, Number(questionCount || 0));
+  const miniTestDurationMinutes = Math.max(0, Number(section?.mini_test_duration_minutes || 0));
   const durationMinutes = Math.max(0, Number(section?.duration_minutes || 0));
   const targetQuestionCount = Math.max(0, Number(section?.target_question_count || 0));
+
+  if (miniTestDurationMinutes > 0) {
+    return Math.max(1, Math.round(miniTestDurationMinutes * 60));
+  }
 
   if (durationMinutes > 0 && targetQuestionCount > 0 && totalQuestions > 0) {
     const estimatedSeconds = Math.round((durationMinutes * 60 * totalQuestions) / targetQuestionCount);
@@ -643,11 +648,14 @@ export default function Learning() {
           [sectionCode]: {
             ...(current[sectionCode] || {}),
             result,
+            open: false,
+            loading: false,
             autoSubmitting: false,
             error: '',
             saveMessage: '',
           },
         }));
+        setSuccessMessage('Waktu mini test habis dan hasil diproses otomatis.');
         return;
       }
 
@@ -811,11 +819,14 @@ export default function Learning() {
           [sectionCode]: {
             ...(current[sectionCode] || {}),
             result,
+            open: false,
+            loading: false,
             autoSubmitting: false,
             error: '',
             saveMessage: '',
           },
         }));
+        setSuccessMessage('Waktu mini test habis dan hasil diproses otomatis.');
         return;
       }
 
@@ -896,6 +907,18 @@ export default function Learning() {
       return;
     }
 
+    if (!autoSubmit && answeredCount !== questions.length) {
+      setSectionTests((current) => ({
+        ...current,
+        [sectionCode]: {
+          ...(current[sectionCode] || {}),
+          error: 'Jawab semua soal dulu sebelum submit mini test.',
+          saveMessage: '',
+        },
+      }));
+      return;
+    }
+
     if (!autoSubmit && pendingReviewNumbers.length > 0) {
       setSectionTests((current) => ({
         ...current,
@@ -909,11 +932,7 @@ export default function Learning() {
     }
 
     if (confirmManual) {
-      const confirmed = window.confirm(
-        allowPartial || answeredCount === questions.length
-          ? 'Yakin ingin menyelesaikan mini test sekarang? Nilai akan langsung diproses.'
-          : 'Masih ada soal yang kosong. Yakin ingin menyelesaikan mini test sekarang? Nilai akan langsung diproses.'
-      );
+      const confirmed = window.confirm('Yakin ingin menyelesaikan mini test sekarang? Nilai akan langsung diproses.');
       if (!confirmed) {
         return;
       }
@@ -935,7 +954,7 @@ export default function Learning() {
         [sectionCode]: {
           ...(current[sectionCode] || {}),
           result,
-          open: true,
+          open: false,
           loading: false,
           autoSubmitting: false,
           error: '',
@@ -1687,29 +1706,31 @@ export default function Learning() {
                                     ? 'Hasil terakhir sudah tersimpan. Kamu bisa kembali ke menu mini test atau ulangi dari awal.'
                                     : currentSectionAllAnswered
                                     ? 'Semua jawaban sudah terisi dan terus tersimpan otomatis.'
-                                    : 'Jawaban tersimpan otomatis saat dipilih. Jika waktu habis, jawaban yang sudah masuk akan langsung diproses.'}
+                                    : 'Jawaban tersimpan otomatis saat dipilih. Tombol submit akan muncul setelah semua soal terjawab. Jika waktu habis, jawaban yang sudah masuk akan langsung diproses.'}
                                   {!currentSectionTest.result && !hasCurrentSectionAnswerSelected ? ' Pilih salah satu opsi dulu untuk membuka tombol ragu-ragu.' : ''}
                                 </div>
 
                                 <div className="test-action-buttons test-action-buttons-end">
-                                  <button
-                                    type="button"
-                                    className="btn btn-primary test-action-button disabled:opacity-50"
-                                    disabled={actionLoading === `test-${activeSection.code}` || currentSectionQuestions.length === 0}
-                                    onClick={() => (
-                                      currentSectionTest.result
-                                        ? loadSectionTest(activeSection.code, { restart: true })
-                                        : submitSectionTest(activeSection.code, { confirmManual: true })
-                                    )}
-                                  >
-                                    {actionLoading === `test-${activeSection.code}`
-                                      ? 'Memproses...'
-                                      : currentSectionTest.result
-                                      ? 'Ulangi Mini Test'
-                                      : activeSection.progress.subtest_test_completed
-                                      ? 'Submit Ulang Mini Test'
-                                      : 'Submit Mini Test'}
-                                  </button>
+                                  {(currentSectionAllAnswered || currentSectionTest.result) && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-primary test-action-button disabled:opacity-50"
+                                      disabled={actionLoading === `test-${activeSection.code}` || currentSectionQuestions.length === 0}
+                                      onClick={() => (
+                                        currentSectionTest.result
+                                          ? loadSectionTest(activeSection.code, { restart: true })
+                                          : submitSectionTest(activeSection.code, { confirmManual: true })
+                                      )}
+                                    >
+                                      {actionLoading === `test-${activeSection.code}`
+                                        ? 'Memproses...'
+                                        : currentSectionTest.result
+                                        ? 'Ulangi Mini Test'
+                                        : activeSection.progress.subtest_test_completed
+                                        ? 'Submit Ulang Mini Test'
+                                        : 'Submit Mini Test'}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>

@@ -15,6 +15,7 @@ const createEmptyQuestionForm = (sectionCode = '') => ({
   question_text: '',
   question_image_url: '',
   question_image_layout: 'top',
+  explanation_notes: '',
   difficulty: 'medium',
   question_type: 'single_choice',
   section_code: sectionCode,
@@ -77,6 +78,7 @@ function questionToForm(question, fallbackSectionCode = '') {
     question_text: question?.question_text || '',
     question_image_url: question?.question_image_url || '',
     question_image_layout: question?.question_image_layout || 'top',
+    explanation_notes: question?.explanation_notes || '',
     difficulty: question?.difficulty || 'medium',
     question_type: question?.question_type || 'single_choice',
     section_code: question?.section_code || fallbackSectionCode,
@@ -470,6 +472,12 @@ export default function AdminQuestionEditor() {
                     </div>
                   ))}
                 </div>
+                {selectedQuestion.explanation_notes && (
+                  <div className="admin-inline-note">
+                    <strong>Pembahasan soal</strong>
+                    <p className="whitespace-pre-line">{selectedQuestion.explanation_notes}</p>
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -506,16 +514,14 @@ export default function AdminQuestionEditor() {
 
                 <div className="account-form-grid">
                   <div className="form-group">
-                    <label>Kesulitan</label>
-                    <select
-                      name="difficulty"
-                      value={questionForm.difficulty}
+                    <label>Catatan Pembahasan</label>
+                    <textarea
+                      name="explanation_notes"
+                      rows="4"
+                      value={questionForm.explanation_notes}
                       onChange={handleQuestionChange}
-                    >
-                      <option value="easy">Mudah</option>
-                      <option value="medium">Sedang</option>
-                      <option value="hard">Sulit</option>
-                    </select>
+                      placeholder="Tulis pembahasan, catatan konsep, atau alasan jawaban benar di sini"
+                    />
                   </div>
                 </div>
 

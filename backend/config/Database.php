@@ -451,6 +451,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             question_image_layout VARCHAR(20) NOT NULL DEFAULT 'top',
             question_type VARCHAR(50) NOT NULL DEFAULT 'single_choice',
             difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+            explanation_notes LONGTEXT NULL,
             section_code VARCHAR(100) DEFAULT NULL,
             section_name VARCHAR(255) DEFAULT NULL,
             section_order INT NOT NULL DEFAULT 1,
@@ -461,6 +462,20 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             INDEX (package_id, section_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+
+    if (!databaseColumnExists($mysqli, 'questions', 'explanation_notes')) {
+        $mysqli->query(
+            "ALTER TABLE questions
+             ADD COLUMN explanation_notes LONGTEXT NULL AFTER difficulty"
+        );
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_drafts', 'explanation_notes')) {
+        $mysqli->query(
+            "ALTER TABLE question_drafts
+             ADD COLUMN explanation_notes LONGTEXT NULL AFTER difficulty"
+        );
+    }
 
     $mysqli->query(
         "CREATE TABLE IF NOT EXISTS question_option_drafts (

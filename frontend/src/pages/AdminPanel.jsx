@@ -6,7 +6,7 @@ import { sanitizeMaterialHtml } from '../utils/materialHtml';
 
 const CSV_HEADERS = [
   'section_code',
-  'difficulty',
+  'explanation_notes',
   'question_text',
   'question_image_url',
   'question_image_layout',
@@ -24,7 +24,7 @@ const CSV_HEADERS = [
 
 const CSV_TEMPLATE_ROW = {
   section_code: 'twk',
-  difficulty: 'easy',
+  explanation_notes: 'Pembahasan: Jakarta adalah ibu kota Indonesia sehingga opsi B menjadi jawaban yang benar.',
   question_text: 'Contoh soal: Ibu kota Indonesia adalah ...',
   question_image_url: 'https://contoh.com/gambar-soal.jpg',
   question_image_layout: 'top',
@@ -52,6 +52,7 @@ const createEmptyQuestionForm = (sectionCode = '') => ({
   question_text: '',
   question_image_url: '',
   question_image_layout: 'top',
+  explanation_notes: '',
   difficulty: 'medium',
   question_type: 'single_choice',
   section_code: sectionCode,
@@ -87,8 +88,13 @@ const createEmptyLearningQuestion = (order = 1) => ({
 
 function computeMiniTestDurationSeconds(section, questionCount) {
   const totalQuestions = Math.max(0, Number(questionCount || 0));
+  const miniTestDurationMinutes = Math.max(0, Number(section?.mini_test_duration_minutes || 0));
   const durationMinutes = Math.max(0, Number(section?.duration_minutes || 0));
   const targetQuestionCount = Math.max(0, Number(section?.target_question_count || 0));
+
+  if (miniTestDurationMinutes > 0) {
+    return Math.max(1, Math.round(miniTestDurationMinutes * 60));
+  }
 
   if (durationMinutes > 0 && targetQuestionCount > 0 && totalQuestions > 0) {
     const estimatedSeconds = Math.round((durationMinutes * 60 * totalQuestions) / targetQuestionCount);
@@ -353,6 +359,7 @@ function createImportPayload(rows, defaultSectionCode) {
       question_text: questionText,
       question_image_url: questionImageUrl,
       question_image_layout: String(row.question_image_layout || 'top').trim() || 'top',
+      explanation_notes: String(row.explanation_notes || '').trim(),
       difficulty: String(row.difficulty || 'medium').trim() || 'medium',
       question_type: 'single_choice',
       section_code: String(row.section_code || defaultSectionCode || '').trim(),
@@ -540,6 +547,10 @@ export default function AdminPanel() {
     () => learningContent.find((section) => section.code === learningSectionCode) || learningContent[0] || null,
     [learningContent, learningSectionCode]
   );
+  const activeLearningWorkflowSection = useMemo(
+    () => packageSections.find((section) => String(section.code) === String(activeLearningSection?.code || '')) || null,
+    [activeLearningSection?.code, packageSections]
+  );
   const activeMaterialTopics = useMemo(
     () => (activeLearningSection ? getMaterialTopics(activeLearningSection.material) : []),
     [activeLearningSection]
@@ -671,8 +682,8 @@ export default function AdminPanel() {
     });
   }, [questionQuery, questionSectionFilter, questions]);
   const miniTestDurationSeconds = useMemo(
-    () => computeMiniTestDurationSeconds(activeLearningSection, learningQuestionsForm.length),
-    [activeLearningSection, learningQuestionsForm.length]
+    () => computeMiniTestDurationSeconds(activeLearningWorkflowSection, learningQuestionsForm.length),
+    [activeLearningWorkflowSection, learningQuestionsForm.length]
   );
   const miniTestDurationMinutesLabel = useMemo(() => {
     const totalMinutes = Math.max(1, Math.ceil(miniTestDurationSeconds / 60));
@@ -1825,26 +1836,16 @@ export default function AdminPanel() {
   };
 
   const handleMiniTestTimingEdit = async (section) => {
-    const nextDuration = window.prompt('Durasi acuan subtest dalam menit untuk mini test', section.duration_minutes ?? '');
+    const currentDuration = section.mini_test_duration_minutes ?? section.duration_minutes ?? '';
+    const nextDuration = window.prompt('Durasi mini test dalam menit', currentDuration);
     if (nextDuration === null) {
       return;
     }
 
-    const nextTargetCount = window.prompt('Target jumlah soal subtest sebagai acuan timer mini test', section.target_question_count ?? '');
-    if (nextTargetCount === null) {
-      return;
-    }
-
     const normalizedDuration = String(nextDuration).trim() === '' ? null : Number(nextDuration);
-    const normalizedTargetCount = String(nextTargetCount).trim() === '' ? null : Number(nextTargetCount);
 
     if (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration < 0)) {
       setError('Durasi mini test tidak valid.');
-      return;
-    }
-
-    if (normalizedTargetCount !== null && (!Number.isFinite(normalizedTargetCount) || normalizedTargetCount < 0)) {
-      setError('Target jumlah soal mini test tidak valid.');
       return;
     }
 
@@ -1852,8 +1853,7 @@ export default function AdminPanel() {
       item.code === section.code
         ? {
             ...item,
-            duration_minutes: normalizedDuration,
-            target_question_count: normalizedTargetCount === null ? null : Math.floor(normalizedTargetCount),
+            mini_test_duration_minutes: normalizedDuration,
           }
         : item
     ));
@@ -2905,7 +2905,7 @@ export default function AdminPanel() {
                                 <span className="admin-preview-eyebrow">Setting Waktu Mini Test</span>
                                 <h3>{activeLearningSection.name}</h3>
                                 <p className="text-muted">
-                                  Timer mini test mengambil acuan dari durasi subtest dan target jumlah soal yang aktif untuk subtest ini.
+                                  Isi langsung berapa menit durasi mini test untuk subtest ini. Timer user akan mengikuti angka ini saat mini test dimulai.
                                 </p>
                               </div>
                               <div className="admin-mini-test-settings-actions">
@@ -2913,7 +2913,7 @@ export default function AdminPanel() {
                                   <button
                                     type="button"
                                     className="btn btn-outline"
-                                    onClick={() => handleMiniTestTimingEdit(activeLearningSection)}
+                                    onClick={() => handleMiniTestTimingEdit(activeLearningWorkflowSection || activeLearningSection)}
                                     disabled={workflowSaving}
                                   >
                                     {workflowSaving ? 'Menyimpan Waktu...' : 'Atur Waktu Mini Test'}
@@ -2923,17 +2923,17 @@ export default function AdminPanel() {
                             </div>
                             <div className="admin-mini-test-settings-grid">
                               <div className="admin-mini-test-settings-card">
-                                <span>Durasi Acuan Subtest</span>
-                                <strong>{activeLearningSection.duration_minutes ? `${activeLearningSection.duration_minutes} menit` : 'Belum diatur'}</strong>
-                                <small>Dipakai sebagai dasar hitung timer mini test.</small>
+                                <span>Durasi Mini Test</span>
+                                <strong>{activeLearningWorkflowSection?.mini_test_duration_minutes ? `${activeLearningWorkflowSection.mini_test_duration_minutes} menit` : 'Belum diatur'}</strong>
+                                <small>Dipakai langsung sebagai timer saat user mengerjakan mini test.</small>
                               </div>
                               <div className="admin-mini-test-settings-card">
-                                <span>Target Soal Subtest</span>
-                                <strong>{activeLearningSection.target_question_count || 'Belum diatur'}</strong>
-                                <small>Digunakan agar timer mini test proporsional.</small>
+                                <span>Durasi Subtest</span>
+                                <strong>{activeLearningWorkflowSection?.duration_minutes ? `${activeLearningWorkflowSection.duration_minutes} menit` : 'Belum diatur'}</strong>
+                                <small>Durasi workflow subtest. Tetap terpisah dari timer mini test.</small>
                               </div>
                               <div className="admin-mini-test-settings-card">
-                                <span>Estimasi Timer Mini Test</span>
+                                <span>Timer Mini Test Aktif</span>
                                 <strong>{miniTestDurationMinutesLabel}</strong>
                                 <small>{`${learningQuestionsForm.length} soal mini test aktif di editor ini.`}</small>
                               </div>
@@ -3428,6 +3428,12 @@ export default function AdminPanel() {
                                       </div>
                                     ))}
                                   </div>
+                                  {question.explanation_notes && (
+                                    <div className="admin-inline-note">
+                                      <strong>Pembahasan soal</strong>
+                                      <p className="whitespace-pre-line">{question.explanation_notes}</p>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -3770,28 +3776,34 @@ export default function AdminPanel() {
                               />
                             </div>
 
-                            <div className="admin-question-options-preview-grid">
-                              {(question.options || []).map((option) => (
-                                <div key={option.id || `${question.id}-${option.letter}`} className="admin-option-preview-card">
-                                  <div className="admin-option-preview-head">
-                                    <strong>{option.letter}.</strong>
+                              <div className="admin-question-options-preview-grid">
+                                {(question.options || []).map((option) => (
+                                  <div key={option.id || `${question.id}-${option.letter}`} className="admin-option-preview-card">
+                                    <div className="admin-option-preview-head">
+                                      <strong>{option.letter}.</strong>
                                     {Number(option.is_correct) === 1 && (
                                       <span className="admin-correct-badge">Jawaban Benar</span>
                                     )}
                                   </div>
                                   <p>{option.text || 'Opsi berbasis gambar'}</p>
-                                  <AdminImagePreview
-                                    src={option.image_url}
-                                    alt={`Opsi ${option.letter}`}
-                                    className="admin-option-preview-image"
-                                  />
+                                    <AdminImagePreview
+                                      src={option.image_url}
+                                      alt={`Opsi ${option.letter}`}
+                                      className="admin-option-preview-image"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              {question.explanation_notes && (
+                                <div className="admin-inline-note">
+                                  <strong>Pembahasan soal</strong>
+                                  <p className="whitespace-pre-line">{question.explanation_notes}</p>
                                 </div>
-                              ))}
+                              )}
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    );
+                          )}
+                        </div>
+                      );
                   })}
                 </div>
               )}

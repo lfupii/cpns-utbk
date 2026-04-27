@@ -140,6 +140,7 @@ class AdminController {
                 'question_image_layout' => (string) ($row['question_image_layout'] ?? 'top'),
                 'question_type' => (string) ($row['question_type'] ?? 'single_choice'),
                 'difficulty' => (string) ($row['difficulty'] ?? 'medium'),
+                'explanation_notes' => (string) ($row['explanation_notes'] ?? ''),
                 'section_code' => (string) ($row['section_code'] ?? ''),
                 'section_name' => (string) ($row['section_name'] ?? ''),
                 'section_order' => (int) ($row['section_order'] ?? 1),
@@ -512,6 +513,13 @@ class AdminController {
                 $durationMinutes = null;
             }
 
+            $miniTestDurationMinutes = $section['mini_test_duration_minutes'] ?? null;
+            if ($miniTestDurationMinutes !== null && $miniTestDurationMinutes !== '') {
+                $miniTestDurationMinutes = max(0, (float) $miniTestDurationMinutes);
+            } else {
+                $miniTestDurationMinutes = null;
+            }
+
             $normalizedSections[] = array_filter([
                 'code' => $code,
                 'name' => $name,
@@ -519,6 +527,7 @@ class AdminController {
                 'session_order' => isset($section['session_order']) ? max(1, (int) $section['session_order']) : null,
                 'order' => $index + 1,
                 'duration_minutes' => $durationMinutes,
+                'mini_test_duration_minutes' => $miniTestDurationMinutes,
                 'target_question_count' => isset($section['target_question_count']) ? max(0, (int) $section['target_question_count']) : null,
             ], static function ($value) {
                 return $value !== null && $value !== '';
@@ -1060,6 +1069,7 @@ class AdminController {
         $questionText = trim((string) ($data['question_text'] ?? ''));
         $questionImageUrl = $this->normalizeMediaUrl($data['question_image_url'] ?? null);
         $questionImageLayout = strtolower(trim((string) ($data['question_image_layout'] ?? 'top')));
+        $explanationNotes = trim((string) ($data['explanation_notes'] ?? ''));
         $difficulty = (string) ($data['difficulty'] ?? 'medium');
         $questionType = (string) ($data['question_type'] ?? 'single_choice');
         $sectionCode = trim((string) ($data['section_code'] ?? ''));
@@ -1140,6 +1150,7 @@ class AdminController {
             'question_text' => $questionText,
             'question_image_url' => $questionImageUrl,
             'question_image_layout' => $questionImageLayout,
+            'explanation_notes' => $explanationNotes,
             'difficulty' => $difficulty,
             'question_type' => $questionType,
             'section_code' => $sectionCode,
@@ -1160,21 +1171,23 @@ class AdminController {
                 question_image_layout,
                 question_type,
                 difficulty,
+                explanation_notes,
                 section_code,
                 section_name,
                 section_order
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 $tables['questions']
             )
         );
         $insertQuestion->bind_param(
-            'isssssssi',
+            'issssssssi',
             $packageId,
             $payload['question_text'],
             $payload['question_image_url'],
             $payload['question_image_layout'],
             $payload['question_type'],
             $payload['difficulty'],
+            $payload['explanation_notes'],
             $payload['section_code'],
             $payload['section_name'],
             $payload['section_order']
@@ -1665,18 +1678,20 @@ class AdminController {
                      question_image_layout = ?,
                      question_type = ?,
                      difficulty = ?,
+                     explanation_notes = ?,
                      section_code = ?,
                      section_name = ?,
                      section_order = ?
                  WHERE id = ? AND package_id = ?', $tables['questions'])
             );
             $updateQuestion->bind_param(
-                'sssssssiii',
+                'ssssssssiii',
                 $payload['question_text'],
                 $payload['question_image_url'],
                 $payload['question_image_layout'],
                 $payload['question_type'],
                 $payload['difficulty'],
+                $payload['explanation_notes'],
                 $payload['section_code'],
                 $payload['section_name'],
                 $payload['section_order'],
@@ -2215,6 +2230,7 @@ class AdminController {
                 'question_image_layout' => (string) ($row['question_image_layout'] ?? 'top'),
                 'question_type' => (string) ($row['question_type'] ?? 'single_choice'),
                 'difficulty' => (string) ($row['difficulty'] ?? 'medium'),
+                'explanation_notes' => (string) ($row['explanation_notes'] ?? ''),
                 'section_code' => (string) ($row['section_code'] ?? ''),
                 'section_name' => (string) ($row['section_name'] ?? ''),
                 'section_order' => (int) ($row['section_order'] ?? 1),

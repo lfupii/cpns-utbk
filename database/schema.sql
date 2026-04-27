@@ -80,6 +80,7 @@ CREATE TABLE questions (
   question_image_layout VARCHAR(20) NOT NULL DEFAULT 'top',
   question_type ENUM('single_choice', 'multiple_choice') DEFAULT 'single_choice',
   difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+  explanation_notes LONGTEXT NULL,
   section_code VARCHAR(100) DEFAULT NULL,
   section_name VARCHAR(150) DEFAULT NULL,
   section_order INT NOT NULL DEFAULT 1,

@@ -207,6 +207,124 @@ class TestController {
         return $result ?: null;
     }
 
+    private function buildQuestionShuffleKey(int $attemptId, array $question): string {
+        $sectionCode = (string) ($question['section_code'] ?? 'general');
+        $questionId = (int) ($question['id'] ?? 0);
+
+        return hash('sha256', $attemptId . '|' . $sectionCode . '|' . $questionId);
+    }
+
+    private function sortQuestionsForAttempt(array $questions, int $attemptId): array {
+        usort($questions, function (array $left, array $right) use ($attemptId): int {
+            $leftSectionOrder = (int) ($left['section_order'] ?? 1);
+            $rightSectionOrder = (int) ($right['section_order'] ?? 1);
+
+            if ($leftSectionOrder !== $rightSectionOrder) {
+                return $leftSectionOrder <=> $rightSectionOrder;
+            }
+
+            $leftSectionCode = (string) ($left['section_code'] ?? '');
+            $rightSectionCode = (string) ($right['section_code'] ?? '');
+            if ($leftSectionCode !== $rightSectionCode) {
+                return strcmp($leftSectionCode, $rightSectionCode);
+            }
+
+            $leftKey = $this->buildQuestionShuffleKey($attemptId, $left);
+            $rightKey = $this->buildQuestionShuffleKey($attemptId, $right);
+            $comparison = strcmp($leftKey, $rightKey);
+            if ($comparison !== 0) {
+                return $comparison;
+            }
+
+            return ((int) ($left['id'] ?? 0)) <=> ((int) ($right['id'] ?? 0));
+        });
+
+        return $questions;
+    }
+
+    private function getResultReviewItems(int $attemptId, array $attempt): array {
+        $query = "SELECT q.id,
+                         q.question_text,
+                         q.question_image_url,
+                         q.question_image_layout,
+                         q.section_code,
+                         q.section_name,
+                         q.section_order,
+                         q.explanation_notes,
+                         ua.selected_option_id,
+                         ua.is_correct AS selected_is_correct,
+                         GROUP_CONCAT(
+                            JSON_OBJECT(
+                                'id', qo.id,
+                                'letter', qo.option_letter,
+                                'text', qo.option_text,
+                                'image_url', qo.option_image_url,
+                                'is_correct', qo.is_correct
+                            )
+                            ORDER BY qo.id SEPARATOR ','
+                         ) AS options
+                  FROM questions q
+                  LEFT JOIN question_options qo ON qo.question_id = q.id
+                  LEFT JOIN user_answers ua ON ua.question_id = q.id AND ua.attempt_id = ?
+                  WHERE q.package_id = ?
+                  GROUP BY q.id
+                  ORDER BY q.section_order ASC, q.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $packageId = (int) ($attempt['package_id'] ?? 0);
+        $stmt->bind_param('ii', $attemptId, $packageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $questions = [];
+        while ($row = $result->fetch_assoc()) {
+            $options = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+            $selectedOptionId = isset($row['selected_option_id']) ? (int) $row['selected_option_id'] : null;
+            $correctOptionId = null;
+
+            $normalizedOptions = array_map(static function (array $option) use ($selectedOptionId, &$correctOptionId): array {
+                $optionId = (int) ($option['id'] ?? 0);
+                $isCorrect = !empty($option['is_correct']);
+                if ($isCorrect) {
+                    $correctOptionId = $optionId;
+                }
+
+                return [
+                    'id' => $optionId,
+                    'letter' => (string) ($option['letter'] ?? ''),
+                    'text' => (string) ($option['text'] ?? ''),
+                    'image_url' => ($option['image_url'] ?? null) ?: null,
+                    'is_correct' => $isCorrect,
+                    'is_selected' => $selectedOptionId !== null && $optionId === $selectedOptionId,
+                ];
+            }, $options);
+
+            $questions[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'question_text' => (string) ($row['question_text'] ?? ''),
+                'question_image_url' => ($row['question_image_url'] ?? null) ?: null,
+                'question_image_layout' => (string) ($row['question_image_layout'] ?? 'top'),
+                'section_code' => (string) ($row['section_code'] ?? ''),
+                'section_name' => (string) ($row['section_name'] ?? ''),
+                'section_order' => (int) ($row['section_order'] ?? 1),
+                'explanation_notes' => trim((string) ($row['explanation_notes'] ?? '')),
+                'selected_option_id' => $selectedOptionId,
+                'correct_option_id' => $correctOptionId,
+                'is_answered' => $selectedOptionId !== null && $selectedOptionId > 0,
+                'is_correct' => isset($row['selected_is_correct']) ? (int) ($row['selected_is_correct'] ?? 0) === 1 : false,
+                'options' => $normalizedOptions,
+            ];
+        }
+
+        $questions = $this->sortQuestionsForAttempt($questions, $attemptId);
+
+        return array_map(static function (array $question, int $index): array {
+            return [
+                ...$question,
+                'number' => $index + 1,
+            ];
+        }, $questions, array_keys($questions));
+    }
+
     private function findSectionIndex(array $sections, array $attemptState): int {
         $activeCode = (string) ($attemptState['active_section_code'] ?? '');
         $activeOrder = (int) ($attemptState['active_section_order'] ?? 0);
@@ -888,17 +1006,26 @@ class TestController {
     public function getResults() {
         $tokenData = verifyToken();
         $attemptId = (int) ($_GET['attempt_id'] ?? 0);
+        $userId = (int) ($tokenData['userId'] ?? 0);
 
         if ($attemptId <= 0) {
             sendResponse('error', 'Attempt ID harus diisi', null, 400);
         }
 
-        $result = $this->getExistingResult($attemptId, (int) $tokenData['userId']);
+        $attempt = $this->getAttemptForUser($attemptId, $userId);
+        if (!$attempt) {
+            sendResponse('error', 'Attempt tidak ditemukan', null, 404);
+        }
+
+        $result = $this->getExistingResult($attemptId, $userId);
         if (!$result) {
             sendResponse('error', 'Hasil test tidak ditemukan', null, 404);
         }
 
-        sendResponse('success', 'Hasil test berhasil diambil', $result);
+        sendResponse('success', 'Hasil test berhasil diambil', [
+            ...$result,
+            'review_items' => $this->getResultReviewItems($attemptId, $attempt),
+        ]);
     }
 
     public function resendResultEmail() {

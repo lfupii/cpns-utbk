@@ -137,30 +137,46 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          max_attempts=3
+          set -u
+
+          max_attempts=2
+          lftp_internal_retries=2
+          lftp_timeout=20
+
           for attempt in $(seq 1 "${max_attempts}"); do
             echo "::group::Frontend deploy attempt ${attempt}/${max_attempts}"
             echo "Deploy target: frontend/dist -> public_html"
 
-            if lftp -e "
+            lftp_log="$(mktemp)"
+
+            set +e
+            lftp <<EOF >"${lftp_log}" 2>&1
             set cmd:fail-exit true
-            set net:max-retries 8
-            set net:reconnect-interval-base 5
-            set net:reconnect-interval-max 30
-            set net:timeout 60
+            set net:max-retries ${lftp_internal_retries}
+            set net:reconnect-interval-base 3
+            set net:reconnect-interval-max 10
+            set net:timeout ${lftp_timeout}
             set ftp:passive-mode true
             set ftp:prefer-epsv false
             open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
+            pwd
+            cls -la
             mirror -R --continue --verbose=2 --parallel=1 frontend/dist .
             bye
-            "; then
+            EOF
+            status=$?
+            set -e
+
+            if [ "${status}" -eq 0 ]; then
               echo "Frontend deploy succeeded on attempt ${attempt}/${max_attempts}"
+              rm -f "${lftp_log}"
               echo "::endgroup::"
               break
             fi
 
-            status=$?
             echo "::warning::Frontend deploy attempt ${attempt}/${max_attempts} failed with exit code ${status}"
+            sed -n '1,160p' "${lftp_log}"
+            rm -f "${lftp_log}"
             echo "::endgroup::"
 
             if [ "${attempt}" -eq "${max_attempts}" ]; then
@@ -179,30 +195,47 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          max_attempts=3
+          set -u
+
+          max_attempts=2
+          lftp_internal_retries=2
+          lftp_timeout=20
+
           for attempt in $(seq 1 "${max_attempts}"); do
             echo "::group::Backend deploy attempt ${attempt}/${max_attempts}"
             echo "Deploy target: .deploy/backend -> public_html/api"
 
-            if lftp -e "
+            lftp_log="$(mktemp)"
+
+            set +e
+            lftp <<EOF >"${lftp_log}" 2>&1
             set cmd:fail-exit true
-            set net:max-retries 8
-            set net:reconnect-interval-base 5
-            set net:reconnect-interval-max 30
-            set net:timeout 60
+            set net:max-retries ${lftp_internal_retries}
+            set net:reconnect-interval-base 3
+            set net:reconnect-interval-max 10
+            set net:timeout ${lftp_timeout}
             set ftp:passive-mode true
             set ftp:prefer-epsv false
             open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
+            pwd
+            mkdir -p api
+            cls -la api
             mirror -R --continue --verbose=2 --parallel=1 .deploy/backend api
             bye
-            "; then
+            EOF
+            status=$?
+            set -e
+
+            if [ "${status}" -eq 0 ]; then
               echo "Backend deploy succeeded on attempt ${attempt}/${max_attempts}"
+              rm -f "${lftp_log}"
               echo "::endgroup::"
               break
             fi
 
-            status=$?
             echo "::warning::Backend deploy attempt ${attempt}/${max_attempts} failed with exit code ${status}"
+            sed -n '1,160p' "${lftp_log}"
+            rm -f "${lftp_log}"
             echo "::endgroup::"
 
             if [ "${attempt}" -eq "${max_attempts}" ]; then

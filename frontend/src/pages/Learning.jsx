@@ -225,6 +225,8 @@ export default function Learning() {
   const isActiveDraftPreview = previewInfo.mode === 'draft' && previewInfo.section_code;
   const summary = learning?.summary || {};
   const packageData = learning?.package || null;
+  const isPackageTemporarilyDisabled = Boolean(Number(packageData?.is_temporarily_disabled || 0));
+  const packageUnderMaintenance = isPackageTemporarilyDisabled && !learning?.admin_bypass;
   const currentSectionTest = useMemo(
     () => (activeSection ? sectionTests[activeSection.code] || EMPTY_OBJECT : EMPTY_OBJECT),
     [activeSection, sectionTests]
@@ -1061,6 +1063,33 @@ export default function Learning() {
           <button type="button" className="btn btn-outline" onClick={() => navigate('/#paket')}>
             Pilih Paket Lagi
           </button>
+        </div>
+      </AccountShell>
+    );
+  }
+
+  if (packageUnderMaintenance) {
+    return (
+      <AccountShell
+        shellClassName="account-shell-learning"
+        title={`Ruang Belajar ${packageData.name}`}
+        subtitle="Paket sedang nonaktif sementara."
+      >
+        <div className="account-card">
+          <div className="alert">
+            Mohon maaf, paket ini nonaktif sementara dan sedang maintenance.
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Silakan cek kembali beberapa saat lagi. Selama maintenance berlangsung, materi dan aktivasi paket ini sedang kami tutup sementara.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button type="button" className="btn btn-primary" onClick={() => navigate('/#paket')}>
+              Kembali ke Paket
+            </button>
+            <button type="button" className="btn btn-outline" onClick={() => navigate('/')}>
+              Kembali ke Home
+            </button>
+          </div>
         </div>
       </AccountShell>
     );

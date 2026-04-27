@@ -122,7 +122,7 @@ class PaymentController {
         $packageId = $data['package_id'];
 
         // Get package details
-        $packageQuery = "SELECT id, name, price FROM test_packages WHERE id = ?";
+        $packageQuery = "SELECT id, name, price, is_temporarily_disabled FROM test_packages WHERE id = ?";
         $stmt = $this->mysqli->prepare($packageQuery);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -133,6 +133,9 @@ class PaymentController {
         }
 
         $package = $packageResult->fetch_assoc();
+        if ((int) ($package['is_temporarily_disabled'] ?? 0) === 1) {
+            sendResponse('error', 'Mohon maaf, paket ini nonaktif sementara dan sedang maintenance.', null, 423);
+        }
 
         // Get user details
         $userQuery = "SELECT email, full_name FROM users WHERE id = ?";

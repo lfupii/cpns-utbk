@@ -1074,6 +1074,7 @@ class LearningController {
                     'question_count' => (int) $package['question_count'],
                     'time_limit' => (int) round((float) ($workflow['total_duration_minutes'] ?? $package['time_limit'])),
                     'test_mode' => $workflow['mode'],
+                    'is_temporarily_disabled' => (int) ($package['is_temporarily_disabled'] ?? 0),
                 ],
                 'workflow' => $workflow,
                 'preview' => [

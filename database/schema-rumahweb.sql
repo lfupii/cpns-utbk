@@ -160,6 +160,7 @@ CREATE TABLE learning_section_questions (
   question_text LONGTEXT NOT NULL,
   question_image_url VARCHAR(1000) DEFAULT NULL,
   difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+  explanation_notes LONGTEXT NULL,
   question_order INT NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

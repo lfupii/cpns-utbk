@@ -1837,6 +1837,15 @@ export default function Learning() {
                   )}
 
                   <div className="learning-section-actions">
+                    {latestSectionMiniTestResult && (
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => navigate(`/learning/${numericPackageId}/review/${encodeURIComponent(activeSection.code)}`)}
+                      >
+                        Lihat Pembahasan Soal
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn btn-primary"

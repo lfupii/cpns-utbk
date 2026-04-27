@@ -515,7 +515,9 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             section_code VARCHAR(100) NOT NULL,
             question_text LONGTEXT NOT NULL,
             question_image_url VARCHAR(1000) DEFAULT NULL,
+            material_topic VARCHAR(255) DEFAULT NULL,
             difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+            explanation_notes LONGTEXT NULL,
             question_order INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -545,7 +547,9 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             section_code VARCHAR(100) NOT NULL,
             question_text LONGTEXT NOT NULL,
             question_image_url VARCHAR(1000) DEFAULT NULL,
+            material_topic VARCHAR(255) DEFAULT NULL,
             difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+            explanation_notes LONGTEXT NULL,
             question_order INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -570,6 +574,22 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
 
     if (!databaseColumnExists($mysqli, 'learning_section_questions', 'question_image_url')) {
         $mysqli->query("ALTER TABLE learning_section_questions ADD COLUMN question_image_url VARCHAR(1000) NULL AFTER question_text");
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_questions', 'material_topic')) {
+        $mysqli->query("ALTER TABLE learning_section_questions ADD COLUMN material_topic VARCHAR(255) NULL AFTER question_image_url");
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_question_drafts', 'material_topic')) {
+        $mysqli->query("ALTER TABLE learning_section_question_drafts ADD COLUMN material_topic VARCHAR(255) NULL AFTER question_image_url");
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_questions', 'explanation_notes')) {
+        $mysqli->query("ALTER TABLE learning_section_questions ADD COLUMN explanation_notes LONGTEXT NULL AFTER difficulty");
+    }
+
+    if (!databaseColumnExists($mysqli, 'learning_section_question_drafts', 'explanation_notes')) {
+        $mysqli->query("ALTER TABLE learning_section_question_drafts ADD COLUMN explanation_notes LONGTEXT NULL AFTER difficulty");
     }
 
     if (!databaseColumnExists($mysqli, 'learning_section_question_options', 'option_image_url')) {

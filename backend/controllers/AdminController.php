@@ -219,8 +219,8 @@ class AdminController {
         $result = $stmt->get_result();
 
         $insertQuestion = $this->mysqli->prepare(
-            "INSERT INTO learning_section_question_drafts (package_id, section_code, question_text, question_image_url, difficulty, question_order)
-             VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO learning_section_question_drafts (package_id, section_code, question_text, question_image_url, material_topic, difficulty, explanation_notes, question_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $insertOption = $this->mysqli->prepare(
             "INSERT INTO learning_section_question_option_drafts (question_id, option_letter, option_text, option_image_url, is_correct)
@@ -231,9 +231,11 @@ class AdminController {
             $sectionCode = (string) ($row['section_code'] ?? '');
             $questionText = (string) ($row['question_text'] ?? '');
             $questionImageUrl = ($row['question_image_url'] ?? null) ?: null;
+            $materialTopic = ($row['material_topic'] ?? null) ? trim((string) $row['material_topic']) : null;
             $difficulty = (string) ($row['difficulty'] ?? 'medium');
+            $explanationNotes = (string) ($row['explanation_notes'] ?? '');
             $questionOrder = (int) ($row['question_order'] ?? 1);
-            $insertQuestion->bind_param('issssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $difficulty, $questionOrder);
+            $insertQuestion->bind_param('issssssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $materialTopic, $difficulty, $explanationNotes, $questionOrder);
             $insertQuestion->execute();
             $draftQuestionId = (int) $insertQuestion->insert_id;
             $options = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
@@ -1000,6 +1002,8 @@ class AdminController {
     private function normalizeLearningQuestionPayload(array $data, int $order): array {
         $questionText = trim((string) ($data['question_text'] ?? ''));
         $questionImageUrl = $this->normalizeMediaUrl($data['question_image_url'] ?? null);
+        $explanationNotes = trim((string) ($data['explanation_notes'] ?? ''));
+        $materialTopic = substr(trim((string) ($data['material_topic'] ?? '')), 0, 255);
         $difficulty = trim((string) ($data['difficulty'] ?? 'medium'));
         $options = $data['options'] ?? [];
 
@@ -1008,7 +1012,7 @@ class AdminController {
         }
 
         if (!in_array($difficulty, ['easy', 'medium', 'hard'], true)) {
-            sendResponse('error', 'Tingkat kesulitan mini test tidak valid', null, 422);
+            $difficulty = 'medium';
         }
 
         if (!is_array($options) || count($options) < 2) {
@@ -1050,6 +1054,8 @@ class AdminController {
         return [
             'question_text' => $questionText,
             'question_image_url' => $questionImageUrl,
+            'explanation_notes' => $explanationNotes,
+            'material_topic' => $materialTopic,
             'difficulty' => $difficulty,
             'question_order' => max(1, (int) ($data['question_order'] ?? $order)),
             'options' => $normalizedOptions,
@@ -2135,8 +2141,8 @@ class AdminController {
 
             $insertQuestion = $this->mysqli->prepare(
                 sprintf(
-                    'INSERT INTO %s (package_id, section_code, question_text, question_image_url, difficulty, question_order)
-                     VALUES (?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO %s (package_id, section_code, question_text, question_image_url, material_topic, difficulty, explanation_notes, question_order)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     $tables['learning_questions']
                 )
             );
@@ -2152,9 +2158,11 @@ class AdminController {
             foreach ($normalizedQuestions as $question) {
                 $questionText = $question['question_text'];
                 $questionImageUrl = $question['question_image_url'];
+                $materialTopic = $question['material_topic'] !== '' ? $question['material_topic'] : null;
                 $difficulty = $question['difficulty'];
+                $explanationNotes = $question['explanation_notes'];
                 $questionOrder = $question['question_order'];
-                $insertQuestion->bind_param('issssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $difficulty, $questionOrder);
+                $insertQuestion->bind_param('issssssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $materialTopic, $difficulty, $explanationNotes, $questionOrder);
                 $insertQuestion->execute();
                 $questionId = (int) $insertQuestion->insert_id;
 
@@ -2162,6 +2170,8 @@ class AdminController {
                     'id' => $questionId,
                     'question_text' => $questionText,
                     'question_image_url' => $questionImageUrl,
+                    'material_topic' => $materialTopic ?? '',
+                    'explanation_notes' => $explanationNotes,
                     'difficulty' => $difficulty,
                     'question_order' => $questionOrder,
                     'options' => [],
@@ -2291,8 +2301,8 @@ class AdminController {
         $result = $stmt->get_result();
 
         $insertQuestion = $this->mysqli->prepare(
-            'INSERT INTO learning_section_questions (package_id, section_code, question_text, question_image_url, difficulty, question_order)
-             VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO learning_section_questions (package_id, section_code, question_text, question_image_url, material_topic, difficulty, explanation_notes, question_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $insertOption = $this->mysqli->prepare(
             'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, option_image_url, is_correct)
@@ -2303,9 +2313,11 @@ class AdminController {
             $sectionCode = (string) ($row['section_code'] ?? '');
             $questionText = (string) ($row['question_text'] ?? '');
             $questionImageUrl = ($row['question_image_url'] ?? null) ?: null;
+            $materialTopic = ($row['material_topic'] ?? null) ? trim((string) $row['material_topic']) : null;
             $difficulty = (string) ($row['difficulty'] ?? 'medium');
+            $explanationNotes = (string) ($row['explanation_notes'] ?? '');
             $questionOrder = (int) ($row['question_order'] ?? 1);
-            $insertQuestion->bind_param('issssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $difficulty, $questionOrder);
+            $insertQuestion->bind_param('issssssi', $packageId, $sectionCode, $questionText, $questionImageUrl, $materialTopic, $difficulty, $explanationNotes, $questionOrder);
             $insertQuestion->execute();
             $publishedQuestionId = (int) $insertQuestion->insert_id;
             $options = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];

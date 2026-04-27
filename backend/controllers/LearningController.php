@@ -710,6 +710,21 @@ class LearningController {
         return $attempt ?: null;
     }
 
+    private function getLatestCompletedSectionTestAttempt(int $userId, int $packageId, string $sectionCode): ?array {
+        $stmt = $this->mysqli->prepare(
+            "SELECT *
+             FROM learning_section_test_attempts
+             WHERE user_id = ? AND package_id = ? AND section_code = ? AND status = 'completed'
+             ORDER BY COALESCE(end_time, updated_at, start_time) DESC, id DESC
+             LIMIT 1"
+        );
+        $stmt->bind_param('iis', $userId, $packageId, $sectionCode);
+        $stmt->execute();
+        $attempt = $stmt->get_result()->fetch_assoc();
+
+        return $attempt ?: null;
+    }
+
     private function getSectionTestAttemptForUser(int $attemptId, int $userId, bool $forUpdate = false): ?array {
         $query = "SELECT *
                   FROM learning_section_test_attempts
@@ -835,6 +850,78 @@ class LearningController {
                 'answered_count' => count($savedAnswers),
             ],
         ];
+    }
+
+    private function buildSectionTestReviewItems(array $attempt, int $packageId, string $sectionCode): array {
+        $query = "SELECT q.id,
+                         q.question_text,
+                         q.question_image_url,
+                         COALESCE(q.explanation_notes, '') AS explanation_notes,
+                         GROUP_CONCAT(
+                            JSON_OBJECT(
+                                'id', qo.id,
+                                'letter', qo.option_letter,
+                                'text', qo.option_text,
+                                'image_url', qo.option_image_url,
+                                'is_correct', qo.is_correct
+                            )
+                            ORDER BY qo.id SEPARATOR ','
+                         ) AS options
+                  FROM learning_section_questions q
+                  LEFT JOIN learning_section_question_options qo ON qo.question_id = q.id
+                  WHERE q.package_id = ? AND q.section_code = ?
+                  GROUP BY q.id
+                  ORDER BY q.question_order ASC, q.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('is', $packageId, $sectionCode);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $answerMap = $this->decodeSectionTestAnswers($attempt['answers_json'] ?? null);
+        $items = [];
+
+        while ($row = $result->fetch_assoc()) {
+            $questionId = (int) ($row['id'] ?? 0);
+            $selectedOptionId = isset($answerMap[(string) $questionId]) ? (int) $answerMap[(string) $questionId] : null;
+            $options = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
+            $correctOptionId = null;
+
+            $normalizedOptions = array_map(static function (array $option) use ($selectedOptionId, &$correctOptionId): array {
+                $optionId = (int) ($option['id'] ?? 0);
+                $isCorrect = !empty($option['is_correct']);
+                if ($isCorrect) {
+                    $correctOptionId = $optionId;
+                }
+
+                return [
+                    'id' => $optionId,
+                    'letter' => (string) ($option['letter'] ?? ''),
+                    'text' => (string) ($option['text'] ?? ''),
+                    'image_url' => ($option['image_url'] ?? null) ?: null,
+                    'is_correct' => $isCorrect,
+                    'is_selected' => $selectedOptionId !== null && $selectedOptionId === $optionId,
+                ];
+            }, $options);
+
+            $items[] = [
+                'id' => $questionId,
+                'question_text' => (string) ($row['question_text'] ?? ''),
+                'question_image_url' => ($row['question_image_url'] ?? null) ?: null,
+                'explanation_notes' => trim((string) ($row['explanation_notes'] ?? '')),
+                'selected_option_id' => $selectedOptionId,
+                'correct_option_id' => $correctOptionId,
+                'is_answered' => $selectedOptionId !== null && $selectedOptionId > 0,
+                'is_correct' => $selectedOptionId !== null && $correctOptionId !== null && $selectedOptionId === $correctOptionId,
+                'options' => $normalizedOptions,
+            ];
+        }
+
+        return array_map(static function (array $item, int $index): array {
+            return [
+                ...$item,
+                'number' => $index + 1,
+            ];
+        }, $items, array_keys($items));
     }
 
     private function persistSectionTestAnswers(
@@ -1174,6 +1261,52 @@ class LearningController {
         }
     }
 
+    public function getSectionTestReview() {
+        $tokenData = verifyToken();
+        $userId = (int) $tokenData['userId'];
+        $packageId = (int) ($_GET['package_id'] ?? 0);
+        $sectionCode = trim((string) ($_GET['section_code'] ?? ''));
+
+        if ($packageId <= 0 || $sectionCode === '') {
+            sendResponse('error', 'Package ID dan section harus diisi', null, 400);
+        }
+
+        try {
+            $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
+            $package = $this->getPackage($packageId);
+            $workflow = TestWorkflow::buildPackageWorkflow($package);
+            $this->assertActiveAccess($userId, $packageId, $isAdmin);
+
+            $section = $this->getWorkflowSection($workflow, $sectionCode);
+            if (!$section) {
+                throw new RuntimeException('Subtest tidak ditemukan pada paket ini', 404);
+            }
+
+            $attempt = $this->getLatestCompletedSectionTestAttempt($userId, $packageId, $sectionCode);
+            if (!$attempt) {
+                throw new RuntimeException('Pembahasan mini test belum tersedia. Selesaikan mini test ini minimal satu kali.', 404);
+            }
+
+            $resultPayload = $this->decodeSectionTestResult($attempt['result_json'] ?? null);
+            if (!$resultPayload) {
+                throw new RuntimeException('Hasil mini test terakhir tidak ditemukan.', 404);
+            }
+
+            sendResponse('success', 'Pembahasan mini test berhasil diambil', [
+                'attempt_id' => (int) ($attempt['id'] ?? 0),
+                'package_id' => $packageId,
+                'section_code' => $sectionCode,
+                'section' => $section,
+                'result' => $resultPayload,
+                'review_items' => $this->buildSectionTestReviewItems($attempt, $packageId, $sectionCode),
+            ]);
+        } catch (RuntimeException $error) {
+            sendResponse('error', $error->getMessage(), null, $error->getCode() ?: 400);
+        } catch (Throwable $error) {
+            sendResponse('error', 'Gagal memuat pembahasan mini test', ['details' => $error->getMessage()], 500);
+        }
+    }
+
     public function startSectionTest() {
         $tokenData = verifyToken();
         $userId = (int) $tokenData['userId'];
@@ -1502,6 +1635,8 @@ if (strpos($requestPath, '/api/learning/package') !== false && $requestMethod ==
     $controller->saveSectionTestAnswer();
 } elseif (strpos($requestPath, '/api/learning/section-test/review-flag') !== false && $requestMethod === 'POST') {
     $controller->saveSectionTestReviewFlag();
+} elseif (strpos($requestPath, '/api/learning/section-test/review') !== false && $requestMethod === 'GET') {
+    $controller->getSectionTestReview();
 } elseif (strpos($requestPath, '/api/learning/section-test/submit') !== false && $requestMethod === 'POST') {
     $controller->submitSectionTest();
 } elseif (strpos($requestPath, '/api/learning/section-test') !== false && $requestMethod === 'GET') {

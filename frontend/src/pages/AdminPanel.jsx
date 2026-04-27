@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
@@ -438,6 +438,7 @@ export default function AdminPanel() {
   const [editingSectionActionsCode, setEditingSectionActionsCode] = useState('');
   const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
   const [activeMaterialTopicIndex, setActiveMaterialTopicIndex] = useState(null);
+  const draftReturnTimeoutRef = useRef(null);
   const routeSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const requestedAdminView = routeSearchParams.get('view') || '';
   const requestedPackageId = Number(routeSearchParams.get('package') || 0);
@@ -475,6 +476,13 @@ export default function AdminPanel() {
     ...accumulator,
     [Number(pkg.category_id || 0)]: (accumulator[Number(pkg.category_id || 0)] || 0) + 1,
   }), {}), [packages]);
+  const packagesByType = useMemo(() => packages.reduce((accumulator, pkg) => {
+    const categoryId = Number(pkg.category_id || 0);
+    return {
+      ...accumulator,
+      [categoryId]: [...(accumulator[categoryId] || []), pkg],
+    };
+  }, {}), [packages]);
   const filteredPackages = useMemo(() => {
     if (selectedPackageTypeFilterId <= 0) {
       return packages;
@@ -946,10 +954,28 @@ export default function AdminPanel() {
   }, [activeLearningSection]);
 
   useEffect(() => {
-    if (['dashboard', 'paket', 'tipe-paket', 'materi', 'soal'].includes(requestedAdminView)) {
+    if (['dashboard', 'tipe-paket', 'edit-paket', 'materi', 'soal'].includes(requestedAdminView)) {
       setAdminView(requestedAdminView);
+      return;
+    }
+
+    if (requestedAdminView === 'paket') {
+      setAdminView('tipe-paket');
     }
   }, [requestedAdminView]);
+
+  useEffect(() => () => {
+    if (draftReturnTimeoutRef.current) {
+      clearTimeout(draftReturnTimeoutRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (adminView !== 'edit-paket' && draftReturnTimeoutRef.current) {
+      clearTimeout(draftReturnTimeoutRef.current);
+      draftReturnTimeoutRef.current = null;
+    }
+  }, [adminView]);
 
   useEffect(() => {
     if (!requestedLearningSectionCode) {
@@ -1046,9 +1072,16 @@ export default function AdminPanel() {
     setSuccess('');
 
     try {
+      if (draftReturnTimeoutRef.current) {
+        clearTimeout(draftReturnTimeoutRef.current);
+      }
       await persistPackageForm(adminWorkspace);
       await refreshAdminData(Number(selectedPackageId));
-      setSuccess('Draft paket berhasil diperbarui.');
+      setSuccess('Draft paket berhasil diperbarui. Kembali ke Kelola Jenis Paket dalam 3 detik.');
+      draftReturnTimeoutRef.current = window.setTimeout(() => {
+        draftReturnTimeoutRef.current = null;
+        navigateToPackageTypeView('draft', Number(selectedPackageId));
+      }, 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyimpan paket');
     } finally {
@@ -1545,17 +1578,43 @@ export default function AdminPanel() {
     setEditingSectionActionsCode('');
   };
 
-  const openPackageView = () => {
-    setAdminView('paket');
-    setLearningEditorMode('');
-    setEditingSectionActionsCode('');
-  };
-
   const openPackageTypeView = () => {
     setAdminView('tipe-paket');
     setLearningEditorMode('');
     setEditingSectionActionsCode('');
   };
+
+  const navigateToPackageTypeView = useCallback((workspace = adminWorkspace, packageId = selectedPackageId) => {
+    const query = new URLSearchParams(location.search);
+    query.set('workspace', workspace);
+    query.set('view', 'tipe-paket');
+    if (packageId) {
+      query.set('package', String(packageId));
+    } else {
+      query.delete('package');
+    }
+    query.delete('section');
+    query.delete('mode');
+    query.delete('preview');
+    query.delete('mini_preview');
+    navigate(`/admin?${query.toString()}`);
+  }, [adminWorkspace, location.search, navigate, selectedPackageId]);
+
+  const openPackageEditor = useCallback((packageId, workspace = adminWorkspace) => {
+    if (!packageId) {
+      return;
+    }
+
+    const query = new URLSearchParams(location.search);
+    query.set('workspace', workspace);
+    query.set('view', 'edit-paket');
+    query.set('package', String(packageId));
+    query.delete('section');
+    query.delete('mode');
+    query.delete('preview');
+    query.delete('mini_preview');
+    navigate(`/admin?${query.toString()}`);
+  }, [adminWorkspace, location.search, navigate]);
 
   const openLearningView = (sectionCode = null, mode = '', shouldExpand = true, topicIndex = null) => {
     if (sectionCode) {
@@ -2013,15 +2072,8 @@ export default function AdminPanel() {
                 <p className="learning-sidebar-label">Pengaturan paket</p>
                 <button
                   type="button"
-                  className={adminView === 'paket' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
-                  onClick={openPackageView}
-                >
-                  Kelola Paket
-                </button>
-                <button
-                  type="button"
-                  className={adminView === 'tipe-paket' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
-                  onClick={openPackageTypeView}
+                  className={['tipe-paket', 'edit-paket'].includes(adminView) ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+                  onClick={() => navigateToPackageTypeView(adminWorkspace)}
                 >
                   Kelola Jenis Paket
                 </button>
@@ -2428,17 +2480,22 @@ export default function AdminPanel() {
                 </section>
               )}
 
-              {adminView === 'paket' && packageForm && (
+              {adminView === 'edit-paket' && packageForm && (
                 <article className="learning-material admin-package-view-shell">
                   <div className="learning-material-header">
                     <div>
-                      <span className="account-package-tag">{isDraftWorkspace ? 'Kelola Draft Paket' : 'Kelola Published Paket'}</span>
+                      <span className="account-package-tag">{isDraftWorkspace ? 'Edit Draft Paket' : 'Lihat Published Paket'}</span>
                       <h2>{selectedPackage?.name || 'Paket aktif'}</h2>
                       <p>
                         {isDraftWorkspace
-                          ? 'Edit paket di workspace draft, lalu publish saat isi dan setting sudah siap tampil ke user.'
-                          : 'Workspace published menampilkan versi live. Untuk ubah detail paket, pindah dulu ke tab Draft.'}
+                          ? 'Edit detail paket dari halaman terpisah ini, lalu simpan draft sebelum kembali ke daftar jenis paket.'
+                          : 'Halaman ini menampilkan versi live paket. Untuk mengubahnya, buka workspace draft lalu edit dari daftar jenis paket.'}
                       </p>
+                    </div>
+                    <div className="learning-hero-actions">
+                      <button type="button" className="btn btn-outline" onClick={() => navigateToPackageTypeView(adminWorkspace, Number(selectedPackageId))}>
+                        Kembali ke Kelola Jenis Paket
+                      </button>
                     </div>
                   </div>
 
@@ -2646,7 +2703,7 @@ export default function AdminPanel() {
                     <div className="admin-section-header admin-list-toolbar">
                       <div>
                         <h3>Form Jenis Paket</h3>
-                        <p className="text-muted">Tambahkan atau edit kategori paket seperti CPNS Standard, UTBK Premium, dan varian lain.</p>
+                        <p className="text-muted">Isi form ini hanya untuk menambah atau mengubah jenis paket. Detail paket dikelola lewat tombol edit pada daftar paket di bawah.</p>
                       </div>
                     </div>
 
@@ -2654,7 +2711,7 @@ export default function AdminPanel() {
                       <div className="account-form-grid">
                         <div className="form-group">
                           <label>Nama Tipe Paket</label>
-                          <input name="name" value={packageTypeForm.name} onChange={handlePackageTypeChange} placeholder="Contoh: UTBK Premium" />
+                          <input name="name" value={packageTypeForm.name} onChange={handlePackageTypeChange} placeholder="Contoh: UTBK Premium" required />
                         </div>
                         <div className="form-group form-group-full">
                           <label>Deskripsi</label>
@@ -2675,23 +2732,63 @@ export default function AdminPanel() {
                     </form>
 
                     <div className="admin-package-type-list">
-                      {packageTypes.map((type) => (
-                        <div key={type.id} className="admin-package-type-card">
-                          <div>
-                            <strong>{type.name}</strong>
-                            <p>{type.description || 'Tanpa deskripsi'}</p>
-                            <small>{type.package_count} paket</small>
+                      {packageTypes.map((type) => {
+                        const typePackages = packagesByType[Number(type.id)] || [];
+                        return (
+                          <div key={type.id} className="admin-package-type-card">
+                            <div>
+                              <strong>{type.name}</strong>
+                              <p>{type.description || 'Tanpa deskripsi'}</p>
+                              <small>{type.package_count} paket</small>
+                            </div>
+                            <div className="admin-package-type-actions">
+                              <button type="button" className="btn btn-outline" onClick={() => handlePackageTypeEdit(type)}>
+                                Edit
+                              </button>
+                              <button type="button" className="btn btn-danger" onClick={() => handlePackageTypeDelete(type)} disabled={packageTypeDeleting}>
+                                Hapus
+                              </button>
+                            </div>
+                            <div className="admin-package-type-package-list">
+                              {typePackages.length > 0 ? typePackages.map((pkg) => {
+                                const packageStatus = normalizeMaterialStatus(packageStatusMap[Number(pkg.id)] || 'published');
+                                return (
+                                  <div key={pkg.id} className="admin-package-type-package-item">
+                                    <div className="admin-package-type-package-copy">
+                                      <strong>{pkg.name}</strong>
+                                      <p>{pkg.workflow?.sections?.length || 0} subtest • {TEST_MODE_OPTIONS.find((option) => option.value === pkg.test_mode)?.label || pkg.test_mode || 'Standard'}</p>
+                                      <div className="admin-inline-status-row">
+                                        <span className={`admin-inline-status admin-inline-status-${packageStatus}`}>
+                                          {getMaterialStatusLabel(packageStatus)}
+                                        </span>
+                                        <span className="admin-inline-status-note">
+                                          {packageStatus === 'draft' ? 'Ada perubahan paket yang belum dipublish.' : 'Paket sudah sinkron dengan versi live.'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="admin-package-type-actions">
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline"
+                                        onClick={() => openPackageEditor(Number(pkg.id), adminWorkspace)}
+                                      >
+                                        {isDraftWorkspace ? 'Edit Paket' : 'Lihat Paket'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }) : (
+                                <div className="admin-package-type-package-item admin-package-type-package-item-empty">
+                                  <div className="admin-package-type-package-copy">
+                                    <strong>Belum ada paket</strong>
+                                    <p>Tambahkan paket baru dari workspace published untuk jenis paket ini.</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div className="admin-package-type-actions">
-                            <button type="button" className="btn btn-outline" onClick={() => handlePackageTypeEdit(type)}>
-                              Edit
-                            </button>
-                            <button type="button" className="btn btn-danger" onClick={() => handlePackageTypeDelete(type)} disabled={packageTypeDeleting}>
-                              Hapus
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </article>

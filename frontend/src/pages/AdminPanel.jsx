@@ -159,6 +159,44 @@ function getMaterialStatusLabel(status) {
   return normalizeMaterialStatus(status) === 'draft' ? 'Draft' : 'Published';
 }
 
+function buildComparablePackageSnapshot(pkg) {
+  if (!pkg) {
+    return null;
+  }
+
+  return JSON.stringify({
+    category_id: Number(pkg.category_id || 0),
+    name: String(pkg.name || ''),
+    description: String(pkg.description || ''),
+    price: Number(pkg.price || 0),
+    duration_days: Number(pkg.duration_days || 0),
+    max_attempts: Number(pkg.max_attempts || 0),
+    time_limit: Number(pkg.time_limit || 0),
+    test_mode: String(pkg.test_mode || 'standard'),
+    is_temporarily_disabled: Number(pkg.is_temporarily_disabled || 0),
+    workflow: pkg.workflow || null,
+  });
+}
+
+function buildPackageStatusMap(publishedPackages, draftPackages) {
+  const publishedMap = new Map((publishedPackages || []).map((pkg) => [Number(pkg.id), pkg]));
+  const draftMap = new Map((draftPackages || []).map((pkg) => [Number(pkg.id), pkg]));
+  const ids = new Set([...publishedMap.keys(), ...draftMap.keys()]);
+
+  return Array.from(ids).reduce((accumulator, id) => {
+    const publishedPackage = publishedMap.get(id) || null;
+    const draftPackage = draftMap.get(id) || null;
+    const status = buildComparablePackageSnapshot(publishedPackage) === buildComparablePackageSnapshot(draftPackage)
+      ? 'published'
+      : 'draft';
+
+    return {
+      ...accumulator,
+      [id]: status,
+    };
+  }, {});
+}
+
 function getTopicStatus(material, topicIndex) {
   const statuses = material?.topic_statuses;
   if (Array.isArray(statuses)) {
@@ -394,7 +432,8 @@ export default function AdminPanel() {
   const [adminView, setAdminView] = useState('dashboard');
   const [savingWorkspaceDraft, setSavingWorkspaceDraft] = useState(false);
   const [publishingWorkspaceDraft, setPublishingWorkspaceDraft] = useState(false);
-  const [packagesExpanded, setPackagesExpanded] = useState(false);
+  const [selectedPackageTypeFilterId, setSelectedPackageTypeFilterId] = useState(0);
+  const [packageStatusMap, setPackageStatusMap] = useState({});
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
   const [editingSectionActionsCode, setEditingSectionActionsCode] = useState('');
   const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
@@ -432,6 +471,32 @@ export default function AdminPanel() {
       || 'Standard',
     [packageForm?.test_mode, selectedPackage?.test_mode]
   );
+  const packageTypeCounts = useMemo(() => packages.reduce((accumulator, pkg) => ({
+    ...accumulator,
+    [Number(pkg.category_id || 0)]: (accumulator[Number(pkg.category_id || 0)] || 0) + 1,
+  }), {}), [packages]);
+  const filteredPackages = useMemo(() => {
+    if (selectedPackageTypeFilterId <= 0) {
+      return packages;
+    }
+
+    return packages.filter((pkg) => Number(pkg.category_id || 0) === Number(selectedPackageTypeFilterId));
+  }, [packages, selectedPackageTypeFilterId]);
+  const selectedPackageWorkspaceStatus = useMemo(
+    () => normalizeMaterialStatus(packageStatusMap[Number(selectedPackageId)] || 'published'),
+    [packageStatusMap, selectedPackageId]
+  );
+  const selectedPackageWorkspaceNote = useMemo(() => {
+    if (selectedPackageWorkspaceStatus === 'draft') {
+      return isDraftWorkspace
+        ? 'Draft paket ini punya perubahan terbaru yang belum dipublish ke user.'
+        : 'Versi live ini masih tertinggal dari draft terbaru.';
+    }
+
+    return isDraftWorkspace
+      ? 'Draft paket ini sudah sinkron dengan versi published.'
+      : 'Versi live ini sudah sinkron dengan draft terbaru.';
+  }, [isDraftWorkspace, selectedPackageWorkspaceStatus]);
   const defaultSectionCode = packageSections[0]?.code || '';
   const preferredSectionCode = useMemo(() => {
     const validCodes = new Set(packageSections.map((section) => String(section.code)));
@@ -491,6 +556,29 @@ export default function AdminPanel() {
     const response = await apiClient.get('/admin/package-types');
     return response.data.data || [];
   }, []);
+
+  const loadPackageWorkspaceData = useCallback(async () => {
+    const [publishedResponse, draftResponse, typesResponse] = await Promise.all([
+      apiClient.get('/admin/packages?workspace=published'),
+      apiClient.get('/admin/packages?workspace=draft'),
+      fetchPackageTypes(),
+    ]);
+
+    const publishedPackages = publishedResponse.data.data || [];
+    const draftPackages = draftResponse.data.data || [];
+    const nextPackages = adminWorkspace === 'draft' ? draftPackages : publishedPackages;
+
+    setPackages(nextPackages);
+    setPackageTypes(typesResponse || []);
+    setPackageStatusMap(buildPackageStatusMap(publishedPackages, draftPackages));
+
+    return {
+      packages: nextPackages,
+      packageTypes: typesResponse || [],
+      publishedPackages,
+      draftPackages,
+    };
+  }, [adminWorkspace, fetchPackageTypes]);
 
   const sectionStats = useMemo(() => {
     const counts = questions.reduce((accumulator, question) => {
@@ -564,16 +652,11 @@ export default function AdminPanel() {
   useEffect(() => {
     const fetchPackages = async () => {
       try {
-        const [packagesResponse, typesResponse] = await Promise.all([
-          apiClient.get(`/admin/packages?workspace=${adminWorkspace}`),
-          fetchPackageTypes(),
-        ]);
-        const nextPackages = packagesResponse.data.data || [];
-        setPackages(nextPackages);
-        setPackageTypes(typesResponse || []);
+        const { packages: nextPackages } = await loadPackageWorkspaceData();
         if (nextPackages.length > 0) {
           const requestedPackage = nextPackages.find((pkg) => Number(pkg.id) === requestedPackageId);
           setSelectedPackageId(Number((requestedPackage || nextPackages[0]).id));
+          setSelectedPackageTypeFilterId(Number((requestedPackage || nextPackages[0]).category_id || 0));
         }
       } catch (err) {
         setError(err.response?.data?.message || 'Gagal memuat data admin');
@@ -583,7 +666,7 @@ export default function AdminPanel() {
     };
 
     fetchPackages();
-  }, [adminWorkspace, fetchPackageTypes, requestedPackageId]);
+  }, [adminWorkspace, loadPackageWorkspaceData, requestedPackageId]);
 
   useEffect(() => {
     if (!selectedPackage) {
@@ -605,25 +688,56 @@ export default function AdminPanel() {
     });
   }, [selectedPackage]);
 
+  useEffect(() => {
+    if (!packages.length) {
+      setSelectedPackageTypeFilterId(0);
+      return;
+    }
+
+    setSelectedPackageTypeFilterId((current) => {
+      const normalizedCurrent = Number(current || 0);
+      if (normalizedCurrent > 0 && packages.some((pkg) => Number(pkg.category_id || 0) === normalizedCurrent)) {
+        return normalizedCurrent;
+      }
+
+      const selectedCategoryId = Number(selectedPackage?.category_id || 0);
+      if (selectedCategoryId > 0 && packages.some((pkg) => Number(pkg.category_id || 0) === selectedCategoryId)) {
+        return selectedCategoryId;
+      }
+
+      return Number(packages[0]?.category_id || 0);
+    });
+  }, [packages, selectedPackage]);
+
+  useEffect(() => {
+    if (!filteredPackages.length) {
+      if (packages.length === 0) {
+        setSelectedPackageId(null);
+      }
+      return;
+    }
+
+    if (!filteredPackages.some((pkg) => Number(pkg.id) === Number(selectedPackageId))) {
+      setSelectedPackageId(Number(filteredPackages[0].id));
+    }
+  }, [filteredPackages, packages.length, selectedPackageId]);
+
   const refreshAdminData = async (packageId = selectedPackageId) => {
     if (!packageId) {
       return;
     }
 
-    const [questionsResponse, packagesResponse, learningResponse, typesResponse] = await Promise.all([
+    const [questionsResponse, packageWorkspaceData, learningResponse] = await Promise.all([
       fetchAdminQuestions(packageId),
-      apiClient.get(`/admin/packages?workspace=${adminWorkspace}`),
+      loadPackageWorkspaceData(),
       fetchLearningContent(packageId),
-      fetchPackageTypes(),
     ]);
 
     const nextQuestions = questionsResponse || [];
-    const nextPackages = packagesResponse.data.data || [];
+    const nextPackages = packageWorkspaceData?.packages || [];
     const nextLearningContent = learningResponse || [];
 
     setQuestions(nextQuestions);
-    setPackages(nextPackages);
-    setPackageTypes(typesResponse || []);
     setLearningContent(nextLearningContent);
     setLearningSectionCode((current) => (
       nextLearningContent.some((section) => section.code === current)
@@ -635,7 +749,7 @@ export default function AdminPanel() {
       questions: nextQuestions,
       packages: nextPackages,
       learningContent: nextLearningContent,
-      packageTypes: typesResponse || [],
+      packageTypes: packageWorkspaceData?.packageTypes || [],
     };
   };
 
@@ -832,7 +946,7 @@ export default function AdminPanel() {
   }, [activeLearningSection]);
 
   useEffect(() => {
-    if (['dashboard', 'paket', 'materi', 'soal'].includes(requestedAdminView)) {
+    if (['dashboard', 'paket', 'tipe-paket', 'materi', 'soal'].includes(requestedAdminView)) {
       setAdminView(requestedAdminView);
     }
   }, [requestedAdminView]);
@@ -933,6 +1047,7 @@ export default function AdminPanel() {
 
     try {
       await persistPackageForm(adminWorkspace);
+      await refreshAdminData(Number(selectedPackageId));
       setSuccess('Draft paket berhasil diperbarui.');
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyimpan paket');
@@ -958,11 +1073,11 @@ export default function AdminPanel() {
         test_mode: packageForm?.test_mode || selectedPackage?.test_mode || 'standard',
       });
       const createdPackageId = Number(response.data?.data?.package_id || 0);
-      const packagesResponse = await apiClient.get('/admin/packages?workspace=published');
-      const nextPackages = packagesResponse.data.data || [];
-      setPackages(nextPackages);
+      const { packages: nextPackages } = await loadPackageWorkspaceData();
       if (createdPackageId > 0) {
         setSelectedPackageId(createdPackageId);
+        const createdPackage = nextPackages.find((pkg) => Number(pkg.id) === createdPackageId);
+        setSelectedPackageTypeFilterId(Number(createdPackage?.category_id || packageForm?.category_id || selectedPackage?.category_id || 0));
       } else if (nextPackages.length > 0) {
         setSelectedPackageId(Number(nextPackages[nextPackages.length - 1].id));
       }
@@ -1012,7 +1127,7 @@ export default function AdminPanel() {
       name: type.name || '',
       description: type.description || '',
     });
-    setAdminView('paket');
+    openPackageTypeView();
   };
 
   const handlePackageTypeDelete = async (type) => {
@@ -1061,9 +1176,7 @@ export default function AdminPanel() {
 
     try {
       await apiClient.delete(`/admin/packages?id=${selectedPackage.id}`);
-      const packagesResponse = await apiClient.get('/admin/packages?workspace=published');
-      const nextPackages = packagesResponse.data.data || [];
-      setPackages(nextPackages);
+      const { packages: nextPackages } = await loadPackageWorkspaceData();
       setSelectedPackageId(nextPackages[0] ? Number(nextPackages[0].id) : null);
       resetQuestionForm();
       setExpandedQuestionId(null);
@@ -1081,16 +1194,11 @@ export default function AdminPanel() {
       return;
     }
 
-    if (isDraftWorkspace) {
-      setError('Nonaktifkan sementara dijalankan dari tab Published agar langsung berdampak ke user.');
-      return;
-    }
-
     const nextValue = isPackageTemporarilyDisabled ? 0 : 1;
     const confirmed = window.confirm(
       nextValue === 1
-        ? `Nonaktifkan sementara paket "${selectedPackage.name}" untuk user?`
-        : `Aktifkan lagi paket "${selectedPackage.name}" untuk user?`
+        ? `Tandai paket "${selectedPackage.name}" sebagai nonaktif sementara${isDraftWorkspace ? ' di draft' : ''}?`
+        : `Aktifkan lagi paket "${selectedPackage.name}"${isDraftWorkspace ? ' di draft' : ''}?`
     );
     if (!confirmed) {
       return;
@@ -1106,12 +1214,15 @@ export default function AdminPanel() {
         workspace: adminWorkspace,
         is_temporarily_disabled: nextValue,
       });
-      const response = await apiClient.get(`/admin/packages?workspace=${adminWorkspace}`);
-      setPackages(response.data.data || []);
+      await refreshAdminData(Number(selectedPackageId));
       setSuccess(
         nextValue === 1
-          ? 'Paket berhasil dinonaktifkan sementara.'
-          : 'Paket berhasil diaktifkan kembali.'
+          ? (isDraftWorkspace
+            ? 'Status nonaktif sementara berhasil disimpan di draft. Publish draft untuk menerapkan ke user.'
+            : 'Paket berhasil dinonaktifkan sementara.')
+          : (isDraftWorkspace
+            ? 'Status aktif paket berhasil disimpan di draft. Publish draft untuk menerapkan ke user.'
+            : 'Paket berhasil diaktifkan kembali.')
       );
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal mengubah status paket');
@@ -1436,6 +1547,12 @@ export default function AdminPanel() {
 
   const openPackageView = () => {
     setAdminView('paket');
+    setLearningEditorMode('');
+    setEditingSectionActionsCode('');
+  };
+
+  const openPackageTypeView = () => {
+    setAdminView('tipe-paket');
     setLearningEditorMode('');
     setEditingSectionActionsCode('');
   };
@@ -1901,45 +2018,103 @@ export default function AdminPanel() {
                 >
                   Kelola Paket
                 </button>
+                <button
+                  type="button"
+                  className={adminView === 'tipe-paket' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+                  onClick={openPackageTypeView}
+                >
+                  Kelola Jenis Paket
+                </button>
+                {adminWorkspace === 'published' && (
+                  <div className="learning-sidebar-list">
+                    <button type="button" className="learning-sidebar-item" onClick={handleCreatePackage} disabled={packageCreating}>
+                      <strong>{packageCreating ? 'Membuat paket...' : 'Tambah Paket Baru'}</strong>
+                      <small>Gunakan paket aktif sebagai template awal.</small>
+                    </button>
+                    <button
+                      type="button"
+                      className="learning-sidebar-item"
+                      onClick={handleDeletePackage}
+                      disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
+                    >
+                      <strong>{packageDeleting ? 'Menghapus paket...' : 'Hapus Paket Terpilih'}</strong>
+                      <small>{selectedPackage ? selectedPackage.name : 'Pilih paket yang ingin dihapus.'}</small>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="learning-sidebar-card admin-user-sidebar-card">
-                <p className="learning-sidebar-label">Jenis paket</p>
-                <button
-                  type="button"
-                  className="learning-sidebar-toggle"
-                  onClick={() => setPackagesExpanded((current) => !current)}
-                  aria-expanded={packagesExpanded}
-                >
-                  <span>
-                    <strong>{selectedPackage?.name || 'Pilih paket'}</strong>
-                    <small>{selectedPackage?.category_name || `${packages.length} paket tersedia`}</small>
-                  </span>
-                  <span>{packagesExpanded ? '▴' : '▾'}</span>
-                </button>
-
-                {packagesExpanded && (
-                  <div className="learning-sidebar-list">
-                    {packages.map((pkg) => (
+                <p className="learning-sidebar-label">Jenis Paket</p>
+                <div className="learning-sidebar-list">
+                  {packageTypes.map((type) => {
+                    const typeId = Number(type.id);
+                    const isActiveType = typeId === Number(selectedPackageTypeFilterId);
+                    return (
                       <button
-                        key={pkg.id}
+                        key={type.id}
                         type="button"
-                        className={Number(selectedPackageId) === Number(pkg.id) ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
+                        className={isActiveType ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
                         onClick={() => {
-                          setSelectedPackageId(Number(pkg.id));
+                          setSelectedPackageTypeFilterId(typeId);
+                          const firstPackage = packages.find((pkg) => Number(pkg.category_id || 0) === typeId);
+                          if (firstPackage) {
+                            setSelectedPackageId(Number(firstPackage.id));
+                          }
                           resetQuestionForm();
                           setExpandedQuestionId(null);
                           setLearningEditorMode('');
                           setEditingSectionActionsCode('');
-                          setAdminView('dashboard');
                         }}
                       >
-                        <strong>{pkg.name}</strong>
-                        <small>{pkg.category_name || `${pkg.workflow?.sections?.length || 0} subtes`}</small>
+                        <strong>{type.name}</strong>
+                        <small>{packageTypeCounts[typeId] || 0} paket</small>
                       </button>
-                    ))}
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="learning-sidebar-card admin-user-sidebar-card">
+                <p className="learning-sidebar-label">Daftar Paket</p>
+                <div className="learning-sidebar-list">
+                  {filteredPackages.map((pkg) => {
+                    const packageStatus = normalizeMaterialStatus(packageStatusMap[Number(pkg.id)] || 'published');
+                    return (
+                      <button
+                        key={pkg.id}
+                        type="button"
+                        className={[
+                          'learning-sidebar-item',
+                          'admin-sidebar-package-item',
+                          Number(selectedPackageId) === Number(pkg.id) ? 'learning-sidebar-item-active' : '',
+                        ].filter(Boolean).join(' ')}
+                        onClick={() => {
+                          setSelectedPackageId(Number(pkg.id));
+                          setSelectedPackageTypeFilterId(Number(pkg.category_id || 0));
+                          resetQuestionForm();
+                          setExpandedQuestionId(null);
+                          setLearningEditorMode('');
+                          setEditingSectionActionsCode('');
+                        }}
+                      >
+                        <span className="admin-sidebar-link-copy">
+                          <strong>{pkg.name}</strong>
+                          <small>{pkg.workflow?.sections?.length || 0} subtest • {TEST_MODE_OPTIONS.find((option) => option.value === pkg.test_mode)?.label || pkg.test_mode || 'Standard'}</small>
+                        </span>
+                        <small className={`admin-inline-status admin-inline-status-${packageStatus}`}>
+                          {getMaterialStatusLabel(packageStatus)}
+                        </small>
+                      </button>
+                    );
+                  })}
+                  {filteredPackages.length === 0 && (
+                    <div className="learning-sidebar-item">
+                      <strong>Belum ada paket</strong>
+                      <small>Pilih jenis paket lain atau tambahkan paket baru dari workspace published.</small>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="learning-sidebar-card admin-user-sidebar-card">
@@ -2320,71 +2495,11 @@ export default function AdminPanel() {
                           <strong>{packageSections.length}</strong>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="admin-package-action-panel">
-                      <div className="admin-package-action-copy">
-                        <h3>{isDraftWorkspace ? 'Aksi Draft' : 'Aksi Published'}</h3>
-                        <p className="text-muted">
-                          {isDraftWorkspace
-                            ? 'Simpan perubahan berkala di draft. Publish hanya saat struktur, materi, dan harga sudah siap tampil ke user.'
-                            : 'Tambah, hapus, dan maintenance paket tetap bisa dari sini. Edit detail paket dilakukan dari workspace draft.'}
-                        </p>
-                      </div>
-
-                      <div className="admin-package-action-group">
-                        {isDraftWorkspace ? (
-                          <>
-                            <button type="button" className="btn btn-outline" onClick={() => handleWorkspaceChange('published')}>
-                              Lihat Published
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline"
-                              onClick={handleSaveWorkspaceDraft}
-                              disabled={savingWorkspaceDraft || !selectedPackageId}
-                            >
-                              {savingWorkspaceDraft ? 'Menyimpan Draft...' : 'Simpan Draft'}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-primary"
-                              onClick={handlePublishWorkspaceDraft}
-                              disabled={publishingWorkspaceDraft || !selectedPackageId}
-                            >
-                              {publishingWorkspaceDraft ? 'Publish Draft...' : 'Publish ke User'}
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button type="button" className="btn btn-outline" onClick={() => handleWorkspaceChange('draft')}>
-                              Edit di Draft
-                            </button>
-                            <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
-                              {packageCreating ? 'Membuat...' : 'Tambah Paket'}
-                            </button>
-                            <button
-                              type="button"
-                              className={isPackageTemporarilyDisabled ? 'btn btn-outline' : 'btn btn-danger'}
-                              onClick={handlePackageAvailabilityToggle}
-                              disabled={packageAvailabilitySaving || !selectedPackage}
-                            >
-                              {packageAvailabilitySaving
-                                ? 'Memproses...'
-                                : isPackageTemporarilyDisabled
-                                  ? 'Aktifkan Lagi Paket'
-                                  : 'Nonaktifkan Sementara'}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-danger"
-                              onClick={handleDeletePackage}
-                              disabled={packageDeleting || packages.length <= 1 || !selectedPackage}
-                            >
-                              {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
-                            </button>
-                          </>
-                        )}
+                      <div className="admin-inline-status-row">
+                        <span className={`admin-material-status-badge admin-material-status-badge-${selectedPackageWorkspaceStatus}`}>
+                          {getMaterialStatusLabel(selectedPackageWorkspaceStatus)}
+                        </span>
+                        <span className="admin-inline-status-note">{selectedPackageWorkspaceNote}</span>
                       </div>
                     </div>
                   </div>
@@ -2493,28 +2608,45 @@ export default function AdminPanel() {
 
                       <div className="account-form-actions">
                         {isDraftWorkspace ? (
-                          <button type="submit" className="btn btn-primary" disabled={packageSaving}>
-                            {packageSaving ? 'Menyimpan...' : 'Simpan Draft Paket'}
-                          </button>
-                        ) : (
-                          <button type="button" className="btn btn-primary" onClick={() => handleWorkspaceChange('draft')}>
-                            Buka Draft untuk Edit
-                          </button>
-                        )}
-                        {isDraftWorkspace && (
-                          <button type="button" className="btn btn-outline" onClick={handleSaveWorkspaceDraft} disabled={savingWorkspaceDraft || !selectedPackageId}>
-                            {savingWorkspaceDraft ? 'Menyimpan Draft...' : 'Simpan Draft Workspace'}
-                          </button>
-                        )}
+                          <>
+                            <button type="submit" className="btn btn-primary" disabled={packageSaving}>
+                              {packageSaving ? 'Menyimpan...' : 'Simpan Draft Paket'}
+                            </button>
+                            <button
+                              type="button"
+                              className={isPackageTemporarilyDisabled ? 'btn btn-outline' : 'btn btn-danger'}
+                              onClick={handlePackageAvailabilityToggle}
+                              disabled={packageAvailabilitySaving || !selectedPackage}
+                            >
+                              {packageAvailabilitySaving
+                                ? 'Memproses...'
+                                : isPackageTemporarilyDisabled
+                                  ? 'Aktifkan Lagi Paket'
+                                  : 'Nonaktifkan Sementara'}
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </form>
+                  </div>
+                </article>
+              )}
+
+              {adminView === 'tipe-paket' && (
+                <article className="learning-material admin-package-view-shell">
+                  <div className="learning-material-header">
+                    <div>
+                      <span className="account-package-tag">Kelola Jenis Paket</span>
+                      <h2>Jenis Paket</h2>
+                      <p>Kelola kategori paket di halaman terpisah supaya area edit paket utama tetap fokus ke satu paket yang sedang dipilih.</p>
+                    </div>
                   </div>
 
                   <div className="learning-page admin-package-form-page">
                     <div className="admin-section-header admin-list-toolbar">
                       <div>
-                        <h3>Tipe Paket</h3>
-                        <p className="text-muted">Kelola kategori paket agar ke depan bisa ada CPNS/UTBK standard, premium, atau varian lain.</p>
+                        <h3>Form Jenis Paket</h3>
+                        <p className="text-muted">Tambahkan atau edit kategori paket seperti CPNS Standard, UTBK Premium, dan varian lain.</p>
                       </div>
                     </div>
 

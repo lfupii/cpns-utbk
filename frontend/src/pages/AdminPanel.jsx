@@ -178,6 +178,25 @@ function buildComparablePackageSnapshot(pkg) {
   });
 }
 
+function buildPackageUpdatePayload(pkg) {
+  if (!pkg) {
+    return null;
+  }
+
+  return {
+    package_id: Number(pkg.id),
+    category_id: Number(pkg.category_id || 0),
+    name: pkg.name || '',
+    description: pkg.description || '',
+    price: Number(pkg.price || 0),
+    duration_days: Number(pkg.duration_days || 30),
+    max_attempts: Number(pkg.max_attempts || 1),
+    time_limit: Number(pkg.time_limit || 90),
+    test_mode: pkg.test_mode || 'standard',
+    is_temporarily_disabled: Number(pkg.is_temporarily_disabled || 0),
+  };
+}
+
 function buildPackageStatusMap(publishedPackages, draftPackages) {
   const publishedMap = new Map((publishedPackages || []).map((pkg) => [Number(pkg.id), pkg]));
   const draftMap = new Map((draftPackages || []).map((pkg) => [Number(pkg.id), pkg]));
@@ -1203,16 +1222,20 @@ export default function AdminPanel() {
     }
   };
 
-  const handlePackageAvailabilityToggle = async () => {
-    if (!selectedPackage || !packageForm) {
+  const handlePackageAvailabilityToggle = async (targetPackage = selectedPackage) => {
+    const payload = targetPackage
+      ? buildPackageUpdatePayload(targetPackage)
+      : packageForm;
+    if (!targetPackage || !payload) {
       return;
     }
 
-    const nextValue = isPackageTemporarilyDisabled ? 0 : 1;
+    const currentDisabled = Boolean(Number(payload.is_temporarily_disabled || 0));
+    const nextValue = currentDisabled ? 0 : 1;
     const confirmed = window.confirm(
       nextValue === 1
-        ? `Tandai paket "${selectedPackage.name}" sebagai nonaktif sementara${isDraftWorkspace ? ' di draft' : ''}?`
-        : `Aktifkan lagi paket "${selectedPackage.name}"${isDraftWorkspace ? ' di draft' : ''}?`
+        ? `Tandai paket "${targetPackage.name}" sebagai nonaktif sementara${isDraftWorkspace ? ' di draft' : ''}?`
+        : `Aktifkan lagi paket "${targetPackage.name}"${isDraftWorkspace ? ' di draft' : ''}?`
     );
     if (!confirmed) {
       return;
@@ -1224,11 +1247,11 @@ export default function AdminPanel() {
 
     try {
       await apiClient.put('/admin/packages', {
-        ...packageForm,
+        ...payload,
         workspace: adminWorkspace,
         is_temporarily_disabled: nextValue,
       });
-      await refreshAdminData(Number(selectedPackageId));
+      await refreshAdminData(Number(selectedPackageId || targetPackage.id));
       setSuccess(
         nextValue === 1
           ? (isDraftWorkspace
@@ -2542,6 +2565,7 @@ export default function AdminPanel() {
                       {filteredPackages.length > 0 ? filteredPackages.map((pkg) => {
                         const packageStatus = normalizeMaterialStatus(packageStatusMap[Number(pkg.id)] || 'published');
                         const isActivePackage = Number(pkg.id) === Number(selectedPackage?.id || 0);
+                        const packageTemporarilyDisabled = Boolean(Number(pkg.is_temporarily_disabled || 0));
 
                         return (
                           <div
@@ -2567,6 +2591,18 @@ export default function AdminPanel() {
                                 onClick={() => openPackageEditor(Number(pkg.id), adminWorkspace)}
                               >
                                 {isDraftWorkspace ? 'Edit Rincian Paket' : 'Lihat Rincian Paket'}
+                              </button>
+                              <button
+                                type="button"
+                                className={packageTemporarilyDisabled ? 'btn btn-outline' : 'btn btn-danger'}
+                                onClick={() => handlePackageAvailabilityToggle(pkg)}
+                                disabled={packageAvailabilitySaving}
+                              >
+                                {packageAvailabilitySaving
+                                  ? 'Memproses...'
+                                  : packageTemporarilyDisabled
+                                    ? 'Aktifkan Lagi Paket'
+                                    : 'Nonaktifkan Sementara'}
                               </button>
                               <button
                                 type="button"
@@ -2786,18 +2822,6 @@ export default function AdminPanel() {
                               <>
                                 <button type="submit" className="btn btn-primary" disabled={packageSaving}>
                                   {packageSaving ? 'Menyimpan...' : 'Simpan Draft Paket'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className={isPackageTemporarilyDisabled ? 'btn btn-outline' : 'btn btn-danger'}
-                                  onClick={handlePackageAvailabilityToggle}
-                                  disabled={packageAvailabilitySaving || !selectedPackage}
-                                >
-                                  {packageAvailabilitySaving
-                                    ? 'Memproses...'
-                                    : isPackageTemporarilyDisabled
-                                      ? 'Aktifkan Lagi Paket'
-                                      : 'Nonaktifkan Sementara'}
                                 </button>
                               </>
                             ) : null}

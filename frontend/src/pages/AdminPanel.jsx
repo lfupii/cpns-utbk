@@ -1155,8 +1155,8 @@ export default function AdminPanel() {
     }
   };
 
-  const handleDeletePackage = async () => {
-    if (!selectedPackage) {
+  const handleDeletePackage = async (targetPackage = selectedPackage) => {
+    if (!targetPackage) {
       return;
     }
 
@@ -1165,7 +1165,7 @@ export default function AdminPanel() {
       return;
     }
 
-    const confirmed = window.confirm(`Hapus paket "${selectedPackage.name}"? Semua materi, soal, dan riwayat terkait akan ikut terhapus.`);
+    const confirmed = window.confirm(`Hapus paket "${targetPackage.name}"? Semua materi, soal, dan riwayat terkait akan ikut terhapus.`);
     if (!confirmed) {
       return;
     }
@@ -1175,13 +1175,16 @@ export default function AdminPanel() {
     setSuccess('');
 
     try {
-      await apiClient.delete(`/admin/packages?id=${selectedPackage.id}`);
+      await apiClient.delete(`/admin/packages?id=${targetPackage.id}`);
       const { packages: nextPackages } = await loadPackageWorkspaceData();
-      setSelectedPackageId(nextPackages[0] ? Number(nextPackages[0].id) : null);
-      resetQuestionForm();
-      setExpandedQuestionId(null);
-      setLearningEditorMode('');
-      setSuccess(`Paket "${selectedPackage.name}" berhasil dihapus.`);
+      const deletedSelectedPackage = Number(selectedPackageId) === Number(targetPackage.id);
+      if (deletedSelectedPackage) {
+        setSelectedPackageId(nextPackages[0] ? Number(nextPackages[0].id) : null);
+        resetQuestionForm();
+        setExpandedQuestionId(null);
+        setLearningEditorMode('');
+      }
+      setSuccess(`Paket "${targetPackage.name}" berhasil dihapus.`);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menghapus paket');
     } finally {
@@ -2057,78 +2060,82 @@ export default function AdminPanel() {
                 )}
               </div>
 
-              <div className="learning-sidebar-card admin-user-sidebar-card">
-                <p className="learning-sidebar-label">Jenis Paket</p>
-                <div className="learning-sidebar-list">
-                  {packageTypes.map((type) => {
-                    const typeId = Number(type.id);
-                    const isActiveType = typeId === Number(selectedPackageTypeFilterId);
-                    return (
-                      <button
-                        key={type.id}
-                        type="button"
-                        className={isActiveType ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
-                        onClick={() => {
-                          setSelectedPackageTypeFilterId(typeId);
-                          const firstPackage = packages.find((pkg) => Number(pkg.category_id || 0) === typeId);
-                          if (firstPackage) {
-                            setSelectedPackageId(Number(firstPackage.id));
-                          }
-                          resetQuestionForm();
-                          setExpandedQuestionId(null);
-                          setLearningEditorMode('');
-                          setEditingSectionActionsCode('');
-                        }}
-                      >
-                        <strong>{type.name}</strong>
-                        <small>{packageTypeCounts[typeId] || 0} paket</small>
-                      </button>
-                    );
-                  })}
+              {adminView !== 'edit-paket' && (
+                <div className="learning-sidebar-card admin-user-sidebar-card">
+                  <p className="learning-sidebar-label">Jenis Paket</p>
+                  <div className="learning-sidebar-list">
+                    {packageTypes.map((type) => {
+                      const typeId = Number(type.id);
+                      const isActiveType = typeId === Number(selectedPackageTypeFilterId);
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          className={isActiveType ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
+                          onClick={() => {
+                            setSelectedPackageTypeFilterId(typeId);
+                            const firstPackage = packages.find((pkg) => Number(pkg.category_id || 0) === typeId);
+                            if (firstPackage) {
+                              setSelectedPackageId(Number(firstPackage.id));
+                            }
+                            resetQuestionForm();
+                            setExpandedQuestionId(null);
+                            setLearningEditorMode('');
+                            setEditingSectionActionsCode('');
+                          }}
+                        >
+                          <strong>{type.name}</strong>
+                          <small>{packageTypeCounts[typeId] || 0} paket</small>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="learning-sidebar-card admin-user-sidebar-card">
-                <p className="learning-sidebar-label">Daftar Paket</p>
-                <div className="learning-sidebar-list">
-                  {filteredPackages.map((pkg) => {
-                    const packageStatus = normalizeMaterialStatus(packageStatusMap[Number(pkg.id)] || 'published');
-                    return (
-                      <button
-                        key={pkg.id}
-                        type="button"
-                        className={[
-                          'learning-sidebar-item',
-                          'admin-sidebar-package-item',
-                          Number(selectedPackageId) === Number(pkg.id) ? 'learning-sidebar-item-active' : '',
-                        ].filter(Boolean).join(' ')}
-                        onClick={() => {
-                          setSelectedPackageId(Number(pkg.id));
-                          setSelectedPackageTypeFilterId(Number(pkg.category_id || 0));
-                          resetQuestionForm();
-                          setExpandedQuestionId(null);
-                          setLearningEditorMode('');
-                          setEditingSectionActionsCode('');
-                        }}
-                      >
-                        <span className="admin-sidebar-link-copy">
-                          <strong>{pkg.name}</strong>
-                          <small>{pkg.workflow?.sections?.length || 0} subtest • {TEST_MODE_OPTIONS.find((option) => option.value === pkg.test_mode)?.label || pkg.test_mode || 'Standard'}</small>
-                        </span>
-                        <small className={`admin-inline-status admin-inline-status-${packageStatus}`}>
-                          {getMaterialStatusLabel(packageStatus)}
-                        </small>
-                      </button>
-                    );
-                  })}
-                  {filteredPackages.length === 0 && (
-                    <div className="learning-sidebar-item">
-                      <strong>Belum ada paket</strong>
-                      <small>Pilih jenis paket lain atau tambahkan paket baru dari workspace published.</small>
-                    </div>
-                  )}
+              {adminView !== 'edit-paket' && (
+                <div className="learning-sidebar-card admin-user-sidebar-card">
+                  <p className="learning-sidebar-label">Daftar Paket</p>
+                  <div className="learning-sidebar-list">
+                    {filteredPackages.map((pkg) => {
+                      const packageStatus = normalizeMaterialStatus(packageStatusMap[Number(pkg.id)] || 'published');
+                      return (
+                        <button
+                          key={pkg.id}
+                          type="button"
+                          className={[
+                            'learning-sidebar-item',
+                            'admin-sidebar-package-item',
+                            Number(selectedPackageId) === Number(pkg.id) ? 'learning-sidebar-item-active' : '',
+                          ].filter(Boolean).join(' ')}
+                          onClick={() => {
+                            setSelectedPackageId(Number(pkg.id));
+                            setSelectedPackageTypeFilterId(Number(pkg.category_id || 0));
+                            resetQuestionForm();
+                            setExpandedQuestionId(null);
+                            setLearningEditorMode('');
+                            setEditingSectionActionsCode('');
+                          }}
+                        >
+                          <span className="admin-sidebar-link-copy">
+                            <strong>{pkg.name}</strong>
+                            <small>{pkg.workflow?.sections?.length || 0} subtest • {TEST_MODE_OPTIONS.find((option) => option.value === pkg.test_mode)?.label || pkg.test_mode || 'Standard'}</small>
+                          </span>
+                          <small className={`admin-inline-status admin-inline-status-${packageStatus}`}>
+                            {getMaterialStatusLabel(packageStatus)}
+                          </small>
+                        </button>
+                      );
+                    })}
+                    {filteredPackages.length === 0 && (
+                      <div className="learning-sidebar-item">
+                        <strong>Belum ada paket</strong>
+                        <small>Pilih jenis paket lain atau tambahkan paket baru dari workspace published.</small>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="learning-sidebar-card admin-user-sidebar-card">
                 <button
@@ -2441,79 +2448,17 @@ export default function AdminPanel() {
                 </section>
               )}
 
-              {adminView === 'edit-paket' && packageForm && (
+              {adminView === 'edit-paket' && (
                 <article className="learning-material admin-package-view-shell">
                   <div className="learning-material-header">
                     <div>
-                      <span className="account-package-tag">{isDraftWorkspace ? 'Edit Draft Paket' : 'Lihat Published Paket'}</span>
-                      <h2>{selectedPackage?.name || 'Paket aktif'}</h2>
+                      <span className="account-package-tag">Kelola Jenis Paket</span>
+                      <h2>Kelola Paket</h2>
                       <p>
                         {isDraftWorkspace
-                          ? 'Kelola jenis paket dan detail paket dari halaman yang sama agar perpindahan antar paket lebih cepat.'
-                          : 'Halaman ini menampilkan versi live paket sekaligus daftar jenis paket untuk review cepat tanpa pindah layar.'}
+                          ? 'Halaman ini berdiri sendiri untuk mengelola tipe paket dan seluruh paket di dalamnya tanpa tergantung pilihan sidebar.'
+                          : 'Review versi live tipe paket dan paketnya dari satu layar, lalu pilih paket yang ingin dilihat detailnya.'}
                       </p>
-                    </div>
-                  </div>
-
-                  <div className="learning-page admin-package-form-page admin-package-overview-shell">
-                    <div className="admin-package-hero">
-                      <div className="admin-package-hero-main">
-                        <div className="admin-package-hero-copy">
-                          <span className={`admin-workspace-mode-pill admin-workspace-mode-pill-${adminWorkspace}`}>
-                            {isDraftWorkspace ? 'Draft Workspace' : 'Published Workspace'}
-                          </span>
-                          <h3>{selectedPackage?.name || 'Paket aktif'}</h3>
-                          <p>
-                            {isDraftWorkspace
-                              ? 'Semua perubahan di sini aman untuk disiapkan dulu. User belum melihat update sampai tombol publish dijalankan.'
-                              : 'Ini adalah versi paket yang sedang dibaca user. Area ini dipakai untuk review hasil live sebelum atau sesudah publish draft.'}
-                          </p>
-                        </div>
-
-                        <div className="admin-package-status-list">
-                          <div className="admin-package-status-item">
-                            <span>Status user</span>
-                            <strong>{isPackageTemporarilyDisabled ? 'Nonaktif sementara / maintenance' : 'Aktif untuk user'}</strong>
-                          </div>
-                          <div className="admin-package-status-item">
-                            <span>Mode edit</span>
-                            <strong>{isDraftWorkspace ? 'Aman untuk revisi' : 'Review versi live'}</strong>
-                          </div>
-                          <div className="admin-package-status-item">
-                            <span>Tipe paket</span>
-                            <strong>{selectedPackageTypeName}</strong>
-                          </div>
-                          <div className="admin-package-status-item">
-                            <span>Mode ujian</span>
-                            <strong>{selectedPackageModeLabel}</strong>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="admin-package-summary-grid">
-                        <div className="admin-package-summary-card">
-                          <span>Harga</span>
-                          <strong>Rp {Number(packageForm.price || 0).toLocaleString('id-ID')}</strong>
-                        </div>
-                        <div className="admin-package-summary-card">
-                          <span>Durasi akses</span>
-                          <strong>{packageForm.duration_days} hari</strong>
-                        </div>
-                        <div className="admin-package-summary-card">
-                          <span>Batas attempt</span>
-                          <strong>{packageForm.max_attempts}x</strong>
-                        </div>
-                        <div className="admin-package-summary-card">
-                          <span>Subtest aktif</span>
-                          <strong>{packageSections.length}</strong>
-                        </div>
-                      </div>
-                      <div className="admin-inline-status-row">
-                        <span className={`admin-material-status-badge admin-material-status-badge-${selectedPackageWorkspaceStatus}`}>
-                          {getMaterialStatusLabel(selectedPackageWorkspaceStatus)}
-                        </span>
-                        <span className="admin-inline-status-note">{selectedPackageWorkspaceNote}</span>
-                      </div>
                     </div>
                   </div>
 
@@ -2522,7 +2467,7 @@ export default function AdminPanel() {
                       <div>
                         <h3>Daftar Tipe Paket</h3>
                         <p className="text-muted">
-                          Semua tipe paket dan isi paketnya ditampilkan di sini supaya Anda bisa pindah edit lebih cepat tanpa buka halaman lain.
+                          Tipe paket dan seluruh paket di dalamnya ditampilkan di sini. Pilih paket yang ingin dikelola dari tombol di dalam kartu tipe paket.
                         </p>
                       </div>
                     </div>
@@ -2549,7 +2494,7 @@ export default function AdminPanel() {
                                 onClick={() => handlePackageTypeEdit(type)}
                                 disabled={packageTypeSaving || packageTypeDeleting}
                               >
-                                {packageTypeSaving ? 'Menyimpan...' : 'Edit'}
+                                {packageTypeSaving ? 'Menyimpan...' : 'Edit Tipe'}
                               </button>
                               <button
                                 type="button"
@@ -2588,7 +2533,15 @@ export default function AdminPanel() {
                                         className="btn btn-outline"
                                         onClick={() => openPackageEditor(Number(pkg.id), adminWorkspace)}
                                       >
-                                        {isDraftWorkspace ? 'Edit Paket' : 'Lihat Paket'}
+                                        {isDraftWorkspace ? 'Edit Paket Lengkap' : 'Lihat Detail Paket'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-danger"
+                                        onClick={() => handleDeletePackage(pkg)}
+                                        disabled={packageDeleting || packages.length <= 1}
+                                      >
+                                        {packageDeleting ? 'Menghapus...' : 'Hapus Paket'}
                                       </button>
                                     </div>
                                   </div>
@@ -2608,131 +2561,208 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
-                  <div className="learning-page admin-package-form-page">
-                    <div className="admin-section-header admin-list-toolbar">
-                      <div>
-                        <h3>Detail Paket</h3>
-                        <p className="text-muted">
-                          {isDraftWorkspace
-                            ? 'Ubah nama, harga, durasi akses, dan setting inti paket di sini.'
-                            : 'Versi published hanya untuk review. Pindah ke Draft kalau ingin mengubah detail paket.'}
-                        </p>
+                  {packageForm ? (
+                    <>
+                      <div className="learning-page admin-package-form-page admin-package-overview-shell">
+                        <div className="admin-package-hero">
+                          <div className="admin-package-hero-main">
+                            <div className="admin-package-hero-copy">
+                              <span className={`admin-workspace-mode-pill admin-workspace-mode-pill-${adminWorkspace}`}>
+                                {isDraftWorkspace ? 'Paket Terpilih di Draft' : 'Paket Terpilih di Published'}
+                              </span>
+                              <h3>{selectedPackage?.name || 'Paket aktif'}</h3>
+                              <p>
+                                {isDraftWorkspace
+                                  ? 'Bagian ini untuk mengubah rincian penuh paket yang Anda pilih dari daftar di atas.'
+                                  : 'Bagian ini menampilkan detail penuh paket live yang dipilih dari daftar di atas.'}
+                              </p>
+                            </div>
+
+                            <div className="admin-package-status-list">
+                              <div className="admin-package-status-item">
+                                <span>Status user</span>
+                                <strong>{isPackageTemporarilyDisabled ? 'Nonaktif sementara / maintenance' : 'Aktif untuk user'}</strong>
+                              </div>
+                              <div className="admin-package-status-item">
+                                <span>Mode edit</span>
+                                <strong>{isDraftWorkspace ? 'Aman untuk revisi' : 'Review versi live'}</strong>
+                              </div>
+                              <div className="admin-package-status-item">
+                                <span>Tipe paket</span>
+                                <strong>{selectedPackageTypeName}</strong>
+                              </div>
+                              <div className="admin-package-status-item">
+                                <span>Mode ujian</span>
+                                <strong>{selectedPackageModeLabel}</strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="admin-package-summary-grid">
+                            <div className="admin-package-summary-card">
+                              <span>Harga</span>
+                              <strong>Rp {Number(packageForm.price || 0).toLocaleString('id-ID')}</strong>
+                            </div>
+                            <div className="admin-package-summary-card">
+                              <span>Durasi akses</span>
+                              <strong>{packageForm.duration_days} hari</strong>
+                            </div>
+                            <div className="admin-package-summary-card">
+                              <span>Batas attempt</span>
+                              <strong>{packageForm.max_attempts}x</strong>
+                            </div>
+                            <div className="admin-package-summary-card">
+                              <span>Subtest aktif</span>
+                              <strong>{packageSections.length}</strong>
+                            </div>
+                          </div>
+                          <div className="admin-inline-status-row">
+                            <span className={`admin-material-status-badge admin-material-status-badge-${selectedPackageWorkspaceStatus}`}>
+                              {getMaterialStatusLabel(selectedPackageWorkspaceStatus)}
+                            </span>
+                            <span className="admin-inline-status-note">{selectedPackageWorkspaceNote}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="learning-page admin-package-form-page">
+                        <div className="admin-section-header admin-list-toolbar">
+                          <div>
+                            <h3>Rincian Paket Lengkap</h3>
+                            <p className="text-muted">
+                              {isDraftWorkspace
+                                ? 'Ubah nama, harga, durasi akses, setting inti, dan status paket dari sini.'
+                                : 'Versi published hanya untuk review. Pindah ke Draft kalau ingin mengubah detail paket.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <form className="admin-package-form" onSubmit={handlePackageSave}>
+                          <div className="account-form-grid">
+                            <div className="form-group">
+                              <label>Tipe Paket</label>
+                              <select
+                                name="category_id"
+                                value={packageForm.category_id}
+                                onChange={handlePackageChange}
+                                disabled={!isDraftWorkspace}
+                              >
+                                {packageTypes.map((type) => (
+                                  <option key={type.id} value={type.id}>
+                                    {type.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label>Nama Paket</label>
+                              <input name="name" value={packageForm.name} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
+                            </div>
+                            <div className="form-group">
+                              <label>Mode Ujian</label>
+                              <select
+                                name="test_mode"
+                                value={packageForm.test_mode}
+                                onChange={handlePackageChange}
+                                disabled={!isDraftWorkspace}
+                              >
+                                {TEST_MODE_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label>Harga</label>
+                              <input type="number" min="1000" name="price" value={packageForm.price} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
+                            </div>
+                            <div className="form-group">
+                              <label>Durasi Akses (hari)</label>
+                              <input type="number" min="1" name="duration_days" value={packageForm.duration_days} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
+                            </div>
+                            <div className="form-group">
+                              <label>Batas Attempt</label>
+                              <input type="number" min="1" name="max_attempts" value={packageForm.max_attempts} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
+                            </div>
+                            <div className="form-group">
+                              <label>Waktu Ujian (menit)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                name="time_limit"
+                                value={packageForm.time_limit}
+                                onChange={handlePackageChange}
+                                disabled={!isDraftWorkspace || packageForm.test_mode === 'cpns_cat' || packageForm.test_mode === 'utbk_sectioned'}
+                              />
+                            </div>
+                            <div className="form-group form-group-full">
+                              <label>Deskripsi</label>
+                              <textarea name="description" rows="3" value={packageForm.description} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
+                            </div>
+                          </div>
+
+                          <div className="admin-package-readonly-grid">
+                            {selectedPackage?.workflow && (
+                              <div className="admin-package-readonly-card">
+                                <span>Mekanisme Ujian</span>
+                                <strong>{selectedPackage.workflow.label}</strong>
+                                <p>
+                                  {selectedPackage.workflow.allow_random_navigation
+                                    ? 'Navigasi soal bebas antar bagian.'
+                                    : 'Navigasi soal mengikuti subtest aktif.'}
+                                </p>
+                                <small>Total durasi {selectedPackage.workflow.total_duration_minutes} menit</small>
+                              </div>
+                            )}
+                            <div className="admin-package-readonly-card">
+                              <span>Struktur Paket</span>
+                              <strong>{packageSections.length} subtest aktif</strong>
+                              <p>
+                                {packageSections.length > 0
+                                  ? packageSections.map((section) => section.name).join(' • ')
+                                  : 'Belum ada subtest aktif pada paket ini.'}
+                              </p>
+                              <small>{selectedPackageTypeName} • {selectedPackageModeLabel}</small>
+                            </div>
+                          </div>
+
+                          <div className="account-form-actions">
+                            {isDraftWorkspace ? (
+                              <>
+                                <button type="submit" className="btn btn-primary" disabled={packageSaving}>
+                                  {packageSaving ? 'Menyimpan...' : 'Simpan Draft Paket'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className={isPackageTemporarilyDisabled ? 'btn btn-outline' : 'btn btn-danger'}
+                                  onClick={handlePackageAvailabilityToggle}
+                                  disabled={packageAvailabilitySaving || !selectedPackage}
+                                >
+                                  {packageAvailabilitySaving
+                                    ? 'Memproses...'
+                                    : isPackageTemporarilyDisabled
+                                      ? 'Aktifkan Lagi Paket'
+                                      : 'Nonaktifkan Sementara'}
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        </form>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="learning-page admin-package-form-page">
+                      <div className="admin-section-header admin-list-toolbar">
+                        <div>
+                          <h3>Belum Ada Paket Terpilih</h3>
+                          <p className="text-muted">
+                            Pilih salah satu paket dari daftar tipe paket di atas untuk membuka rincian edit lengkapnya.
+                          </p>
+                        </div>
                       </div>
                     </div>
-
-                    <form className="admin-package-form" onSubmit={handlePackageSave}>
-                      <div className="account-form-grid">
-                        <div className="form-group">
-                          <label>Tipe Paket</label>
-                          <select
-                            name="category_id"
-                            value={packageForm.category_id}
-                            onChange={handlePackageChange}
-                            disabled={!isDraftWorkspace}
-                          >
-                            {packageTypes.map((type) => (
-                              <option key={type.id} value={type.id}>
-                                {type.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label>Nama Paket</label>
-                          <input name="name" value={packageForm.name} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
-                        </div>
-                        <div className="form-group">
-                          <label>Mode Ujian</label>
-                          <select
-                            name="test_mode"
-                            value={packageForm.test_mode}
-                            onChange={handlePackageChange}
-                            disabled={!isDraftWorkspace}
-                          >
-                            {TEST_MODE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label>Harga</label>
-                          <input type="number" min="1000" name="price" value={packageForm.price} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
-                        </div>
-                        <div className="form-group">
-                          <label>Durasi Akses (hari)</label>
-                          <input type="number" min="1" name="duration_days" value={packageForm.duration_days} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
-                        </div>
-                        <div className="form-group">
-                          <label>Batas Attempt</label>
-                          <input type="number" min="1" name="max_attempts" value={packageForm.max_attempts} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
-                        </div>
-                        <div className="form-group">
-                          <label>Waktu Ujian (menit)</label>
-                          <input
-                            type="number"
-                            min="1"
-                            name="time_limit"
-                            value={packageForm.time_limit}
-                            onChange={handlePackageChange}
-                            disabled={!isDraftWorkspace || packageForm.test_mode === 'cpns_cat' || packageForm.test_mode === 'utbk_sectioned'}
-                          />
-                        </div>
-                        <div className="form-group form-group-full">
-                          <label>Deskripsi</label>
-                          <textarea name="description" rows="3" value={packageForm.description} onChange={handlePackageChange} disabled={!isDraftWorkspace} />
-                        </div>
-                      </div>
-
-                      <div className="admin-package-readonly-grid">
-                        {selectedPackage?.workflow && (
-                          <div className="admin-package-readonly-card">
-                            <span>Mekanisme Ujian</span>
-                            <strong>{selectedPackage.workflow.label}</strong>
-                            <p>
-                              {selectedPackage.workflow.allow_random_navigation
-                                ? 'Navigasi soal bebas antar bagian.'
-                                : 'Navigasi soal mengikuti subtest aktif.'}
-                            </p>
-                            <small>Total durasi {selectedPackage.workflow.total_duration_minutes} menit</small>
-                          </div>
-                        )}
-                        <div className="admin-package-readonly-card">
-                          <span>Struktur Paket</span>
-                          <strong>{packageSections.length} subtest aktif</strong>
-                          <p>
-                            {packageSections.length > 0
-                              ? packageSections.map((section) => section.name).join(' • ')
-                              : 'Belum ada subtest aktif pada paket ini.'}
-                          </p>
-                          <small>{selectedPackageTypeName} • {selectedPackageModeLabel}</small>
-                        </div>
-                      </div>
-
-                      <div className="account-form-actions">
-                        {isDraftWorkspace ? (
-                          <>
-                            <button type="submit" className="btn btn-primary" disabled={packageSaving}>
-                              {packageSaving ? 'Menyimpan...' : 'Simpan Draft Paket'}
-                            </button>
-                            <button
-                              type="button"
-                              className={isPackageTemporarilyDisabled ? 'btn btn-outline' : 'btn btn-danger'}
-                              onClick={handlePackageAvailabilityToggle}
-                              disabled={packageAvailabilitySaving || !selectedPackage}
-                            >
-                              {packageAvailabilitySaving
-                                ? 'Memproses...'
-                                : isPackageTemporarilyDisabled
-                                  ? 'Aktifkan Lagi Paket'
-                                  : 'Nonaktifkan Sementara'}
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
-                    </form>
-                  </div>
+                  )}
                 </article>
               )}
 

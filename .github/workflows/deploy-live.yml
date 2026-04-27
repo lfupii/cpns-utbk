@@ -150,7 +150,7 @@ jobs:
             lftp_log="$(mktemp)"
 
             set +e
-            lftp <<EOF >"${lftp_log}" 2>&1
+            lftp -u "${FTP_USERNAME}","${FTP_PASSWORD}" -p "${FTP_PORT}" "${FTP_HOST}" -e "
             set cmd:fail-exit true
             set net:max-retries ${lftp_internal_retries}
             set net:reconnect-interval-base 3
@@ -158,12 +158,11 @@ jobs:
             set net:timeout ${lftp_timeout}
             set ftp:passive-mode true
             set ftp:prefer-epsv false
-            open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
             pwd
             cls -la
             mirror -R --continue --verbose=2 --parallel=1 frontend/dist .
             bye
-            EOF
+            " >"${lftp_log}" 2>&1
             status=$?
             set -e
 
@@ -208,7 +207,7 @@ jobs:
             lftp_log="$(mktemp)"
 
             set +e
-            lftp <<EOF >"${lftp_log}" 2>&1
+            lftp -u "${FTP_USERNAME}","${FTP_PASSWORD}" -p "${FTP_PORT}" "${FTP_HOST}" -e "
             set cmd:fail-exit true
             set net:max-retries ${lftp_internal_retries}
             set net:reconnect-interval-base 3
@@ -216,13 +215,11 @@ jobs:
             set net:timeout ${lftp_timeout}
             set ftp:passive-mode true
             set ftp:prefer-epsv false
-            open -p ${FTP_PORT} -u ${FTP_USERNAME},${FTP_PASSWORD} ${FTP_HOST}
             pwd
-            mkdir -p api
-            cls -la api
+            cls -la
             mirror -R --continue --verbose=2 --parallel=1 .deploy/backend api
             bye
-            EOF
+            " >"${lftp_log}" 2>&1
             status=$?
             set -e
 

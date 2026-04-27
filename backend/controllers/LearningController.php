@@ -338,6 +338,7 @@ class LearningController {
                 'session_order' => $section['session_order'] ?? 1,
                 'order' => $section['order'],
                 'duration_minutes' => $section['duration_minutes'] ?? null,
+                'mini_test_duration_minutes' => $section['mini_test_duration_minutes'] ?? null,
                 'target_question_count' => $section['target_question_count'] ?? null,
                 'mini_test_question_count' => (int) ($sectionQuestionCounts[$sectionCode] ?? 0),
                 'preview_page_count' => $previewPageCount,
@@ -611,8 +612,13 @@ class LearningController {
 
     private function computeSectionTestDurationSeconds(array $section, int $questionCount): int {
         $totalQuestions = max(0, $questionCount);
+        $miniTestDurationMinutes = max(0, (float) ($section['mini_test_duration_minutes'] ?? 0));
         $durationMinutes = max(0, (float) ($section['duration_minutes'] ?? 0));
         $targetQuestionCount = max(0, (int) ($section['target_question_count'] ?? 0));
+
+        if ($miniTestDurationMinutes > 0) {
+            return max(1, (int) round($miniTestDurationMinutes * 60));
+        }
 
         if ($durationMinutes > 0 && $targetQuestionCount > 0 && $totalQuestions > 0) {
             $estimatedSeconds = (int) round(($durationMinutes * 60 * $totalQuestions) / $targetQuestionCount);

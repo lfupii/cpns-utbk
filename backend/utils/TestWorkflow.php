@@ -426,6 +426,9 @@ class TestWorkflow {
                 'duration_minutes' => isset($section['duration_minutes']) && $section['duration_minutes'] !== null
                     ? max(0, (float) $section['duration_minutes'])
                     : null,
+                'mini_test_duration_minutes' => isset($section['mini_test_duration_minutes']) && $section['mini_test_duration_minutes'] !== null
+                    ? max(0, (float) $section['mini_test_duration_minutes'])
+                    : null,
                 'target_question_count' => isset($section['target_question_count']) && $section['target_question_count'] !== null
                     ? max(0, (int) $section['target_question_count'])
                     : null,

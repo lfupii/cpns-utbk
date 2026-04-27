@@ -20,6 +20,7 @@ export default function Payment() {
   const autoCheckedOrderRef = useRef('');
   const isProduction = import.meta.env.VITE_IS_PRODUCTION === 'true';
   const midtransClientKey = import.meta.env.VITE_MIDTRANS_CLIENT_KEY;
+  const isTemporarilyDisabled = Boolean(Number(packageData?.is_temporarily_disabled || 0));
   const midtransSnapJsUrl = isProduction
     ? 'https://app.midtrans.com/snap/snap.js'
     : 'https://app.sandbox.midtrans.com/snap/snap.js';
@@ -174,6 +175,11 @@ export default function Payment() {
   }, [confirmPayment, readPendingPayment, searchParams]);
 
   const handlePayment = async () => {
+    if (isTemporarilyDisabled && !isAdmin) {
+      setError('Mohon maaf, paket ini nonaktif sementara dan sedang maintenance.');
+      return;
+    }
+
     setProcessing(true);
     setError('');
 
@@ -293,6 +299,43 @@ export default function Payment() {
             <button onClick={() => navigate('/')} className="btn-outline">
               Kembali ke Home
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isTemporarilyDisabled && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-100 py-8 sm:py-12">
+        <div className="container mx-auto max-w-2xl px-4">
+          <button
+            onClick={() => navigate(`/#paket`)}
+            className="mb-8 text-blue-600 hover:underline"
+          >
+            ← Kembali ke paket
+          </button>
+
+          <div className="card">
+            <h1 className="mb-6 text-2xl font-bold sm:text-3xl">Paket Sedang Maintenance</h1>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-900">
+              <p className="mb-3 font-semibold">{packageData.name}</p>
+              <p>
+                Mohon maaf, paket ini nonaktif sementara dan sedang maintenance.
+              </p>
+              <p className="mt-3 text-sm text-amber-800">
+                Silakan cek kembali beberapa saat lagi atau pilih paket lain yang sedang aktif.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button onClick={() => navigate('/#paket')} className="flex-1 btn-primary">
+                Lihat Paket Lain
+              </button>
+              <button onClick={() => navigate('/')} className="flex-1 btn-outline">
+                Kembali ke Home
+              </button>
+            </div>
           </div>
         </div>
       </div>

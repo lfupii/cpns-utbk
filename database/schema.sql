@@ -67,6 +67,7 @@ CREATE TABLE test_packages (
   time_limit INT NOT NULL COMMENT 'dalam menit',
   test_mode VARCHAR(50) DEFAULT NULL,
   workflow_config LONGTEXT,
+  is_temporarily_disabled TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (category_id) REFERENCES test_categories(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

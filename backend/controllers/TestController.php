@@ -91,6 +91,16 @@ class TestController {
         return $package;
     }
 
+    private function assertPackageAvailable(array $package, bool $isAdmin = false): void {
+        if ($isAdmin) {
+            return;
+        }
+
+        if ((int) ($package['is_temporarily_disabled'] ?? 0) === 1) {
+            throw new RuntimeException('Mohon maaf, paket ini nonaktif sementara dan sedang maintenance.', 423);
+        }
+    }
+
     private function getCompletedAttemptCount(int $userId, int $packageId): int {
         $query = "SELECT COUNT(*) AS attempt_count
                   FROM test_attempts
@@ -495,6 +505,7 @@ class TestController {
             $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
             $this->assertActiveAccess($userId, $packageId, $isAdmin);
             $package = $this->getPackage($packageId);
+            $this->assertPackageAvailable($package, $isAdmin);
             $completedAttempts = $this->ensureAttemptQuota($userId, $packageId, (int) $package['max_attempts'], $isAdmin);
             $ongoingAttempt = $this->getOngoingAttempt($userId, $packageId);
 
@@ -526,6 +537,7 @@ class TestController {
             $isAdmin = userHasRole($tokenData, $this->mysqli, 'admin');
             $this->assertActiveAccess($userId, $packageId, $isAdmin);
             $package = $this->getPackage($packageId);
+            $this->assertPackageAvailable($package, $isAdmin);
             $workflow = TestWorkflow::buildPackageWorkflow($package);
 
             $ongoingAttempt = $this->getOngoingAttempt($userId, $packageId);

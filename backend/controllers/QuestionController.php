@@ -55,6 +55,7 @@ class QuestionController {
     private function enrichPackage(array $package): array {
         $workflow = TestWorkflow::buildPackageWorkflow($package);
         $package['time_limit'] = (int) ($workflow['total_duration_minutes'] ?? (int) ($package['time_limit'] ?? 0));
+        $package['is_temporarily_disabled'] = (int) ($package['is_temporarily_disabled'] ?? 0);
         $package['workflow'] = $workflow;
 
         return $package;

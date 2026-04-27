@@ -358,6 +358,7 @@ export default function AdminPanel() {
   const [loadingPackages, setLoadingPackages] = useState(true);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [packageSaving, setPackageSaving] = useState(false);
+  const [packageAvailabilitySaving, setPackageAvailabilitySaving] = useState(false);
   const [packageCreating, setPackageCreating] = useState(false);
   const [packageDeleting, setPackageDeleting] = useState(false);
   const [packageTypeSaving, setPackageTypeSaving] = useState(false);
@@ -415,6 +416,10 @@ export default function AdminPanel() {
   const packageSections = useMemo(
     () => selectedPackage?.workflow?.sections || [],
     [selectedPackage]
+  );
+  const isPackageTemporarilyDisabled = useMemo(
+    () => Boolean(Number(packageForm?.is_temporarily_disabled ?? selectedPackage?.is_temporarily_disabled ?? 0)),
+    [packageForm?.is_temporarily_disabled, selectedPackage?.is_temporarily_disabled]
   );
   const defaultSectionCode = packageSections[0]?.code || '';
   const preferredSectionCode = useMemo(() => {
@@ -585,6 +590,7 @@ export default function AdminPanel() {
       max_attempts: Number(selectedPackage.max_attempts || 1),
       time_limit: Number(selectedPackage.time_limit || 90),
       test_mode: selectedPackage.test_mode || 'standard',
+      is_temporarily_disabled: Number(selectedPackage.is_temporarily_disabled || 0),
     });
   }, [selectedPackage]);
 
@@ -1036,6 +1042,50 @@ export default function AdminPanel() {
       setError(err.response?.data?.message || 'Gagal menghapus paket');
     } finally {
       setPackageDeleting(false);
+    }
+  };
+
+  const handlePackageAvailabilityToggle = async () => {
+    if (!selectedPackage || !packageForm) {
+      return;
+    }
+
+    if (isDraftWorkspace) {
+      setError('Nonaktifkan sementara dijalankan dari tab Published agar langsung berdampak ke user.');
+      return;
+    }
+
+    const nextValue = isPackageTemporarilyDisabled ? 0 : 1;
+    const confirmed = window.confirm(
+      nextValue === 1
+        ? `Nonaktifkan sementara paket "${selectedPackage.name}" untuk user?`
+        : `Aktifkan lagi paket "${selectedPackage.name}" untuk user?`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setPackageAvailabilitySaving(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await apiClient.put('/admin/packages', {
+        ...packageForm,
+        workspace: adminWorkspace,
+        is_temporarily_disabled: nextValue,
+      });
+      const response = await apiClient.get(`/admin/packages?workspace=${adminWorkspace}`);
+      setPackages(response.data.data || []);
+      setSuccess(
+        nextValue === 1
+          ? 'Paket berhasil dinonaktifkan sementara.'
+          : 'Paket berhasil diaktifkan kembali.'
+      );
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal mengubah status paket');
+    } finally {
+      setPackageAvailabilitySaving(false);
     }
   };
 
@@ -2179,6 +2229,11 @@ export default function AdminPanel() {
                       <span className="account-package-tag">Pengaturan paket</span>
                       <h2>{selectedPackage?.name || 'Paket aktif'}</h2>
                       <p>Harga, durasi akses, batas attempt, dan mekanisme ujian dikelola dari sini.</p>
+                      {selectedPackage && (
+                        <p className="text-sm text-gray-600 mt-2">
+                          Status user: {isPackageTemporarilyDisabled ? 'Nonaktif sementara / maintenance' : 'Aktif'}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -2275,6 +2330,20 @@ export default function AdminPanel() {
                         {!isDraftWorkspace && (
                           <button type="button" className="btn btn-outline" onClick={handleCreatePackage} disabled={packageCreating}>
                             {packageCreating ? 'Membuat...' : 'Tambah Paket'}
+                          </button>
+                        )}
+                        {!isDraftWorkspace && (
+                          <button
+                            type="button"
+                            className={isPackageTemporarilyDisabled ? 'btn btn-outline' : 'btn btn-danger'}
+                            onClick={handlePackageAvailabilityToggle}
+                            disabled={packageAvailabilitySaving || !selectedPackage}
+                          >
+                            {packageAvailabilitySaving
+                              ? 'Memproses...'
+                              : isPackageTemporarilyDisabled
+                                ? 'Aktifkan Lagi Paket'
+                                : 'Nonaktifkan Sementara'}
                           </button>
                         )}
                         <button type="submit" className="btn btn-primary" disabled={packageSaving}>

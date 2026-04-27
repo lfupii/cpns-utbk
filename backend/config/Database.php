@@ -195,6 +195,14 @@ function ensureTestWorkflowSchema(mysqli $mysqli): void {
         $schemaChanged = true;
     }
 
+    if (!databaseColumnExists($mysqli, 'test_packages', 'is_temporarily_disabled')) {
+        $mysqli->query(
+            "ALTER TABLE test_packages
+             ADD COLUMN is_temporarily_disabled TINYINT(1) NOT NULL DEFAULT 0 AFTER workflow_config"
+        );
+        $schemaChanged = true;
+    }
+
     if (!databaseColumnExists($mysqli, 'questions', 'section_code')) {
         $mysqli->query("ALTER TABLE questions ADD COLUMN section_code VARCHAR(100) NULL AFTER difficulty");
         $schemaChanged = true;
@@ -402,6 +410,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             time_limit INT NOT NULL DEFAULT 90,
             test_mode VARCHAR(50) NOT NULL DEFAULT 'standard',
             workflow_config LONGTEXT NULL,
+            is_temporarily_disabled TINYINT(1) NOT NULL DEFAULT 0,
             last_saved_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             last_published_at TIMESTAMP NULL DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -416,6 +425,13 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
         $mysqli->query(
             "ALTER TABLE test_package_drafts
              ADD COLUMN last_saved_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP AFTER workflow_config"
+        );
+    }
+
+    if (!databaseColumnExists($mysqli, 'test_package_drafts', 'is_temporarily_disabled')) {
+        $mysqli->query(
+            "ALTER TABLE test_package_drafts
+             ADD COLUMN is_temporarily_disabled TINYINT(1) NOT NULL DEFAULT 0 AFTER workflow_config"
         );
     }
 

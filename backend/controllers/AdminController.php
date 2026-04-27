@@ -59,6 +59,11 @@ class AdminController {
         ];
     }
 
+    private function normalizeTemporaryDisabledFlag($value): int {
+        $normalized = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        return $normalized ? 1 : 0;
+    }
+
     private function getDraftPackage(int $packageId): ?array {
         $query = "SELECT tp.*, tc.name AS category_name
                   FROM test_package_drafts tp
@@ -262,11 +267,12 @@ class AdminController {
                     time_limit,
                     test_mode,
                     workflow_config,
+                    is_temporarily_disabled,
                     last_saved_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
             );
             $insertDraft->bind_param(
-                'iissiiiisss',
+                'iissiiiiissi',
                 $packageId,
                 $package['category_id'],
                 $package['name'],
@@ -277,7 +283,8 @@ class AdminController {
                 $package['question_count'],
                 $package['time_limit'],
                 $package['test_mode'],
-                $package['workflow_config']
+                $package['workflow_config'],
+                $this->normalizeTemporaryDisabledFlag($package['is_temporarily_disabled'] ?? 0)
             );
             $insertDraft->execute();
         }
@@ -389,6 +396,7 @@ class AdminController {
     private function enrichPackage(array $package): array {
         $workflow = TestWorkflow::buildPackageWorkflow($package);
         $package['time_limit'] = (int) ($workflow['total_duration_minutes'] ?? (int) ($package['time_limit'] ?? 0));
+        $package['is_temporarily_disabled'] = (int) ($package['is_temporarily_disabled'] ?? 0);
         $package['workflow'] = $workflow;
 
         return $package;
@@ -1345,6 +1353,9 @@ class AdminController {
         $package = $this->getPackageByWorkspace($packageId, $workspace);
         $categoryId = $categoryId > 0 ? $categoryId : (int) ($package['category_id'] ?? 0);
         $testMode = $this->normalizeTestMode($data['test_mode'] ?? ($package['test_mode'] ?? ''));
+        $isTemporarilyDisabled = array_key_exists('is_temporarily_disabled', $data)
+            ? $this->normalizeTemporaryDisabledFlag($data['is_temporarily_disabled'])
+            : $this->normalizeTemporaryDisabledFlag($package['is_temporarily_disabled'] ?? 0);
         $workflowContext = array_merge($package, [
             'category_id' => $categoryId,
             'test_mode' => $testMode,
@@ -1369,13 +1380,13 @@ class AdminController {
 
         $query = $workspace === self::WORKSPACE_DRAFT
             ? "UPDATE test_package_drafts
-               SET category_id = ?, name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, test_mode = ?, workflow_config = ?, last_saved_at = CURRENT_TIMESTAMP
+               SET category_id = ?, name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, test_mode = ?, workflow_config = ?, is_temporarily_disabled = ?, last_saved_at = CURRENT_TIMESTAMP
                WHERE package_id = ?"
             : "UPDATE test_packages
-               SET category_id = ?, name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, test_mode = ?, workflow_config = ?
+               SET category_id = ?, name = ?, description = ?, price = ?, duration_days = ?, max_attempts = ?, time_limit = ?, test_mode = ?, workflow_config = ?, is_temporarily_disabled = ?
                WHERE id = ?";
         $stmt = $this->mysqli->prepare($query);
-        $stmt->bind_param('issiiiissi', $categoryId, $name, $description, $price, $durationDays, $maxAttempts, $timeLimit, $testMode, $workflowConfig, $packageId);
+        $stmt->bind_param('issiiiissii', $categoryId, $name, $description, $price, $durationDays, $maxAttempts, $timeLimit, $testMode, $workflowConfig, $isTemporarilyDisabled, $packageId);
 
         if (!$stmt->execute()) {
             sendResponse('error', 'Gagal memperbarui paket', null, 500);
@@ -1433,6 +1444,9 @@ class AdminController {
         if (in_array($testMode, [TestWorkflow::MODE_CPNS_CAT, TestWorkflow::MODE_UTBK_SECTIONED], true)) {
             $timeLimit = (int) ($workflowPayload['total_duration_minutes'] ?? $timeLimit);
         }
+        $isTemporarilyDisabled = $templatePackage
+            ? $this->normalizeTemporaryDisabledFlag($templatePackage['is_temporarily_disabled'] ?? 0)
+            : 0;
 
         $query = 'INSERT INTO test_packages (
                     category_id,
@@ -1444,11 +1458,12 @@ class AdminController {
                     question_count,
                     time_limit,
                     test_mode,
-                    workflow_config
-                  ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)';
+                    workflow_config,
+                    is_temporarily_disabled
+                  ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)';
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param(
-            'issiiiiss',
+            'issiiiissi',
             $categoryId,
             $name,
             $description,
@@ -1457,7 +1472,8 @@ class AdminController {
             $maxAttempts,
             $timeLimit,
             $testMode,
-            $workflowConfig
+            $workflowConfig,
+            $isTemporarilyDisabled
         );
 
         if (!$stmt->execute()) {
@@ -2334,11 +2350,12 @@ class AdminController {
                      max_attempts = ?,
                      time_limit = ?,
                      test_mode = ?,
-                     workflow_config = ?
+                     workflow_config = ?,
+                     is_temporarily_disabled = ?
                  WHERE id = ?'
             );
             $updatePackage->bind_param(
-                'issiiiissi',
+                'issiiiissii',
                 $draftPackage['category_id'],
                 $draftPackage['name'],
                 $draftPackage['description'],
@@ -2348,6 +2365,7 @@ class AdminController {
                 $draftPackage['time_limit'],
                 $draftPackage['test_mode'],
                 $draftPackage['workflow_config'],
+                $this->normalizeTemporaryDisabledFlag($draftPackage['is_temporarily_disabled'] ?? 0),
                 $packageId
             );
             $updatePackage->execute();

@@ -5031,6 +5031,15 @@ html[data-theme='dark'] .theme-toggle-thumb {
   .admin-package-action-group .btn {
     width: 100%;
   }
+
+  .admin-package-type-card,
+  .admin-package-type-package-item {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-package-type-actions {
+    justify-content: flex-start;
+  }
 }
 
 .admin-package-form,
@@ -5278,7 +5287,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
-  align-items: center;
+  align-items: start;
   padding: 1rem 1.05rem;
   border-radius: 1rem;
   border: 1px solid rgba(214, 226, 240, 0.95);
@@ -5307,6 +5316,42 @@ html[data-theme='dark'] .theme-toggle-thumb {
   gap: 0.55rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.admin-package-type-package-list {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.15rem;
+}
+
+.admin-package-type-package-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.9rem 0.95rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(223, 232, 244, 0.95);
+  background: rgba(248, 251, 255, 0.88);
+}
+
+.admin-package-type-package-copy strong {
+  color: #16243c;
+}
+
+.admin-package-type-package-copy p {
+  margin: 0.22rem 0 0;
+  color: #607089;
+  line-height: 1.5;
+}
+
+.admin-package-type-package-copy .admin-inline-status-row {
+  margin-top: 0.45rem;
+}
+
+.admin-package-type-package-item-empty {
+  grid-template-columns: 1fr;
 }
 
 .admin-learning-overview-stats,
@@ -12010,12 +12055,25 @@ html[data-theme='dark'] .admin-package-type-card {
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
 }
 
+html[data-theme='dark'] .admin-package-type-package-item {
+  background: rgba(17, 27, 45, 0.72);
+  border-color: rgba(112, 142, 186, 0.24);
+}
+
 html[data-theme='dark'] .admin-package-type-card strong {
   color: #f3f7fd;
 }
 
 html[data-theme='dark'] .admin-package-type-card p,
 html[data-theme='dark'] .admin-package-type-card small {
+  color: #9fb0c7;
+}
+
+html[data-theme='dark'] .admin-package-type-package-copy strong {
+  color: #eef4ff;
+}
+
+html[data-theme='dark'] .admin-package-type-package-copy p {
   color: #9fb0c7;
 }
 

@@ -14,6 +14,8 @@ const createEmptyLearningQuestion = (order = 1) => ({
   id: null,
   question_text: '',
   question_image_url: '',
+  explanation_notes: '',
+  material_topic: '',
   difficulty: 'medium',
   question_order: order,
   options: [
@@ -40,6 +42,21 @@ function truncateText(value, length = 180) {
   }
 
   return `${normalized.slice(0, length).trim()}...`;
+}
+
+function getMaterialTopics(material) {
+  if (Array.isArray(material?.topics) && material.topics.length > 0) {
+    return material.topics;
+  }
+
+  if (Array.isArray(material?.pages) && material.pages.length > 0) {
+    return material.pages.map((page, index) => ({
+      title: page.title || `Topik ${index + 1}`,
+      pages: [page],
+    }));
+  }
+
+  return [];
 }
 
 function AdminImagePreview({ src, alt, className = '' }) {
@@ -76,6 +93,8 @@ function questionToForm(question, fallbackOrder = 1) {
     id: Number(question?.id || 0) || null,
     question_text: question?.question_text || '',
     question_image_url: question?.question_image_url || '',
+    explanation_notes: question?.explanation_notes || '',
+    material_topic: question?.material_topic || '',
     difficulty: question?.difficulty || 'medium',
     question_order: Number(question?.question_order || fallbackOrder),
     options,
@@ -112,6 +131,18 @@ export default function AdminMiniTestQuestionEditor() {
     () => sectionQuestions.find((question) => Number(question.id) === numericQuestionId) || null,
     [numericQuestionId, sectionQuestions]
   );
+  const materialTopicOptions = useMemo(() => {
+    const topicTitles = getMaterialTopics(activeSection?.material)
+      .map((topic, index) => String(topic?.title || `Topik ${index + 1}`).trim())
+      .filter(Boolean);
+    const uniqueTopicTitles = topicTitles.filter((title, index) => topicTitles.indexOf(title) === index);
+
+    if (questionForm.material_topic && !uniqueTopicTitles.includes(questionForm.material_topic)) {
+      return [questionForm.material_topic, ...uniqueTopicTitles];
+    }
+
+    return uniqueTopicTitles;
+  }, [activeSection?.material, questionForm.material_topic]);
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
   const backToMiniTestHref = `/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&mode=quiz&workspace=${workspace}${questionForm.id ? `&mini_preview=${questionForm.id}` : ''}`;
 
@@ -463,7 +494,11 @@ export default function AdminMiniTestQuestionEditor() {
                   <div>
                     <h3>{selectedQuestion.question_text || 'Soal berbasis gambar'}</h3>
                     <p className="text-muted">
-                      {selectedQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
+                      {selectedQuestion.material_topic
+                        ? `${selectedQuestion.material_topic} • ${selectedQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}`
+                        : selectedQuestion.question_image_url
+                        ? 'Ada gambar soal'
+                        : 'Tanpa gambar soal'}
                     </p>
                   </div>
                   <AdminImagePreview
@@ -527,12 +562,35 @@ export default function AdminMiniTestQuestionEditor() {
 
                 <div className="account-form-grid">
                   <div className="form-group">
-                    <label>Kesulitan</label>
-                    <select name="difficulty" value={questionForm.difficulty} onChange={handleQuestionChange}>
-                      <option value="easy">Mudah</option>
-                      <option value="medium">Sedang</option>
-                      <option value="hard">Sulit</option>
+                    <label>Kategori Topik Materi</label>
+                    <select
+                      name="material_topic"
+                      value={questionForm.material_topic}
+                      onChange={handleQuestionChange}
+                    >
+                      <option value="">Pilih topik materi</option>
+                      {materialTopicOptions.map((topicTitle) => (
+                        <option key={topicTitle} value={topicTitle}>
+                          {topicTitle}
+                        </option>
+                      ))}
                     </select>
+                    <small className="text-muted">
+                      Dropdown ini mengambil topik materi aktif dari subtest {activeSection?.name || 'ini'} agar admin bisa menandai soal mini test masuk ke topik mana.
+                    </small>
+                  </div>
+                  <div className="form-group">
+                    <label>Catatan Pembahasan</label>
+                    <textarea
+                      name="explanation_notes"
+                      rows="4"
+                      value={questionForm.explanation_notes}
+                      onChange={handleQuestionChange}
+                      placeholder="Tulis pembahasan jawaban yang nanti akan dilihat user setelah mini test selesai"
+                    />
+                    <small className="text-muted">
+                      Catatan ini akan tampil di halaman pembahasan mini test setelah user menyelesaikan soal.
+                    </small>
                   </div>
                 </div>
 

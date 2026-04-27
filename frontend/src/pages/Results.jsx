@@ -14,7 +14,6 @@ export default function Results() {
   const [statusMessage, setStatusMessage] = useState('');
   const [statusTone, setStatusTone] = useState('info');
   const [resendingEmail, setResendingEmail] = useState(false);
-  const [showReview, setShowReview] = useState(false);
 
   useEffect(() => {
     const flashMessage = window.sessionStorage.getItem(RESULT_EMAIL_STATUS_KEY);
@@ -74,7 +73,6 @@ export default function Results() {
 
   const percentage = Number.isFinite(results.percentage) ? results.percentage : 0;
   const score = Number.isFinite(results.score) ? results.score : 0;
-  const reviewItems = Array.isArray(results.review_items) ? results.review_items : [];
   const scoreColor = percentage >= 75 ? 'text-green-600' :
     percentage >= 50 ? 'text-yellow-600' : 'text-red-600';
   const statusClasses = statusTone === 'warning'
@@ -194,17 +192,15 @@ export default function Results() {
               Lihat Paket Lain
             </button>
           </div>
-          {reviewItems.length > 0 && (
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={() => setShowReview((current) => !current)}
-                className="btn-outline w-full"
-              >
-                {showReview ? 'Sembunyikan Pembahasan Soal' : 'Lihat Pembahasan Soal'}
-              </button>
-            </div>
-          )}
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => navigate(`/results/${attemptId}/review`)}
+              className="btn-outline w-full"
+            >
+              Lihat Pembahasan Soal
+            </button>
+          </div>
         </div>
 
         {/* Additional Info */}
@@ -227,107 +223,6 @@ export default function Results() {
             </div>
           </div>
         </div>
-
-        {showReview && reviewItems.length > 0 && (
-          <div className="card mt-8">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold">Pembahasan Soal</h2>
-              <p className="text-sm text-gray-600">
-                Lihat kembali jawaban yang Anda pilih, status benar atau salah, dan catatan pembahasan dari tiap soal.
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              {reviewItems.map((item) => {
-                const statusLabel = !item.is_answered ? 'Tidak Dijawab' : item.is_correct ? 'Benar' : 'Salah';
-                const statusClasses = !item.is_answered
-                  ? 'bg-gray-100 text-gray-700'
-                  : item.is_correct
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-red-100 text-red-700';
-
-                return (
-                  <article key={item.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-blue-600">
-                          Soal {item.number}
-                          {item.section_name ? ` • ${item.section_name}` : ''}
-                        </p>
-                        {item.question_text && (
-                          <p className="mt-2 whitespace-pre-line text-base font-medium text-gray-900">
-                            {item.question_text}
-                          </p>
-                        )}
-                      </div>
-                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${statusClasses}`}>
-                        {statusLabel}
-                      </span>
-                    </div>
-
-                    {item.question_image_url && (
-                      <div className="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                        <img
-                          src={item.question_image_url}
-                          alt={`Soal ${item.number}`}
-                          className="mx-auto max-h-96 w-auto rounded-xl"
-                          loading="lazy"
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-3">
-                      {item.options.map((option) => {
-                        const optionClasses = option.is_correct
-                          ? 'border-green-300 bg-green-50'
-                          : option.is_selected
-                          ? 'border-red-200 bg-red-50'
-                          : 'border-gray-200 bg-gray-50';
-
-                        return (
-                          <div key={option.id || `${item.id}-${option.letter}`} className={`rounded-2xl border p-4 ${optionClasses}`}>
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="flex-1">
-                                <p className="font-semibold text-gray-900">{option.letter}. {option.text || 'Opsi berbasis gambar'}</p>
-                                {option.image_url && (
-                                  <img
-                                    src={option.image_url}
-                                    alt={`Opsi ${option.letter}`}
-                                    className="mt-3 max-h-64 rounded-xl"
-                                    loading="lazy"
-                                  />
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {option.is_selected && (
-                                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                                    Jawaban Anda
-                                  </span>
-                                )}
-                                {option.is_correct && (
-                                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                                    Jawaban Benar
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                      <p className="text-sm font-semibold text-blue-800">Catatan Pembahasan</p>
-                      <p className="mt-2 whitespace-pre-line text-sm text-blue-900">
-                        {item.explanation_notes || 'Pembahasan untuk soal ini belum diisi admin.'}
-                      </p>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -79,8 +79,11 @@ const TEST_MODE_OPTIONS = [
 
 const createEmptyLearningQuestion = (order = 1) => ({
   id: null,
+  status: 'draft',
   question_text: '',
   question_image_url: '',
+  explanation_notes: '',
+  material_topic: '',
   difficulty: 'medium',
   question_order: order,
   options: createDefaultOptionSet(),
@@ -375,18 +378,6 @@ function truncateText(value, length = 110) {
   }
 
   return `${normalized.slice(0, length).trim()}...`;
-}
-
-function formatDifficultyLabel(value) {
-  if (value === 'easy') {
-    return 'Mudah';
-  }
-
-  if (value === 'hard') {
-    return 'Sulit';
-  }
-
-  return 'Sedang';
 }
 
 function getLearningQuestionRowKey(question, index) {
@@ -915,8 +906,11 @@ export default function AdminPanel() {
 
     const normalizedQuestions = nextLearningQuestions.map((question, index) => ({
       id: question.id || null,
+      status: question.status || 'published',
       question_text: question.question_text || '',
       question_image_url: question.question_image_url || '',
+      explanation_notes: question.explanation_notes || '',
+      material_topic: question.material_topic || '',
       difficulty: question.difficulty || 'medium',
       question_order: Number(question.question_order || index + 1),
       options: (
@@ -2985,7 +2979,7 @@ export default function AdminPanel() {
                               <div className="admin-question-table-head">
                                 <span />
                                 <span>Pertanyaan</span>
-                                <span>Kesulitan</span>
+                                <span>Kategori</span>
                                 <span>Opsi</span>
                                 <span>Aksi</span>
                               </div>
@@ -3019,7 +3013,7 @@ export default function AdminPanel() {
                                       </div>
 
                                       <div className="admin-question-row-meta">
-                                        <span className="account-package-tag">{formatDifficultyLabel(question.difficulty)}</span>
+                                        <span className="account-package-tag">{question.material_topic || 'Belum pilih topik'}</span>
                                         <span className={`admin-material-status-badge admin-material-status-badge-${learningQuestionStatus}`}>
                                           {getMaterialStatusLabel(learningQuestionStatus)}
                                         </span>
@@ -3056,7 +3050,9 @@ export default function AdminPanel() {
                                           <div>
                                             <h3>{question.question_text || `Soal ${questionIndex + 1}`}</h3>
                                             <p className="text-muted">
-                                              {activeLearningSection.name}
+                                              {question.material_topic
+                                                ? `${activeLearningSection.name} • ${question.material_topic}`
+                                                : activeLearningSection.name}
                                             </p>
                                           </div>
                                           <AdminImagePreview
@@ -3103,6 +3099,12 @@ export default function AdminPanel() {
                                             </div>
                                           ))}
                                         </div>
+                                        {question.explanation_notes && (
+                                          <div className="admin-inline-note">
+                                            <strong>Pembahasan mini test</strong>
+                                            <p className="whitespace-pre-line">{question.explanation_notes}</p>
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -3556,16 +3558,23 @@ export default function AdminPanel() {
                           </div>
                           <div className="account-form-grid">
                             <div className="form-group">
-                              <label>Kesulitan</label>
+                              <label>Kategori Topik Materi</label>
                               <select
-                                name={`learning_question_difficulty_${questionIndex}`}
-                                value={question.difficulty}
-                                onChange={(event) => updateLearningQuestion(questionIndex, 'difficulty', event.target.value)}
+                                name={`learning_question_material_topic_${questionIndex}`}
+                                value={question.material_topic || ''}
+                                onChange={(event) => updateLearningQuestion(questionIndex, 'material_topic', event.target.value)}
                               >
-                                <option value="easy">Mudah</option>
-                                <option value="medium">Sedang</option>
-                                <option value="hard">Sulit</option>
+                                <option value="">Pilih topik materi</option>
+                                {activeMaterialTopics.map((topic, topicIndex) => {
+                                  const topicTitle = String(topic?.title || `Topik ${topicIndex + 1}`).trim();
+                                  return (
+                                    <option key={`legacy-learning-topic-${questionIndex}-${topicTitle}`} value={topicTitle}>
+                                      {topicTitle}
+                                    </option>
+                                  );
+                                })}
                               </select>
+                              <small className="text-muted">Dipakai untuk menandai soal mini test ini masuk ke topik materi yang mana.</small>
                             </div>
                           </div>
                           <div className="admin-options-editor-list">

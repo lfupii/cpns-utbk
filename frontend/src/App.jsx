@@ -9,6 +9,8 @@ import Payment from './pages/Payment';
 import Learning from './pages/Learning';
 import Test from './pages/Test';
 import Results from './pages/Results';
+import ResultsReview from './pages/ResultsReview';
+import MiniTestReview from './pages/MiniTestReview';
 import Profile from './pages/Profile';
 import ActivePackages from './pages/ActivePackages';
 import TestHistory from './pages/TestHistory';
@@ -122,6 +124,22 @@ function AppRoutes() {
             element={
               <ProtectedRoute>
                 <Results />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/results/:attemptId/review"
+            element={
+              <ProtectedRoute>
+                <ResultsReview />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/learning/:packageId/review/:sectionCode"
+            element={
+              <ProtectedRoute>
+                <MiniTestReview />
               </ProtectedRoute>
             }
           />

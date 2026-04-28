@@ -432,11 +432,6 @@ export default function Learning() {
   };
 
   const toggleMaterialSection = (sectionCode) => {
-    setContentView('materi');
-    setActiveSectionView('material');
-    setActiveSectionCode(sectionCode);
-    setActiveTopicIndex(0);
-    setMaterialsExpanded(true);
     setExpandedMaterialSections((current) => ({
       ...current,
       [sectionCode]: !current[sectionCode],
@@ -1229,12 +1224,13 @@ export default function Learning() {
                   const topics = getSectionTopics(section);
                   const isTopicActive = contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code;
                   const isMiniTestActive = contentView === 'materi' && activeSectionView === 'mini-test' && section.code === activeSection?.code;
+                  const isSectionExpanded = Boolean(expandedMaterialSections[section.code]);
 
                   return (
                     <div key={section.code} className="admin-section-sidebar-entry">
                       <button
                         type="button"
-                        className={isTopicActive || isMiniTestActive ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
+                        className={isTopicActive || isMiniTestActive || isSectionExpanded ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
                         onClick={() => toggleMaterialSection(section.code)}
                       >
                         <span className="admin-section-sidebar-item-copy">
@@ -1404,13 +1400,13 @@ export default function Learning() {
                     {activeSection.session_name || packageData.category_name}
                   </span>
                   <h2>{activeSection.name}</h2>
-                  <p>
-                    {activeSectionView === 'mini-test'
-                      ? 'Kerjakan mini test subtest ini setelah membaca topik-topik yang tersedia.'
-                      : hasAccess
-                      ? 'Materi penuh terbuka. Ikuti urutan topik lalu halaman seperti alur belajar di admin.'
-                      : `Preview ${activeSection.visible_page_count} dari ${activeSection.total_page_count} halaman materi.`}
-                  </p>
+                  {(activeSectionView === 'mini-test' || !hasAccess) && (
+                    <p>
+                      {activeSectionView === 'mini-test'
+                        ? 'Kerjakan mini test subtest ini setelah membaca topik-topik yang tersedia.'
+                        : `Preview ${activeSection.visible_page_count} dari ${activeSection.total_page_count} halaman materi.`}
+                    </p>
+                  )}
                 </div>
                 {(activeSectionView === 'mini-test'
                   ? activeSection.progress.subtest_test_completed

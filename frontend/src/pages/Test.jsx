@@ -79,11 +79,6 @@ export default function Test() {
   const pendingAutoSaveRef = useRef(null);
   const loadedSectionCodeRef = useRef(null);
   const currentQuestionIdRef = useRef(null);
-  const {
-    navigationRef: floatingNavigationRef,
-    shouldShowDock: shouldShowFloatingDock,
-    timerRef: floatingTimerRef,
-  } = useFloatingTestDock(!loading);
 
   const [questions, setQuestions] = useState([]);
   const [savedAnswers, setSavedAnswers] = useState({});
@@ -100,6 +95,11 @@ export default function Test() {
   const [isAdvancingSection, setIsAdvancingSection] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [reviewFlags, setReviewFlags] = useState({});
+  const {
+    navigationRef: floatingNavigationRef,
+    shouldShowDock: shouldShowFloatingDock,
+    timerRef: floatingTimerRef,
+  } = useFloatingTestDock(!loading);
 
   const attemptState = useMemo(
     () => computeAttemptState(workflow, elapsedSeconds),

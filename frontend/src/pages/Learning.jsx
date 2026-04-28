@@ -116,10 +116,8 @@ export default function Learning() {
   const [learning, setLearning] = useState(null);
   const [activeSectionCode, setActiveSectionCode] = useState('');
   const [sectionTests, setSectionTests] = useState({});
-  const [activePackages, setActivePackages] = useState([]);
   const [contentView, setContentView] = useState('dashboard');
   const [activeTopicIndex, setActiveTopicIndex] = useState(0);
-  const [packagesExpanded, setPackagesExpanded] = useState(false);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
   const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
   const [activeSectionView, setActiveSectionView] = useState('material');
@@ -181,40 +179,11 @@ export default function Learning() {
 
   useEffect(() => {
     setContentView('dashboard');
-    setPackagesExpanded(false);
     setMaterialsExpanded(true);
     setExpandedMaterialSections({});
     setActiveTopicIndex(0);
     autoResumeMiniTestRef.current = false;
   }, [numericPackageId]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setActivePackages([]);
-      return;
-    }
-
-    let ignore = false;
-
-    const fetchActivePackages = async () => {
-      try {
-        const response = await apiClient.get('/auth/active-packages');
-        if (!ignore) {
-          setActivePackages(response.data.data || []);
-        }
-      } catch (err) {
-        if (!ignore) {
-          setActivePackages([]);
-        }
-      }
-    };
-
-    fetchActivePackages();
-
-    return () => {
-      ignore = true;
-    };
-  }, [isAuthenticated]);
 
   const sections = useMemo(() => learning?.sections || [], [learning]);
   const activeSection = useMemo(
@@ -375,30 +344,6 @@ export default function Learning() {
   const totalMilestoneSteps = Math.max(1, sections.length * 2 + 1);
   const completedMilestoneSteps = materialDoneCount + subtestDoneCount + (completedTryout ? 1 : 0);
   const milestonePercent = Math.round((completedMilestoneSteps / totalMilestoneSteps) * 100);
-  const currentPackageOption = useMemo(() => {
-    const matchedPackage = activePackages.find((pkg) => Number(pkg.package_id) === numericPackageId);
-    if (matchedPackage) {
-      return matchedPackage;
-    }
-
-    return {
-      access_id: `current-${numericPackageId}`,
-      package_id: numericPackageId,
-      package_name: packageData?.name || 'Paket belajar',
-      category_name: packageData?.category_name || 'Paket',
-      description: packageData?.description || '',
-      remaining_attempts: summary.remaining_attempts ?? 'Admin',
-      is_unused: false,
-      can_start_test: Boolean(summary.can_start_tryout),
-    };
-  }, [activePackages, numericPackageId, packageData, summary.remaining_attempts, summary.can_start_tryout]);
-  const packageOptions = useMemo(() => {
-    if (activePackages.length > 0) {
-      return activePackages;
-    }
-
-    return currentPackageOption ? [currentPackageOption] : [];
-  }, [activePackages, currentPackageOption]);
   const sectionLookup = useMemo(
     () => new Map(sections.map((section) => [section.code, section])),
     [sections]
@@ -1249,38 +1194,6 @@ export default function Learning() {
       <section className={`learning-workspace${shouldShowFocusLayout ? ' learning-workspace-focus' : ''}`}>
         {!shouldShowFocusLayout && (
         <aside className="learning-sidebar">
-          <div className="learning-sidebar-card">
-            <p className="learning-sidebar-label">Jenis paket</p>
-            <button
-              type="button"
-              className="learning-sidebar-toggle"
-              onClick={() => setPackagesExpanded((current) => !current)}
-              aria-expanded={packagesExpanded}
-            >
-              <span>
-                <strong>{currentPackageOption.package_name}</strong>
-                <small>{currentPackageOption.category_name}</small>
-              </span>
-              <span>{packagesExpanded ? '▴' : '▾'}</span>
-            </button>
-
-            {packagesExpanded && (
-              <div className="learning-sidebar-list">
-                {packageOptions.map((pkg) => (
-                  <button
-                    type="button"
-                    key={pkg.access_id || pkg.package_id}
-                    className={Number(pkg.package_id) === numericPackageId ? 'learning-sidebar-item learning-sidebar-item-active' : 'learning-sidebar-item'}
-                    onClick={() => navigate(`/learning/${pkg.package_id}`)}
-                  >
-                    <strong>{pkg.package_name}</strong>
-                    <small>{pkg.category_name}</small>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           <div className="learning-sidebar-card">
             <button
               type="button"

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
+import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
@@ -123,6 +124,11 @@ export default function Learning() {
   const [successMessage, setSuccessMessage] = useState('');
   const sectionTestSavingRef = useRef({});
   const sectionTestPendingSaveRef = useRef({});
+  const {
+    navigationRef: floatingNavigationRef,
+    shouldShowDock: shouldShowFloatingDock,
+    timerRef: floatingTimerRef,
+  } = useFloatingTestDock(!loading && activeSectionView === 'mini-test' && Boolean(activeSectionCode));
 
   const fetchLearning = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0) {
@@ -338,6 +344,56 @@ export default function Learning() {
     [currentSectionDraftAnswers, currentSectionQuestion?.id, currentSectionSavedAnswers]
   );
   const hasCurrentSectionAnswerSelected = currentSectionCurrentAnswerValue > 0;
+  const floatingDockItems = useMemo(() => (
+    currentSectionQuestions.map((question, index) => {
+      const answeredValue = currentSectionDraftAnswers[question.id]
+        || currentSectionDraftAnswers[String(question.id)]
+        || currentSectionSavedAnswers[question.id]
+        || currentSectionSavedAnswers[String(question.id)];
+      const isMarkedForReview = Boolean(
+        currentSectionReviewFlags[String(question.id)] || currentSectionReviewFlags[question.id]
+      );
+
+      return {
+        id: question.id,
+        label: index + 1,
+        status: Number(question.id) === Number(currentSectionQuestion?.id)
+          ? 'current'
+          : answeredValue
+          ? 'done'
+          : 'empty',
+        review: isMarkedForReview,
+        ariaLabel: `Soal ${index + 1}${isMarkedForReview ? ', ditandai ragu-ragu' : ''}`,
+        title: isMarkedForReview ? `Soal ${index + 1} ditandai ragu-ragu` : `Soal ${index + 1}`,
+      };
+    })
+  ), [
+    currentSectionDraftAnswers,
+    currentSectionQuestion?.id,
+    currentSectionQuestions,
+    currentSectionReviewFlags,
+    currentSectionSavedAnswers,
+  ]);
+  const floatingDockStats = useMemo(() => ([
+    {
+      label: 'Sisa waktu',
+      value: formatTime(currentSectionTest.remainingSeconds),
+      tone: Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'danger' : 'success',
+    },
+    {
+      label: 'Terjawab',
+      value: `${currentSectionAnsweredCount}/${currentSectionQuestions.length}`,
+    },
+    {
+      label: 'Soal aktif',
+      value: `${Math.max(1, currentSectionQuestionIndex + 1)}/${Math.max(currentSectionQuestions.length, 1)}`,
+    },
+  ]), [
+    currentSectionAnsweredCount,
+    currentSectionQuestionIndex,
+    currentSectionQuestions.length,
+    currentSectionTest.remainingSeconds,
+  ]);
   const completedTryout = Number(summary.completed_attempts || 0) > 0;
   const materialDoneCount = sections.filter((section) => section.progress.material_read).length;
   const subtestDoneCount = sections.filter((section) => section.progress.subtest_test_completed).length;
@@ -1515,7 +1571,7 @@ export default function Learning() {
                             <strong>{currentSectionAnsweredCount} / {currentSectionQuestions.length}</strong>
                             <small>Progress mini test subtest aktif</small>
                           </div>
-                          <div className="test-hero-stat-card">
+                          <div ref={floatingTimerRef} className="test-hero-stat-card">
                             <span>Sisa waktu</span>
                             <strong>{formatTime(currentSectionTest.remainingSeconds)}</strong>
                             <small>{currentSectionTest.result ? 'Timer berhenti setelah hasil tersimpan' : 'Waktu akan berjalan selama mini test dibuka'}</small>
@@ -1557,11 +1613,21 @@ export default function Learning() {
                         </div>
                       )}
 
+                      <FloatingTestDock
+                        ariaLabel="Navigasi cepat mini test subtest"
+                        items={floatingDockItems}
+                        note="Timer dan nomor soal tetap bisa diakses saat kamu scroll."
+                        onSelectItem={(questionId) => goToSectionQuestion(activeSection.code, questionId)}
+                        stats={floatingDockStats}
+                        title="Akses cepat"
+                        visible={currentSectionTest.open && shouldShowFloatingDock}
+                      />
+
                       <div className="test-layout-grid">
                         <div className="test-main-column">
                           <div className="card test-question-card">
                             <div className="test-question-stage">
-                              <div className="test-inline-navigation">
+                              <div ref={floatingNavigationRef} className="test-inline-navigation">
                                 <div className="test-inline-navigation-head">
                                   <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
                                   <p className="test-inline-navigation-note">

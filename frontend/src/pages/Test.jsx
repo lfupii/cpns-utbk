@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../api';
+import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
 
 const MODE_CPNS = 'cpns_cat';
 const MODE_UTBK = 'utbk_sectioned';
@@ -78,6 +79,11 @@ export default function Test() {
   const pendingAutoSaveRef = useRef(null);
   const loadedSectionCodeRef = useRef(null);
   const currentQuestionIdRef = useRef(null);
+  const {
+    navigationRef: floatingNavigationRef,
+    shouldShowDock: shouldShowFloatingDock,
+    timerRef: floatingTimerRef,
+  } = useFloatingTestDock(!loading);
 
   const [questions, setQuestions] = useState([]);
   const [savedAnswers, setSavedAnswers] = useState({});
@@ -209,6 +215,27 @@ export default function Test() {
     () => pendingReviewQuestionNumbers.join(', '),
     [pendingReviewQuestionNumbers]
   );
+  const floatingDockItems = useMemo(() => (
+    orderedQuestions.map((question, index) => {
+      const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
+      const isMarkedForReview = Boolean(
+        reviewFlags[String(question.id)] || reviewFlags[question.id]
+      );
+
+      return {
+        id: question.id,
+        label: index + 1,
+        status: Number(question.id) === Number(currentQuestion?.id)
+          ? 'current'
+          : savedValue
+          ? 'done'
+          : 'empty',
+        review: isMarkedForReview,
+        ariaLabel: `Soal ${index + 1}${isMarkedForReview ? ', ditandai ragu-ragu' : ''}`,
+        title: isMarkedForReview ? `Soal ${index + 1} ditandai ragu-ragu` : `Soal ${index + 1}`,
+      };
+    })
+  ), [currentQuestion?.id, orderedQuestions, reviewFlags, savedAnswers]);
 
   const pickInitialQuestionId = useCallback((nextQuestions, nextSavedAnswers, nextWorkflow, nextElapsedSeconds) => {
     const initialState = computeAttemptState(nextWorkflow, nextElapsedSeconds);
@@ -673,6 +700,24 @@ export default function Test() {
   const isCurrentQuestionMarkedForReview = Boolean(
     reviewFlags[String(currentQuestion.id)] || reviewFlags[currentQuestion.id]
   );
+  const activeRemainingSeconds = isUtbkMode
+    ? attemptState.activeSectionRemainingSeconds
+    : attemptState.remainingSeconds;
+  const floatingDockStats = [
+    {
+      label: isUtbkMode ? 'Timer subtes' : 'Sisa waktu',
+      value: formatTime(activeRemainingSeconds),
+      tone: activeRemainingSeconds < 300 ? 'danger' : 'success',
+    },
+    {
+      label: 'Terjawab',
+      value: `${answeredCount}/${totalQuestionCount}`,
+    },
+    {
+      label: 'Soal aktif',
+      value: `${questionTitleNumber}/${Math.max(orderedQuestions.length, 1)}`,
+    },
+  ];
 
   return (
     <div className="min-h-screen test-shell">
@@ -705,7 +750,7 @@ export default function Test() {
               <strong>{answeredCount} / {totalQuestionCount}</strong>
               <small>Progress seluruh soal</small>
             </div>
-            <div className="test-hero-stat-card">
+            <div ref={floatingTimerRef} className="test-hero-stat-card">
               <span>{isUtbkMode ? 'Timer subtes' : 'Timer utama'}</span>
               <strong>
                 {formatTime(isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds)}
@@ -735,11 +780,21 @@ export default function Test() {
           </div>
         )}
 
+        <FloatingTestDock
+          ariaLabel={isUtbkMode ? 'Navigasi cepat soal subtes aktif' : 'Navigasi cepat soal'}
+          items={floatingDockItems}
+          note="Timer dan nomor soal tetap bisa diakses saat kamu scroll."
+          onSelectItem={goToQuestion}
+          stats={floatingDockStats}
+          title="Akses cepat"
+          visible={shouldShowFloatingDock}
+        />
+
         <div className="test-layout-grid">
           <div className="test-main-column">
             <div className="card test-question-card">
               <div key={currentQuestion.id} className="test-question-stage">
-                <div className="test-inline-navigation">
+                <div ref={floatingNavigationRef} className="test-inline-navigation">
                   <div className="test-inline-navigation-head">
                     <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
                     <p className="test-inline-navigation-note">

@@ -7333,6 +7333,115 @@ html[data-theme='dark'] .theme-toggle-thumb {
   background: #cbd5e1;
 }
 
+.test-floating-dock {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 0.8rem);
+  left: max(0.75rem, env(safe-area-inset-left, 0px));
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  z-index: 70;
+  pointer-events: none;
+}
+
+.test-floating-dock-shell {
+  pointer-events: auto;
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.95rem;
+  border-radius: 1.3rem;
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(239, 246, 255, 0.96) 100%);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(18px);
+  animation: softRise 0.22s ease-out both;
+}
+
+.test-floating-dock-head {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.test-floating-dock-copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.test-floating-dock-kicker {
+  margin: 0;
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+}
+
+.test-floating-dock-note {
+  margin: 0;
+  color: #52627b;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.test-floating-dock-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.test-floating-dock-stat {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+  padding: 0.65rem 0.72rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.test-floating-dock-stat span {
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.test-floating-dock-stat strong {
+  color: #172033;
+  font-size: 0.96rem;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.test-floating-dock-stat-success strong {
+  color: #15803d;
+}
+
+.test-floating-dock-stat-danger strong {
+  color: #dc2626;
+}
+
+.test-floating-dock-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-auto-columns: 44px;
+  gap: 0.5rem 0.55rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 0.15rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.test-floating-dock-strip .test-nav-chip-button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  scroll-snap-align: start;
+}
+
 .test-subtest-chip-current {
   border-color: rgba(45, 140, 255, 0.34);
   background: rgba(239, 246, 255, 0.98);
@@ -8667,6 +8776,21 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
   .test-sidebar-card {
     width: 100%;
+  }
+
+  .test-floating-dock {
+    top: calc(env(safe-area-inset-top, 0px) + 0.65rem);
+    left: max(0.6rem, env(safe-area-inset-left, 0px));
+    right: max(0.6rem, env(safe-area-inset-right, 0px));
+  }
+
+  .test-floating-dock-shell {
+    padding: 0.85rem;
+    border-radius: 1.15rem;
+  }
+
+  .test-floating-dock-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -11160,6 +11284,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
     border-radius: 0.8rem;
   }
 
+  .test-floating-dock-strip {
+    grid-auto-columns: 42px;
+  }
+
   .test-action-row,
   .test-action-buttons,
   .test-action-buttons-end {
@@ -11169,6 +11297,12 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
   .test-action-buttons-end {
     margin-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .test-floating-dock-stats {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -12263,6 +12397,30 @@ html[data-theme='dark'] .test-nav-chip-flag {
 
 html[data-theme='dark'] .test-nav-legend-dot-empty {
   background: #64748b;
+}
+
+html[data-theme='dark'] .test-floating-dock-shell {
+  border-color: rgba(96, 165, 250, 0.26);
+  background: linear-gradient(135deg, rgba(13, 21, 35, 0.94) 0%, rgba(16, 28, 45, 0.94) 100%);
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.44);
+}
+
+html[data-theme='dark'] .test-floating-dock-kicker {
+  color: #93c5fd;
+}
+
+html[data-theme='dark'] .test-floating-dock-note,
+html[data-theme='dark'] .test-floating-dock-stat span {
+  color: #9fb2c9;
+}
+
+html[data-theme='dark'] .test-floating-dock-stat {
+  border-color: rgba(71, 85, 105, 0.72);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+html[data-theme='dark'] .test-floating-dock-stat strong {
+  color: #e2e8f0;
 }
 
 html[data-theme='dark'] .alert {

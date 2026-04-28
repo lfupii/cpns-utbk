@@ -3,7 +3,11 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
-import { downloadQuestionExtractFile } from '../utils/questionExtract';
+import {
+  downloadBulkQuestionExtractFile,
+  downloadQuestionExtractFile,
+  hasQuestionExtractContent,
+} from '../utils/questionExtract';
 
 const CSV_HEADERS = [
   'section_code',
@@ -1608,6 +1612,50 @@ export default function AdminPanel() {
     }
   };
 
+  const handleTryoutBulkExtractDownload = () => {
+    const entries = filteredQuestions
+      .filter((question) => hasQuestionExtractContent(question))
+      .map((question) => ({
+        question,
+        metadata: {
+          sectionName: question.section_name || question.section_code || '',
+        },
+      }));
+
+    try {
+      downloadBulkQuestionExtractFile(entries, {
+        prefix: 'extract-semua-soal-tryout',
+        suffix: selectedPackage?.name || 'paket-aktif',
+      });
+    } catch (error) {
+      setError(error.message || 'Gagal mengunduh extract semua soal tryout.');
+    }
+  };
+
+  const handleMiniTestBulkExtractDownload = () => {
+    if (!activeLearningSection) {
+      return;
+    }
+
+    const entries = learningQuestionsForm
+      .filter((question) => hasQuestionExtractContent(question))
+      .map((question) => ({
+        question,
+        metadata: {
+          sectionName: activeLearningSection.name,
+        },
+      }));
+
+    try {
+      downloadBulkQuestionExtractFile(entries, {
+        prefix: 'extract-semua-soal-mini-test',
+        sectionName: activeLearningSection.name,
+      });
+    } catch (error) {
+      setError(error.message || 'Gagal mengunduh extract semua soal mini test.');
+    }
+  };
+
   const openDashboardView = () => {
     setAdminView('dashboard');
     setLearningEditorMode('');
@@ -2970,6 +3018,14 @@ export default function AdminPanel() {
                               </p>
                             </div>
                             <div className="admin-question-editor-actions">
+                              <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={handleMiniTestBulkExtractDownload}
+                                disabled={!learningQuestionsForm.some((question) => hasQuestionExtractContent(question))}
+                              >
+                                Download Semua Extract
+                              </button>
                               {isDraftWorkspace && (
                                 <button
                                   type="button"
@@ -3095,7 +3151,7 @@ export default function AdminPanel() {
                                             className="btn btn-outline"
                                             onClick={() => handleMiniTestExtractDownload(question)}
                                           >
-                                            Download Extract
+                                            Download Soal Ini
                                           </button>
                                           {isDraftWorkspace && (
                                             <button
@@ -3252,6 +3308,14 @@ export default function AdminPanel() {
                         )}
                       </div>
                       <div className="admin-list-toolbar-actions">
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          onClick={handleTryoutBulkExtractDownload}
+                          disabled={filteredQuestions.filter((question) => hasQuestionExtractContent(question)).length === 0}
+                        >
+                          Download Semua Extract
+                        </button>
                         <select
                           name="question_section_filter"
                           value={questionSectionFilter}
@@ -3436,7 +3500,7 @@ export default function AdminPanel() {
                                       className="btn btn-outline"
                                       onClick={() => handleTryoutExtractDownload(question)}
                                     >
-                                      Download Extract
+                                      Download Soal Ini
                                     </button>
                                     {isDraftWorkspace && (
                                       <Link

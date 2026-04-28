@@ -125,7 +125,7 @@ export default function Learning() {
   const sectionTestSavingRef = useRef({});
   const sectionTestPendingSaveRef = useRef({});
   const {
-    navigationRef: floatingNavigationRef,
+    isCompactViewport,
     shouldShowDock: shouldShowFloatingDock,
     timerRef: floatingTimerRef,
   } = useFloatingTestDock(!loading && activeSectionView === 'mini-test' && Boolean(activeSectionCode));
@@ -344,56 +344,23 @@ export default function Learning() {
     [currentSectionDraftAnswers, currentSectionQuestion?.id, currentSectionSavedAnswers]
   );
   const hasCurrentSectionAnswerSelected = currentSectionCurrentAnswerValue > 0;
-  const floatingDockItems = useMemo(() => (
-    currentSectionQuestions.map((question, index) => {
-      const answeredValue = currentSectionDraftAnswers[question.id]
-        || currentSectionDraftAnswers[String(question.id)]
-        || currentSectionSavedAnswers[question.id]
-        || currentSectionSavedAnswers[String(question.id)];
-      const isMarkedForReview = Boolean(
-        currentSectionReviewFlags[String(question.id)] || currentSectionReviewFlags[question.id]
-      );
-
-      return {
-        id: question.id,
-        label: index + 1,
-        status: Number(question.id) === Number(currentSectionQuestion?.id)
-          ? 'current'
-          : answeredValue
-          ? 'done'
-          : 'empty',
-        review: isMarkedForReview,
-        ariaLabel: `Soal ${index + 1}${isMarkedForReview ? ', ditandai ragu-ragu' : ''}`,
-        title: isMarkedForReview ? `Soal ${index + 1} ditandai ragu-ragu` : `Soal ${index + 1}`,
-      };
-    })
-  ), [
-    currentSectionDraftAnswers,
-    currentSectionQuestion?.id,
-    currentSectionQuestions,
-    currentSectionReviewFlags,
-    currentSectionSavedAnswers,
-  ]);
-  const floatingDockStats = useMemo(() => ([
-    {
-      label: 'Sisa waktu',
-      value: formatTime(currentSectionTest.remainingSeconds),
-      tone: Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'danger' : 'success',
-    },
-    {
-      label: 'Terjawab',
-      value: `${currentSectionAnsweredCount}/${currentSectionQuestions.length}`,
-    },
-    {
-      label: 'Soal aktif',
-      value: `${Math.max(1, currentSectionQuestionIndex + 1)}/${Math.max(currentSectionQuestions.length, 1)}`,
-    },
-  ]), [
-    currentSectionAnsweredCount,
-    currentSectionQuestionIndex,
-    currentSectionQuestions.length,
-    currentSectionTest.remainingSeconds,
-  ]);
+  const floatingTimerStat = useMemo(() => ({
+    label: 'Sisa waktu',
+    value: formatTime(currentSectionTest.remainingSeconds),
+    tone: Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'danger' : 'success',
+  }), [currentSectionTest.remainingSeconds]);
+  const hasPreviousTopic = activeSectionView === 'material' && activeTopicIndex > 0;
+  const hasNextTopic = activeSectionView === 'material' && activeTopicIndex < activeSectionTopics.length - 1;
+  const isLastTopic = activeSectionView === 'material' && activeSectionTopics.length > 0 && activeTopicIndex === activeSectionTopics.length - 1;
+  const shouldShowFocusLayout = isCompactViewport && contentView !== 'dashboard';
+  const mobileFocusTitle = contentView === 'tryout'
+    ? 'Menu Tryout'
+    : activeSectionView === 'mini-test'
+    ? 'Mini Test Subtest'
+    : activeTopic?.title || activeSection?.name || 'Materi Subtest';
+  const mobileFocusSubtitle = contentView === 'tryout'
+    ? packageData?.name || 'Tryout keseluruhan'
+    : activeSection?.name || activeSection?.session_name || 'Ruang belajar';
   const completedTryout = Number(summary.completed_attempts || 0) > 0;
   const materialDoneCount = sections.filter((section) => section.progress.material_read).length;
   const subtestDoneCount = sections.filter((section) => section.progress.subtest_test_completed).length;
@@ -1172,9 +1139,10 @@ export default function Learning() {
 
   return (
     <AccountShell
-      shellClassName="account-shell-learning"
+      shellClassName={`account-shell-learning${shouldShowFocusLayout ? ' account-shell-learning-focus' : ''}`}
       title={`Ruang Belajar ${packageData.name}`}
       subtitle="Baca materi per subtest, kerjakan mini test, lalu lanjut ke tryout keseluruhan saat paket aktif."
+      hidePageHeader={shouldShowFocusLayout}
     >
       {error && <div className="alert">{error}</div>}
       {successMessage && <div className="account-success learning-flash">{successMessage}</div>}
@@ -1198,7 +1166,8 @@ export default function Learning() {
           </span>
         </div>
       )}
-      <section className="learning-workspace">
+      <section className={`learning-workspace${shouldShowFocusLayout ? ' learning-workspace-focus' : ''}`}>
+        {!shouldShowFocusLayout && (
         <aside className="learning-sidebar">
           <div className="learning-sidebar-card">
             <p className="learning-sidebar-label">Jenis paket</p>
@@ -1315,8 +1284,26 @@ export default function Learning() {
             </button>
           </div>
         </aside>
+        )}
 
-        <div className="learning-main-panel">
+        <div className={`learning-main-panel${shouldShowFocusLayout ? ' learning-main-panel-focus' : ''}`}>
+          {shouldShowFocusLayout && (
+            <div className="learning-mobile-focus-bar">
+              <button
+                type="button"
+                className="learning-mobile-focus-back"
+                onClick={openDashboardView}
+              >
+                <span aria-hidden="true">←</span>
+                <span>Kembali ke Dashboard</span>
+              </button>
+              <div className="learning-mobile-focus-copy">
+                <strong>{mobileFocusTitle}</strong>
+                <small>{mobileFocusSubtitle}</small>
+              </div>
+            </div>
+          )}
+
           {contentView === 'dashboard' && (
             <section className="learning-dashboard-shell">
               <div className="learning-dashboard-header">
@@ -1434,7 +1421,7 @@ export default function Learning() {
                 )}
               </div>
 
-              {activeSectionView === 'material' && activeSectionTopics.length > 0 && (
+              {activeSectionView === 'material' && activeSectionTopics.length > 0 && !shouldShowFocusLayout && (
                 <div className="learning-topic-list">
                   {activeSectionTopics.map((topic, topicIndex) => (
                     <button
@@ -1493,6 +1480,45 @@ export default function Learning() {
                   </section>
                 </div>
               ) : null}
+
+              {activeSectionView === 'material' && activeSectionTopics.length > 0 && (
+                <div className="learning-material-flow">
+                  {hasPreviousTopic ? (
+                    <button
+                      type="button"
+                      className="learning-material-flow-button learning-material-flow-button-secondary"
+                      onClick={() => setActiveTopicIndex((current) => Math.max(0, current - 1))}
+                    >
+                      <span className="learning-material-flow-icon" aria-hidden="true">←</span>
+                      <span>Materi Sebelumnya</span>
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+
+                  {hasNextTopic ? (
+                    <button
+                      type="button"
+                      className="learning-material-flow-button"
+                      onClick={() => setActiveTopicIndex((current) => Math.min(activeSectionTopics.length - 1, current + 1))}
+                    >
+                      <span>Lanjut ke Materi Berikutnya</span>
+                      <span className="learning-material-flow-icon" aria-hidden="true">→</span>
+                    </button>
+                  ) : isLastTopic && hasAccess ? (
+                    <button
+                      type="button"
+                      className="learning-material-flow-button"
+                      onClick={() => openSectionTestView(activeSection.code)}
+                    >
+                      <span>Lanjut ke Mini Test {activeSection.name}</span>
+                      <span className="learning-material-flow-icon" aria-hidden="true">→</span>
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              )}
 
               {activeSectionView === 'material' && !hasAccess && activeSection.locked_page_count > 0 && (
                 <div className="learning-locked-pages">
@@ -1614,12 +1640,8 @@ export default function Learning() {
                       )}
 
                       <FloatingTestDock
-                        ariaLabel="Navigasi cepat mini test subtest"
-                        items={floatingDockItems}
-                        note="Timer dan nomor soal tetap bisa diakses saat kamu scroll."
-                        onSelectItem={(questionId) => goToSectionQuestion(activeSection.code, questionId)}
-                        stats={floatingDockStats}
-                        title="Akses cepat"
+                        ariaLabel="Timer mini test mengambang"
+                        stat={floatingTimerStat}
                         visible={currentSectionTest.open && shouldShowFloatingDock}
                       />
 
@@ -1627,7 +1649,7 @@ export default function Learning() {
                         <div className="test-main-column">
                           <div className="card test-question-card">
                             <div className="test-question-stage">
-                              <div ref={floatingNavigationRef} className="test-inline-navigation">
+                              <div className="test-inline-navigation">
                                 <div className="test-inline-navigation-head">
                                   <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
                                   <p className="test-inline-navigation-note">
@@ -1803,24 +1825,26 @@ export default function Learning() {
                           </div>
                         </div>
 
-                        <div className="test-sidebar-column">
-                          <div className="test-sidebar-metrics">
-                            <div className="test-header-stat">
-                              <p className="test-header-stat-label">Terjawab</p>
-                              <p className="test-header-stat-value">{currentSectionAnsweredCount} / {currentSectionQuestions.length}</p>
-                            </div>
-                            <div className="test-header-stat">
-                              <p className="test-header-stat-label">Sisa Waktu</p>
-                              <p className={`test-header-stat-value ${Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'test-header-stat-value-danger' : 'test-header-stat-value-success'}`}>
-                                {formatTime(currentSectionTest.remainingSeconds)}
-                              </p>
-                            </div>
-                            <div className="test-header-stat">
-                              <p className="test-header-stat-label">Soal Aktif</p>
-                              <p className="test-header-stat-value">{Math.max(1, currentSectionQuestionIndex + 1)} / {currentSectionQuestions.length}</p>
+                        {!isCompactViewport && (
+                          <div className="test-sidebar-column">
+                            <div className="test-sidebar-metrics">
+                              <div className="test-header-stat">
+                                <p className="test-header-stat-label">Terjawab</p>
+                                <p className="test-header-stat-value">{currentSectionAnsweredCount} / {currentSectionQuestions.length}</p>
+                              </div>
+                              <div className="test-header-stat">
+                                <p className="test-header-stat-label">Sisa Waktu</p>
+                                <p className={`test-header-stat-value ${Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'test-header-stat-value-danger' : 'test-header-stat-value-success'}`}>
+                                  {formatTime(currentSectionTest.remainingSeconds)}
+                                </p>
+                              </div>
+                              <div className="test-header-stat">
+                                <p className="test-header-stat-label">Soal Aktif</p>
+                                <p className="test-header-stat-value">{Math.max(1, currentSectionQuestionIndex + 1)} / {currentSectionQuestions.length}</p>
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </>
                   )}

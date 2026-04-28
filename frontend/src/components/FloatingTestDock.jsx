@@ -12,7 +12,6 @@ function isRectVisible(rect, topOffset) {
 }
 
 export function useFloatingTestDock(enabled) {
-  const navigationRef = useRef(null);
   const timerRef = useRef(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [shouldShowDock, setShouldShowDock] = useState(false);
@@ -54,10 +53,9 @@ export function useFloatingTestDock(enabled) {
       animationFrameId = 0;
       const topOffset = 96;
       const hasScrolledPastHeader = window.scrollY > 160;
-      const navigationVisible = isRectVisible(navigationRef.current?.getBoundingClientRect?.() || null, topOffset);
       const timerVisible = isRectVisible(timerRef.current?.getBoundingClientRect?.() || null, topOffset);
 
-      setShouldShowDock(hasScrolledPastHeader && (!navigationVisible || !timerVisible));
+      setShouldShowDock(hasScrolledPastHeader && !timerVisible);
     };
 
     const requestVisibilityUpdate = () => {
@@ -83,7 +81,6 @@ export function useFloatingTestDock(enabled) {
 
   return {
     isCompactViewport,
-    navigationRef,
     shouldShowDock,
     timerRef,
   };
@@ -91,67 +88,25 @@ export function useFloatingTestDock(enabled) {
 
 export default function FloatingTestDock({
   ariaLabel,
-  items,
-  note,
-  onSelectItem,
-  stats,
-  title,
+  stat,
   visible,
 }) {
-  if (!visible || !Array.isArray(items) || items.length === 0) {
+  if (!visible || !stat?.label || !stat?.value) {
     return null;
   }
 
   return (
     <div className="test-floating-dock" role="complementary" aria-label={ariaLabel}>
       <div className="test-floating-dock-shell">
-        <div className="test-floating-dock-head">
-          <div className="test-floating-dock-copy">
-            <p className="test-floating-dock-kicker">{title}</p>
-            {note ? <p className="test-floating-dock-note">{note}</p> : null}
-          </div>
-
-          {Array.isArray(stats) && stats.length > 0 && (
-            <div className="test-floating-dock-stats">
-              {stats.map((stat) => (
-                <div
-                  key={`${stat.label}-${stat.value}`}
-                  className={[
-                    'test-floating-dock-stat',
-                    stat.tone ? `test-floating-dock-stat-${stat.tone}` : '',
-                  ].filter(Boolean).join(' ')}
-                >
-                  <span>{stat.label}</span>
-                  <strong>{stat.value}</strong>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="test-floating-dock-strip" role="tablist" aria-label={ariaLabel}>
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelectItem(item.id)}
-              className={[
-                'test-nav-chip',
-                'test-nav-chip-button',
-                item.status === 'current'
-                  ? 'test-nav-chip-current'
-                  : item.status === 'done'
-                  ? 'test-nav-chip-done'
-                  : 'test-nav-chip-empty',
-                item.review ? 'test-nav-chip-review' : '',
-              ].filter(Boolean).join(' ')}
-              aria-label={item.ariaLabel}
-              title={item.title}
-            >
-              {item.label}
-              {item.review ? <span className="test-nav-chip-flag" aria-hidden="true" /> : null}
-            </button>
-          ))}
+        <div
+          className={[
+            'test-floating-dock-stat',
+            'test-floating-dock-stat-single',
+            stat.tone ? `test-floating-dock-stat-${stat.tone}` : '',
+          ].filter(Boolean).join(' ')}
+        >
+          <span>{stat.label}</span>
+          <strong>{stat.value}</strong>
         </div>
       </div>
     </div>

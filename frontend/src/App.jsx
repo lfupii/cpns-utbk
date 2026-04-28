@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -21,6 +21,13 @@ import AdminMiniTestQuestionEditor from './pages/AdminMiniTestQuestionEditor';
 import Contact from './pages/Contact';
 import TermsConditions from './pages/TermsConditions';
 import { ThemeProvider } from './ThemeContext';
+import apiClient from './api';
+import {
+  clearActiveMiniTestSession,
+  clearActiveTryoutSession,
+  getActiveMiniTestSession,
+  getActiveTryoutSession,
+} from './utils/activeAssessmentSession';
 import './index.css';
 
 function ProtectedRoute({ children }) {
@@ -78,6 +85,70 @@ function MotionEffects() {
   return null;
 }
 
+function ActiveAssessmentRedirector() {
+  const { isAuthenticated, authReady } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authReady || !isAuthenticated) {
+      return;
+    }
+
+    const currentPath = location.pathname;
+    if (
+      currentPath.startsWith('/test/')
+      || currentPath.startsWith('/results/')
+      || currentPath.startsWith('/admin')
+    ) {
+      return;
+    }
+
+    let ignore = false;
+
+    const resumeActiveAssessment = async () => {
+      const tryoutSession = getActiveTryoutSession();
+      if (tryoutSession?.packageId) {
+        try {
+          const response = await apiClient.get(`/test/check-access?package_id=${Number(tryoutSession.packageId)}`);
+          const ongoingAttemptId = Number(response.data?.data?.ongoing_attempt_id || 0);
+
+          if (!ignore && ongoingAttemptId > 0) {
+            if (currentPath !== `/test/${Number(tryoutSession.packageId)}`) {
+              navigate(`/test/${Number(tryoutSession.packageId)}`, { replace: true });
+            }
+            return;
+          }
+
+          clearActiveTryoutSession();
+        } catch (error) {
+          if (!ignore && error?.response?.status !== 401) {
+            clearActiveTryoutSession();
+          }
+        }
+      }
+
+      const miniTestSession = getActiveMiniTestSession();
+      if (!miniTestSession?.packageId || !miniTestSession?.sectionCode || ignore) {
+        return;
+      }
+
+      const learningPath = `/learning/${Number(miniTestSession.packageId)}`;
+      if (currentPath !== learningPath) {
+        navigate(learningPath, { replace: true });
+      }
+    };
+
+    resumeActiveAssessment();
+
+    return () => {
+      ignore = true;
+    };
+  }, [authReady, isAuthenticated, location.pathname, navigate]);
+
+  return null;
+}
+
 function AppRoutes() {
   const { isAuthenticated, authReady } = useAuth();
   const location = useLocation();
@@ -89,6 +160,7 @@ function AppRoutes() {
   return (
     <>
       <MotionEffects />
+      <ActiveAssessmentRedirector />
       <div key={location.pathname} className="route-stage">
         <Routes location={location}>
           <Route path="/" element={<Home />} />

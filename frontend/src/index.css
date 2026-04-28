@@ -10739,6 +10739,12 @@ html[data-theme='dark'] .theme-toggle-thumb {
     box-shadow: 0 16px 34px rgba(51, 84, 128, 0.08);
   }
 
+  .landing-mindmap-node-top,
+  .landing-mindmap-node-bottom {
+    margin-top: 0;
+    gap: 0.95rem 1rem;
+  }
+
   .landing-mindmap-node-top .landing-mindmap-copy,
   .landing-mindmap-node-bottom .landing-mindmap-copy,
   .landing-mindmap-copy {
@@ -11030,6 +11036,46 @@ html[data-theme='dark'] .theme-toggle-thumb {
   }
 }
 
+@media (max-width: 1024px) and (orientation: portrait) {
+  .landing-mindmap-shell {
+    padding: 1.35rem 1rem 1rem;
+  }
+
+  .landing-mindmap-track {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 0.95rem;
+  }
+
+  .landing-mindmap-node {
+    max-width: 34rem;
+    min-height: 0;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    align-items: start;
+    align-content: start;
+    gap: 0.8rem;
+    padding: 1rem 0.95rem;
+    text-align: center;
+  }
+
+  .landing-mindmap-node-top,
+  .landing-mindmap-node-bottom {
+    gap: 0.8rem;
+  }
+
+  .landing-mindmap-copy,
+  .landing-mindmap-node-top .landing-mindmap-copy,
+  .landing-mindmap-node-bottom .landing-mindmap-copy {
+    text-align: center;
+  }
+
+  .landing-mindmap-node-top .landing-mindmap-icon,
+  .landing-mindmap-node-bottom .landing-mindmap-icon {
+    order: -1;
+  }
+}
+
 @media (max-width: 720px) {
   .landing-mindmap-shell {
     padding: 1.35rem 1rem 1rem;
@@ -11050,6 +11096,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
     align-content: start;
     gap: 0.75rem 0.95rem;
     padding: 1rem 0.95rem;
+  }
+
+  .landing-mindmap-node-top,
+  .landing-mindmap-node-bottom {
+    gap: 0.75rem 0.95rem;
   }
 
   .landing-mindmap-icon {
@@ -11164,6 +11215,17 @@ html[data-theme='dark'] .theme-toggle-thumb {
     right: 0.75rem;
   }
 
+  .learning-page-label {
+    min-height: 20px;
+    padding: 0 0.55rem;
+    font-size: 0.56rem;
+  }
+
+  .learning-page-brand-logo {
+    width: 28px;
+    opacity: 0.32;
+  }
+
   .learning-mobile-focus-bar {
     gap: 0.6rem;
     margin-bottom: 0.85rem;
@@ -11253,6 +11315,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
     gap: 0.7rem;
     padding: 1rem 0.9rem 0.95rem;
     text-align: center;
+  }
+
+  .landing-mindmap-node-top,
+  .landing-mindmap-node-bottom {
+    gap: 0.7rem;
   }
 
   .landing-mindmap-copy,
@@ -11390,13 +11457,14 @@ html[data-theme='dark'] .theme-toggle-thumb {
   }
 
   .learning-page-label {
-    min-height: 27px;
-    padding: 0 0.72rem;
-    font-size: 0.7rem;
+    min-height: 18px;
+    padding: 0 0.48rem;
+    font-size: 0.52rem;
   }
 
   .learning-page-brand-logo {
-    width: 56px;
+    width: 24px;
+    opacity: 0.28;
   }
 
   .learning-page-document {

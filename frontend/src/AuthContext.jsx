@@ -1,5 +1,6 @@
 import React, { createContext, useState, useCallback, useEffect } from 'react';
 import apiClient from './api';
+import { clearAllActiveAssessmentSessions } from './utils/activeAssessmentSession';
 
 export const AuthContext = createContext();
 
@@ -49,6 +50,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('userEmail');
     localStorage.removeItem('fullName');
     localStorage.removeItem('userRole');
+    clearAllActiveAssessmentSessions();
     setToken(null);
     setUser(null);
   }, []);

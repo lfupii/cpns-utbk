@@ -2,6 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../api';
 import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
+import {
+  clearActiveTryoutSession,
+  persistActiveTryoutSession,
+} from '../utils/activeAssessmentSession';
 
 const MODE_CPNS = 'cpns_cat';
 const MODE_UTBK = 'utbk_sectioned';
@@ -261,6 +265,10 @@ export default function Test() {
     setElapsedSeconds(nextElapsedSeconds);
     setCurrentQuestionId(nextCurrentQuestionId);
     loadedSectionCodeRef.current = payload.attempt?.state?.active_section_code || '__all__';
+    persistActiveTryoutSession({
+      packageId: numericPackageId,
+      attemptId: nextAttemptId,
+    });
   }, [numericPackageId, pickInitialQuestionId]);
 
   const saveAnswer = useCallback(async (questionId, optionId, nextQuestionId = null) => {
@@ -303,6 +311,7 @@ export default function Test() {
     } catch (err) {
       const payload = err.response?.data?.data;
       if (payload?.attempt_completed) {
+        clearActiveTryoutSession();
         navigate(`/results/${attemptId}`);
         return;
       }
@@ -366,6 +375,7 @@ export default function Test() {
         window.sessionStorage.setItem(RESULT_EMAIL_STATUS_KEY, responseMessage);
       }
 
+      clearActiveTryoutSession();
       navigate(`/results/${attemptId}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal menyelesaikan ujian');
@@ -412,6 +422,7 @@ export default function Test() {
     } catch (err) {
       const payload = err.response?.data?.data;
       if (payload?.attempt_completed) {
+        clearActiveTryoutSession();
         navigate(`/results/${attemptId}`);
         return;
       }
@@ -447,6 +458,7 @@ export default function Test() {
         const startData = startResponse.data.data || {};
 
         if (startData.result_ready && startData.completed_attempt_id) {
+          clearActiveTryoutSession();
           navigate(`/results/${startData.completed_attempt_id}`);
           return;
         }
@@ -454,6 +466,10 @@ export default function Test() {
         const nextAttemptId = Number(startData.attempt_id || 0);
         setAttemptId(nextAttemptId);
         setWorkflow(startData.workflow || null);
+        persistActiveTryoutSession({
+          packageId: numericPackageId,
+          attemptId: nextAttemptId,
+        });
         await loadQuestions(nextAttemptId);
       } catch (err) {
         if (err.response?.status === 401) {
@@ -626,6 +642,7 @@ export default function Test() {
 
       const payload = err.response?.data?.data;
       if (payload?.attempt_completed) {
+        clearActiveTryoutSession();
         navigate(`/results/${attemptId}`);
         return;
       }

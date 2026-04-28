@@ -4,6 +4,11 @@ import AccountShell from '../components/AccountShell';
 import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
+import {
+  clearActiveMiniTestSession,
+  getActiveMiniTestSession,
+  persistActiveMiniTestSession,
+} from '../utils/activeAssessmentSession';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
 import { isMaterialPdfVisualHtml } from '../utils/materialPagination';
 
@@ -124,6 +129,8 @@ export default function Learning() {
   const [successMessage, setSuccessMessage] = useState('');
   const sectionTestSavingRef = useRef({});
   const sectionTestPendingSaveRef = useRef({});
+  const materialViewRef = useRef(null);
+  const autoResumeMiniTestRef = useRef(false);
   const {
     isCompactViewport,
     shouldShowDock: shouldShowFloatingDock,
@@ -178,6 +185,7 @@ export default function Learning() {
     setMaterialsExpanded(true);
     setExpandedMaterialSections({});
     setActiveTopicIndex(0);
+    autoResumeMiniTestRef.current = false;
   }, [numericPackageId]);
 
   useEffect(() => {
@@ -419,6 +427,44 @@ export default function Learning() {
   );
   const resumeSection = lastReadSection || nextLearningSection || activeSection || null;
 
+  const scrollToMaterialTop = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const scrollTarget = materialViewRef.current;
+    if (scrollTarget?.scrollIntoView) {
+      scrollTarget.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+      return;
+    }
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  }, []);
+
+  const handleMaterialTopicNavigation = useCallback((direction) => {
+    if (activeSectionTopics.length <= 0) {
+      return;
+    }
+
+    const nextTopicIndex = Math.max(0, Math.min(activeSectionTopics.length - 1, activeTopicIndex + direction));
+    if (nextTopicIndex === activeTopicIndex) {
+      return;
+    }
+
+    setActiveTopicIndex(nextTopicIndex);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        scrollToMaterialTop();
+      });
+    });
+  }, [activeSectionTopics.length, activeTopicIndex, scrollToMaterialTop]);
+
   const jumpToSectionMaterial = (sectionCode, topicIndex = 0) => {
     setContentView('materi');
     setActiveSectionView('material');
@@ -526,8 +572,10 @@ export default function Learning() {
       const sectionMeta = payload.section || sectionLookup.get(sectionCode) || null;
       const durationSeconds = Number(payload.attempt?.state?.total_duration_seconds || computeMiniTestDurationSeconds(sectionMeta, questions.length));
       const remainingSeconds = Number(payload.attempt?.state?.remaining_seconds || durationSeconds);
+      const resumedAttemptId = Number(payload.attempt_id || payload.attempt?.id || 0) || null;
 
       if (payload.result_ready && result) {
+        clearActiveMiniTestSession();
         updateSectionProgress(sectionCode, {
           subtest_test_completed: true,
           subtest_test_completed_at: new Date().toISOString(),
@@ -550,7 +598,7 @@ export default function Learning() {
           ...(current || {}),
           [sectionCode]: {
             ...existingState,
-            attemptId: Number(payload.attempt_id || payload.attempt?.id || 0) || null,
+            attemptId: resumedAttemptId,
             loading: false,
             open: !payload.result_ready,
             questions,
@@ -567,6 +615,14 @@ export default function Learning() {
           },
         };
       });
+
+      if (!payload.result_ready && resumedAttemptId) {
+        persistActiveMiniTestSession({
+          packageId: numericPackageId,
+          sectionCode,
+          attemptId: resumedAttemptId,
+        });
+      }
     } catch (err) {
       setSectionTests((current) => ({
         ...current,
@@ -654,6 +710,7 @@ export default function Learning() {
       const payload = err.response?.data?.data;
       if (payload?.attempt_completed) {
         const result = payload.result || null;
+        clearActiveMiniTestSession();
         if (result) {
           updateSectionProgress(sectionCode, {
             subtest_test_completed: true,
@@ -825,6 +882,7 @@ export default function Learning() {
       const payload = err.response?.data?.data;
       if (payload?.attempt_completed) {
         const result = payload.result || null;
+        clearActiveMiniTestSession();
         if (result) {
           updateSectionProgress(sectionCode, {
             subtest_test_completed: true,
@@ -967,6 +1025,7 @@ export default function Learning() {
         auto_submit: autoSubmit,
       });
       const result = response.data.data || null;
+      clearActiveMiniTestSession();
       setSectionTests((current) => ({
         ...current,
         [sectionCode]: {
@@ -1081,6 +1140,32 @@ export default function Learning() {
 
     submitSectionTest(activeSection.code, { allowPartial: true, autoSubmit: true });
   }, [actionLoading, activeSection?.code, activeSectionView, hasAccess, sectionTests, submitSectionTest]);
+
+  useEffect(() => {
+    if (loading || autoResumeMiniTestRef.current) {
+      return;
+    }
+
+    const activeMiniTestSession = getActiveMiniTestSession();
+    if (
+      !activeMiniTestSession
+      || Number(activeMiniTestSession.packageId || 0) !== numericPackageId
+      || !sections.some((section) => section.code === activeMiniTestSession.sectionCode)
+    ) {
+      return;
+    }
+
+    const resumedSection = sections.find((section) => section.code === activeMiniTestSession.sectionCode);
+    if (resumedSection?.progress?.subtest_test_completed) {
+      clearActiveMiniTestSession();
+      autoResumeMiniTestRef.current = true;
+      return;
+    }
+
+    autoResumeMiniTestRef.current = true;
+    openSectionTestView(activeMiniTestSession.sectionCode);
+    loadSectionTest(activeMiniTestSession.sectionCode);
+  }, [loading, loadSectionTest, numericPackageId, sections]);
 
   if (loading) {
     return (
@@ -1393,7 +1478,7 @@ export default function Learning() {
           )}
 
           {contentView === 'materi' && activeSection && (
-            <article className="learning-material">
+            <article ref={materialViewRef} className="learning-material">
               <div className="learning-material-header">
                 <div>
                   <span className="account-package-tag">
@@ -1486,7 +1571,7 @@ export default function Learning() {
                     <button
                       type="button"
                       className="learning-material-flow-button learning-material-flow-button-secondary"
-                      onClick={() => setActiveTopicIndex((current) => Math.max(0, current - 1))}
+                      onClick={() => handleMaterialTopicNavigation(-1)}
                     >
                       <span className="learning-material-flow-icon" aria-hidden="true">←</span>
                       <span>Materi Sebelumnya</span>
@@ -1499,7 +1584,7 @@ export default function Learning() {
                     <button
                       type="button"
                       className="learning-material-flow-button"
-                      onClick={() => setActiveTopicIndex((current) => Math.min(activeSectionTopics.length - 1, current + 1))}
+                      onClick={() => handleMaterialTopicNavigation(1)}
                     >
                       <span>Lanjut ke Materi Berikutnya</span>
                       <span className="learning-material-flow-icon" aria-hidden="true">→</span>

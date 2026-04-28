@@ -75,6 +75,20 @@ export function buildQuestionExtractText(question, metadata = {}) {
     .join('\n');
 }
 
+export function buildBulkQuestionExtractText(entries = []) {
+  return entries
+    .map((entry, index) => {
+      const question = entry?.question || null;
+      const metadata = entry?.metadata || {};
+
+      return [
+        `===== SOAL ${index + 1} =====`,
+        buildQuestionExtractText(question, metadata),
+      ].join('\n');
+    })
+    .join('\n\n');
+}
+
 export function downloadQuestionExtractFile(question, metadata = {}) {
   if (typeof document === 'undefined' || typeof URL === 'undefined') {
     throw new Error('Download file belum tersedia di perangkat ini.');
@@ -89,6 +103,35 @@ export function downloadQuestionExtractFile(question, metadata = {}) {
   ].filter(Boolean);
 
   const filename = `${filenameParts.join('-') || 'extract-soal'}.txt`;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(blobUrl);
+}
+
+export function downloadBulkQuestionExtractFile(entries = [], metadata = {}) {
+  if (typeof document === 'undefined' || typeof URL === 'undefined') {
+    throw new Error('Download file belum tersedia di perangkat ini.');
+  }
+
+  const validEntries = entries.filter((entry) => entry?.question);
+  if (validEntries.length === 0) {
+    throw new Error('Belum ada soal aktif yang bisa diextract.');
+  }
+
+  const text = buildBulkQuestionExtractText(validEntries);
+  const filenameParts = [
+    slugifyFilePart(metadata.prefix || 'extract-semua-soal', 'extract-semua-soal'),
+    metadata.sectionName ? slugifyFilePart(metadata.sectionName, '') : '',
+    metadata.suffix ? slugifyFilePart(metadata.suffix, '') : '',
+  ].filter(Boolean);
+
+  const filename = `${filenameParts.join('-') || 'extract-semua-soal'}.txt`;
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const blobUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');

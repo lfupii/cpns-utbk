@@ -96,7 +96,7 @@ export default function Test() {
   const [saveMessage, setSaveMessage] = useState('');
   const [reviewFlags, setReviewFlags] = useState({});
   const {
-    navigationRef: floatingNavigationRef,
+    isCompactViewport,
     shouldShowDock: shouldShowFloatingDock,
     timerRef: floatingTimerRef,
   } = useFloatingTestDock(!loading);
@@ -215,27 +215,6 @@ export default function Test() {
     () => pendingReviewQuestionNumbers.join(', '),
     [pendingReviewQuestionNumbers]
   );
-  const floatingDockItems = useMemo(() => (
-    orderedQuestions.map((question, index) => {
-      const savedValue = savedAnswers[String(question.id)] || savedAnswers[question.id];
-      const isMarkedForReview = Boolean(
-        reviewFlags[String(question.id)] || reviewFlags[question.id]
-      );
-
-      return {
-        id: question.id,
-        label: index + 1,
-        status: Number(question.id) === Number(currentQuestion?.id)
-          ? 'current'
-          : savedValue
-          ? 'done'
-          : 'empty',
-        review: isMarkedForReview,
-        ariaLabel: `Soal ${index + 1}${isMarkedForReview ? ', ditandai ragu-ragu' : ''}`,
-        title: isMarkedForReview ? `Soal ${index + 1} ditandai ragu-ragu` : `Soal ${index + 1}`,
-      };
-    })
-  ), [currentQuestion?.id, orderedQuestions, reviewFlags, savedAnswers]);
 
   const pickInitialQuestionId = useCallback((nextQuestions, nextSavedAnswers, nextWorkflow, nextElapsedSeconds) => {
     const initialState = computeAttemptState(nextWorkflow, nextElapsedSeconds);
@@ -703,21 +682,11 @@ export default function Test() {
   const activeRemainingSeconds = isUtbkMode
     ? attemptState.activeSectionRemainingSeconds
     : attemptState.remainingSeconds;
-  const floatingDockStats = [
-    {
-      label: isUtbkMode ? 'Timer subtes' : 'Sisa waktu',
-      value: formatTime(activeRemainingSeconds),
-      tone: activeRemainingSeconds < 300 ? 'danger' : 'success',
-    },
-    {
-      label: 'Terjawab',
-      value: `${answeredCount}/${totalQuestionCount}`,
-    },
-    {
-      label: 'Soal aktif',
-      value: `${questionTitleNumber}/${Math.max(orderedQuestions.length, 1)}`,
-    },
-  ];
+  const floatingTimerStat = {
+    label: isUtbkMode ? 'Sisa waktu subtes' : 'Sisa waktu',
+    value: formatTime(activeRemainingSeconds),
+    tone: activeRemainingSeconds < 300 ? 'danger' : 'success',
+  };
 
   return (
     <div className="min-h-screen test-shell">
@@ -781,12 +750,8 @@ export default function Test() {
         )}
 
         <FloatingTestDock
-          ariaLabel={isUtbkMode ? 'Navigasi cepat soal subtes aktif' : 'Navigasi cepat soal'}
-          items={floatingDockItems}
-          note="Timer dan nomor soal tetap bisa diakses saat kamu scroll."
-          onSelectItem={goToQuestion}
-          stats={floatingDockStats}
-          title="Akses cepat"
+          ariaLabel={isUtbkMode ? 'Timer subtes mengambang' : 'Timer ujian mengambang'}
+          stat={floatingTimerStat}
           visible={shouldShowFloatingDock}
         />
 
@@ -794,7 +759,7 @@ export default function Test() {
           <div className="test-main-column">
             <div className="card test-question-card">
               <div key={currentQuestion.id} className="test-question-stage">
-                <div ref={floatingNavigationRef} className="test-inline-navigation">
+                <div className="test-inline-navigation">
                   <div className="test-inline-navigation-head">
                     <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
                     <p className="test-inline-navigation-note">
@@ -989,32 +954,34 @@ export default function Test() {
             </div>
           </div>
 
-          <div className="test-sidebar-column">
-            <div className="test-sidebar-metrics">
-              <div className="test-header-stat">
-                <p className="test-header-stat-label">Terjawab</p>
-                <p className="test-header-stat-value">{answeredCount} / {totalQuestionCount}</p>
-              </div>
-              <div className="test-header-stat">
-                <p className="test-header-stat-label">
-                  {isUtbkMode ? 'Sisa Waktu Subtes' : 'Sisa Waktu'}
-                </p>
-                <p className={`test-header-stat-value ${
-                  (isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds) < 300
-                    ? 'test-header-stat-value-danger'
-                    : 'test-header-stat-value-success'
-                }`}>
-                  {formatTime(isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds)}
-                </p>
-              </div>
-              {isUtbkMode && (
+          {!isCompactViewport && (
+            <div className="test-sidebar-column">
+              <div className="test-sidebar-metrics">
                 <div className="test-header-stat">
-                  <p className="test-header-stat-label">Sisa Waktu Total</p>
-                  <p className="test-header-stat-value">{formatTime(attemptState.remainingSeconds)}</p>
+                  <p className="test-header-stat-label">Terjawab</p>
+                  <p className="test-header-stat-value">{answeredCount} / {totalQuestionCount}</p>
                 </div>
-              )}
+                <div className="test-header-stat">
+                  <p className="test-header-stat-label">
+                    {isUtbkMode ? 'Sisa Waktu Subtes' : 'Sisa Waktu'}
+                  </p>
+                  <p className={`test-header-stat-value ${
+                    (isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds) < 300
+                      ? 'test-header-stat-value-danger'
+                      : 'test-header-stat-value-success'
+                  }`}>
+                    {formatTime(isUtbkMode ? attemptState.activeSectionRemainingSeconds : attemptState.remainingSeconds)}
+                  </p>
+                </div>
+                {isUtbkMode && (
+                  <div className="test-header-stat">
+                    <p className="test-header-stat-label">Sisa Waktu Total</p>
+                    <p className="test-header-stat-value">{formatTime(attemptState.remainingSeconds)}</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

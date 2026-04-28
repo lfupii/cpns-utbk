@@ -1435,37 +1435,40 @@ export default function Learning() {
 
               {activeSectionView === 'material' && activeTopic ? (
                 <div className="learning-page-list">
-                  {(activeTopic.pages || []).map((page, index) => (
-                    <section
-                      key={`${activeTopic.title || 'topic'}-${index}`}
-                      className={page.content_html && isMaterialPdfVisualHtml(page.content_html)
-                        ? 'learning-page learning-page-document learning-page-document-pdf-visual'
-                        : 'learning-page learning-page-document'}
-                    >
-                      <div className="learning-page-document-header">
-                        <span className="learning-page-document-label">Halaman {index + 1}</span>
-                        <div className="learning-page-brand" aria-hidden="true">
-                          <img className="learning-page-brand-logo" src="/ujiin-logo.png" alt="Ujiin" />
+                  {(activeTopic.pages || []).map((page, index) => {
+                    const isPdfVisualPage = Boolean(page.content_html && isMaterialPdfVisualHtml(page.content_html));
+                    const pageLabel = page.title || `Halaman ${index + 1}`;
+
+                    return (
+                      <section
+                        key={`${activeTopic.title || 'topic'}-${index}`}
+                        className={isPdfVisualPage ? 'learning-page learning-page-visual' : 'learning-page learning-page-content'}
+                      >
+                        <div className={isPdfVisualPage ? 'learning-page-head learning-page-head-visual' : 'learning-page-head'}>
+                          <span className="learning-page-label">{pageLabel}</span>
+                          <div className="learning-page-brand" aria-hidden="true">
+                            <img className="learning-page-brand-logo" src="/ujiin-logo.png" alt="Ujiin" />
+                          </div>
                         </div>
-                      </div>
-                      <div className="learning-page-document-body learning-rich-content">
-                        {page.content_html ? (
-                          <div
-                            dangerouslySetInnerHTML={{ __html: sanitizeMaterialHtml(page.content_html) }}
-                          />
-                        ) : (
-                          <>
-                            <ul>
-                              {(page.points || []).map((point) => (
-                                <li key={point}>{point}</li>
-                              ))}
-                            </ul>
-                            <p>{page.closing}</p>
-                          </>
-                        )}
-                      </div>
-                    </section>
-                  ))}
+                        <div className={isPdfVisualPage ? 'learning-page-body learning-page-body-visual learning-rich-content' : 'learning-page-body learning-rich-content'}>
+                          {page.content_html ? (
+                            <div
+                              dangerouslySetInnerHTML={{ __html: sanitizeMaterialHtml(page.content_html) }}
+                            />
+                          ) : (
+                            <>
+                              <ul>
+                                {(page.points || []).map((point) => (
+                                  <li key={point}>{point}</li>
+                                ))}
+                              </ul>
+                              <p>{page.closing}</p>
+                            </>
+                          )}
+                        </div>
+                      </section>
+                    );
+                  })}
                 </div>
               ) : activeSectionView === 'material' ? (
                 <div className="learning-page-list">

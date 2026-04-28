@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
+import { downloadQuestionExtractFile, hasQuestionExtractContent } from '../utils/questionExtract';
 
 const createOption = (index, text = '', isCorrect = false, imageUrl = '') => ({
   letter: String.fromCharCode(65 + index),
@@ -145,6 +146,15 @@ export default function AdminMiniTestQuestionEditor() {
   }, [activeSection?.material, questionForm.material_topic]);
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
   const backToMiniTestHref = `/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&mode=quiz&workspace=${workspace}${questionForm.id ? `&mini_preview=${questionForm.id}` : ''}`;
+  const extractQuestionSource = useMemo(() => ({
+    ...questionForm,
+    section_name: activeSection?.name || '',
+    options: questionForm.options,
+  }), [activeSection?.name, questionForm]);
+  const canExtractQuestion = useMemo(
+    () => hasQuestionExtractContent(extractQuestionSource),
+    [extractQuestionSource]
+  );
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !sectionCode) {
@@ -209,6 +219,21 @@ export default function AdminMiniTestQuestionEditor() {
     setShowQuestionImageTools(Boolean(nextForm.question_image_url));
     setOpenOptionImageEditors(buildOptionImageEditorState(nextForm.options));
   }, [activeSection, draftIndex, isCreating, loading, sectionQuestions, selectedQuestion]);
+
+  const handleExtractDownload = () => {
+    if (!canExtractQuestion) {
+      return;
+    }
+
+    try {
+      downloadQuestionExtractFile(extractQuestionSource, {
+        prefix: 'extract-soal-mini-test',
+        sectionName: activeSection?.name || '',
+      });
+    } catch (error) {
+      setError(error.message || 'Gagal mengunduh extract soal mini test.');
+    }
+  };
 
   const handleQuestionChange = (event) => {
     const { name, value } = event.target;
@@ -471,6 +496,14 @@ export default function AdminMiniTestQuestionEditor() {
               {!isDraftWorkspace && <p className="text-muted">Mode Published hanya untuk review. Edit dilakukan dari tab Draft.</p>}
             </div>
             <div className="admin-question-editor-actions">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleExtractDownload}
+                disabled={!canExtractQuestion}
+              >
+                Download Extract
+              </button>
               <Link className="btn btn-outline" to={backToMiniTestHref}>
                 Kembali ke Mini Test
               </Link>

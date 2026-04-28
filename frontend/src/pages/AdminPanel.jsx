@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
+import { downloadQuestionExtractFile } from '../utils/questionExtract';
 
 const CSV_HEADERS = [
   'section_code',
@@ -1581,6 +1582,32 @@ export default function AdminPanel() {
     }
   };
 
+  const handleTryoutExtractDownload = (question) => {
+    try {
+      downloadQuestionExtractFile(question, {
+        prefix: 'extract-soal-tryout',
+        sectionName: question.section_name || question.section_code || '',
+      });
+    } catch (error) {
+      setError(error.message || 'Gagal mengunduh extract soal tryout.');
+    }
+  };
+
+  const handleMiniTestExtractDownload = (question) => {
+    if (!activeLearningSection) {
+      return;
+    }
+
+    try {
+      downloadQuestionExtractFile(question, {
+        prefix: 'extract-soal-mini-test',
+        sectionName: activeLearningSection.name,
+      });
+    } catch (error) {
+      setError(error.message || 'Gagal mengunduh extract soal mini test.');
+    }
+  };
+
   const openDashboardView = () => {
     setAdminView('dashboard');
     setLearningEditorMode('');
@@ -3063,6 +3090,13 @@ export default function AdminPanel() {
                                         </div>
 
                                         <div className="admin-question-preview-actions">
+                                          <button
+                                            type="button"
+                                            className="btn btn-outline"
+                                            onClick={() => handleMiniTestExtractDownload(question)}
+                                          >
+                                            Download Extract
+                                          </button>
                                           {isDraftWorkspace && (
                                             <button
                                               type="button"
@@ -3075,7 +3109,9 @@ export default function AdminPanel() {
                                           <button
                                             type="button"
                                             className="btn btn-outline"
-                                            onClick={() => setExpandedLearningQuestionKey('')}
+                                            onClick={() => {
+                                              setExpandedLearningQuestionKey('');
+                                            }}
                                           >
                                             Tutup Detail
                                           </button>
@@ -3395,6 +3431,13 @@ export default function AdminPanel() {
                                   </div>
 
                                   <div className="admin-question-preview-actions">
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline"
+                                      onClick={() => handleTryoutExtractDownload(question)}
+                                    >
+                                      Download Extract
+                                    </button>
                                     {isDraftWorkspace && (
                                       <Link
                                         className="btn btn-primary"
@@ -3406,7 +3449,9 @@ export default function AdminPanel() {
                                     <button
                                       type="button"
                                       className="btn btn-outline"
-                                      onClick={() => setExpandedQuestionId(null)}
+                                      onClick={() => {
+                                        setExpandedQuestionId(null);
+                                      }}
                                     >
                                       Tutup Detail
                                     </button>

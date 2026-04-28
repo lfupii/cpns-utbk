@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
+import { downloadQuestionExtractFile, hasQuestionExtractContent } from '../utils/questionExtract';
 
 const createOption = (index, text = '', isCorrect = false, imageUrl = '') => ({
   letter: String.fromCharCode(65 + index),
@@ -129,6 +130,19 @@ export default function AdminQuestionEditor() {
   );
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
   const backToBankSoalHref = `/admin?view=soal&package=${numericPackageId}&workspace=${workspace}${questionForm.question_id ? `&preview=${questionForm.question_id}` : ''}`;
+  const activeSectionName = useMemo(
+    () => packageSections.find((section) => String(section.code) === String(questionForm.section_code))?.name || selectedQuestion?.section_name || '',
+    [packageSections, questionForm.section_code, selectedQuestion?.section_name]
+  );
+  const extractQuestionSource = useMemo(() => ({
+    ...questionForm,
+    section_name: activeSectionName,
+    options: questionForm.options,
+  }), [activeSectionName, questionForm]);
+  const canExtractQuestion = useMemo(
+    () => hasQuestionExtractContent(extractQuestionSource),
+    [extractQuestionSource]
+  );
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0) {
@@ -191,6 +205,21 @@ export default function AdminQuestionEditor() {
       return accumulator;
     }, {}));
   }, [defaultSectionCode, isCreating, loading, selectedQuestion]);
+
+  const handleExtractDownload = () => {
+    if (!canExtractQuestion) {
+      return;
+    }
+
+    try {
+      downloadQuestionExtractFile(extractQuestionSource, {
+        prefix: 'extract-soal-tryout',
+        sectionName: activeSectionName,
+      });
+    } catch (error) {
+      setError(error.message || 'Gagal mengunduh extract soal.');
+    }
+  };
 
   const handleQuestionChange = (event) => {
     const { name, value } = event.target;
@@ -421,6 +450,14 @@ export default function AdminQuestionEditor() {
               {!isDraftWorkspace && <p className="text-muted">Mode Published hanya untuk review. Edit dilakukan dari tab Draft.</p>}
             </div>
             <div className="admin-question-editor-actions">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleExtractDownload}
+                disabled={!canExtractQuestion}
+              >
+                Download Extract
+              </button>
               <Link className="btn btn-outline" to={backToBankSoalHref}>
                 Kembali ke Bank Soal
               </Link>

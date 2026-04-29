@@ -46,6 +46,7 @@ jobs:
           VITE_API_URL: ${{ secrets.PROD_VITE_API_URL || secrets.VITE_API_URL || secrets.PROD_API_URL }}
           VITE_IS_PRODUCTION: ${{ secrets.PROD_VITE_IS_PRODUCTION || secrets.PROD_MIDTRANS_IS_PRODUCTION }}
           VITE_MIDTRANS_CLIENT_KEY: ${{ secrets.PROD_VITE_MIDTRANS_CLIENT_KEY || secrets.VITE_MIDTRANS_CLIENT_KEY || secrets.PROD_MIDTRANS_CLIENT_KEY }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.PROD_VITE_GOOGLE_CLIENT_ID || secrets.VITE_GOOGLE_CLIENT_ID || secrets.PROD_GOOGLE_CLIENT_ID }}
         run: npm run build
 
       - name: Install backend dependencies
@@ -64,6 +65,7 @@ jobs:
           CORS_ALLOWED_ORIGINS: ${{ secrets.PROD_CORS_ALLOWED_ORIGINS }}
           JWT_SECRET_KEY: ${{ secrets.PROD_JWT_SECRET_KEY }}
           TOKEN_EXPIRY: ${{ secrets.PROD_TOKEN_EXPIRY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.PROD_GOOGLE_CLIENT_ID || secrets.PROD_VITE_GOOGLE_CLIENT_ID || secrets.VITE_GOOGLE_CLIENT_ID }}
           MIDTRANS_IS_PRODUCTION: ${{ secrets.PROD_MIDTRANS_IS_PRODUCTION }}
           MIDTRANS_SERVER_KEY: ${{ secrets.PROD_MIDTRANS_SERVER_KEY }}
           MIDTRANS_CLIENT_KEY: ${{ secrets.PROD_MIDTRANS_CLIENT_KEY }}
@@ -105,6 +107,7 @@ jobs:
 
           JWT_SECRET_KEY="$(dotenv_escape "${JWT_SECRET_KEY}")"
           TOKEN_EXPIRY="$(dotenv_escape "${TOKEN_EXPIRY}")"
+          GOOGLE_CLIENT_ID="$(dotenv_escape "${GOOGLE_CLIENT_ID}")"
 
           MIDTRANS_IS_PRODUCTION="$(dotenv_escape "${MIDTRANS_IS_PRODUCTION}")"
           MIDTRANS_SERVER_KEY="$(dotenv_escape "${MIDTRANS_SERVER_KEY}")"

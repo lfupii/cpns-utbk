@@ -93,6 +93,7 @@ Setup yang terbukti jalan di hosting ini:
 - `PROD_VITE_API_URL`
 - `PROD_VITE_IS_PRODUCTION`
 - `PROD_VITE_MIDTRANS_CLIENT_KEY`
+- `PROD_VITE_GOOGLE_CLIENT_ID`
 
 Nilai tetap untuk project ini:
 - `PROD_VITE_API_URL=https://api.tocpnsutbk.com`
@@ -100,6 +101,7 @@ Nilai tetap untuk project ini:
 
 Catatan kompatibilitas:
 - workflow masih menerima secret lama `VITE_API_URL` dan `VITE_MIDTRANS_CLIENT_KEY`
+- workflow juga menerima `VITE_GOOGLE_CLIENT_ID` atau `PROD_GOOGLE_CLIENT_ID` sebagai fallback
 - tetapi untuk setup baru, pakai prefix `PROD_` agar tidak rancu dengan sandbox/local
 
 ### Backend Database
@@ -121,6 +123,7 @@ Nilai umum di cPanel:
 - `PROD_CORS_ALLOWED_ORIGINS`
 - `PROD_JWT_SECRET_KEY`
 - `PROD_TOKEN_EXPIRY`
+- `PROD_GOOGLE_CLIENT_ID`
 
 Nilai tetap untuk project ini:
 - `PROD_API_URL=https://api.tocpnsutbk.com`
@@ -160,6 +163,7 @@ FTP_PASSWORD=ISI_PASSWORD_FTP
 PROD_VITE_API_URL=https://api.tocpnsutbk.com
 PROD_VITE_IS_PRODUCTION=true
 PROD_VITE_MIDTRANS_CLIENT_KEY=ISI_CLIENT_KEY_PRODUCTION
+PROD_VITE_GOOGLE_CLIENT_ID=ISI_GOOGLE_WEB_CLIENT_ID
 
 PROD_DB_HOST=localhost
 PROD_DB_USER=ISI_DB_USER
@@ -172,6 +176,7 @@ PROD_FRONTEND_URL=https://tocpnsutbk.com
 PROD_CORS_ALLOWED_ORIGINS=https://tocpnsutbk.com,https://www.tocpnsutbk.com
 PROD_JWT_SECRET_KEY=ISI_SECRET_JWT
 PROD_TOKEN_EXPIRY=86400
+PROD_GOOGLE_CLIENT_ID=ISI_GOOGLE_WEB_CLIENT_ID
 
 PROD_MIDTRANS_IS_PRODUCTION=false
 PROD_MIDTRANS_SERVER_KEY=ISI_SERVER_KEY

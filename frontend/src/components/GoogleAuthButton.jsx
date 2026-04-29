@@ -41,6 +41,7 @@ export default function GoogleAuthButton({
   onCredential,
   disabled = false,
   text = 'continue_with',
+  locale = 'id',
 }) {
   const containerRef = useRef(null);
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
@@ -75,9 +76,10 @@ export default function GoogleAuthButton({
         theme: 'outline',
         size: 'large',
         text,
+        locale,
         shape: 'rectangular',
         logo_alignment: 'left',
-        width: Math.max(220, Math.min(containerElement.offsetWidth || 320, 320)),
+        width: Math.max(220, containerElement.offsetWidth || 320),
       });
     };
 
@@ -93,7 +95,7 @@ export default function GoogleAuthButton({
         containerElement.innerHTML = '';
       }
     };
-  }, [clientId, disabled, onCredential, text]);
+  }, [clientId, disabled, locale, onCredential, text]);
 
   if (!clientId) {
     return null;
@@ -101,7 +103,7 @@ export default function GoogleAuthButton({
 
   return (
     <div className={disabled ? 'opacity-60 pointer-events-none' : ''}>
-      <div ref={containerRef} className="flex justify-center" />
+      <div ref={containerRef} className="flex justify-center w-full" />
     </div>
   );
 }

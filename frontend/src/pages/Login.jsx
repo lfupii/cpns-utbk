@@ -11,7 +11,6 @@ export default function Login() {
   const [infoMessage, setInfoMessage] = useState('');
   const [showResendButton, setShowResendButton] = useState(false);
   const [googleRedirectPending, setGoogleRedirectPending] = useState(false);
-  const [showEmailForm, setShowEmailForm] = useState(false);
   const { login, loginWithGoogle, resendVerification, loading, error: authError } = useAuth();
   const navigate = useNavigate();
   const hasGoogleAuth = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim());
@@ -21,7 +20,6 @@ export default function Login() {
     setError('');
     setInfoMessage('');
     setShowResendButton(false);
-    setShowEmailForm(true);
 
     const result = await login(email, password);
     if (result.success) {
@@ -33,7 +31,6 @@ export default function Login() {
   };
 
   const handleResendVerification = async () => {
-    setShowEmailForm(true);
     const targetEmail = email.trim().toLowerCase();
     if (!targetEmail) {
       setError('Masukkan email terlebih dahulu.');
@@ -76,13 +73,6 @@ export default function Login() {
     }
   }, [loginWithGoogle, navigate]);
 
-  const handleShowEmailForm = useCallback(() => {
-    setShowEmailForm(true);
-    setError('');
-    setInfoMessage('');
-    setGoogleRedirectPending(false);
-  }, []);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8">
@@ -103,8 +93,53 @@ export default function Login() {
           </div>
         )}
 
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-gray-700 font-semibold mb-2">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
+              placeholder="you@example.com"
+              required
+              disabled={googleRedirectPending}
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
+              placeholder="••••••••"
+              required
+              disabled={googleRedirectPending}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || googleRedirectPending}
+            className="w-full btn-primary mb-4 disabled:opacity-50"
+          >
+            {googleRedirectPending ? 'Mengalihkan ke Daftar...' : loading ? 'Memproses...' : 'Login'}
+          </button>
+        </form>
+
         {hasGoogleAuth && (
           <>
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase tracking-[0.2em] text-gray-400">
+                <span className="bg-white px-3">Atau login dengan Google</span>
+              </div>
+            </div>
+
             <div className="mb-6">
               <GoogleAuthButton
                 onCredential={handleGoogleLogin}
@@ -113,63 +148,7 @@ export default function Login() {
                 locale="id"
               />
             </div>
-
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase tracking-[0.2em] text-gray-400">
-                <span className="bg-white px-3">Atau login dengan email</span>
-              </div>
-            </div>
           </>
-        )}
-
-        <button
-          type="button"
-          onClick={handleShowEmailForm}
-          disabled={googleRedirectPending}
-          className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Login dengan Email
-        </button>
-
-        {showEmailForm && (
-          <form onSubmit={handleSubmit} className="mt-6">
-            <div className="mb-4">
-              <label className="block text-gray-700 font-semibold mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
-                placeholder="you@example.com"
-                required
-                disabled={googleRedirectPending}
-              />
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-gray-700 font-semibold mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
-                placeholder="••••••••"
-                required
-                disabled={googleRedirectPending}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || googleRedirectPending}
-              className="w-full btn-primary mb-4 disabled:opacity-50"
-            >
-              {googleRedirectPending ? 'Mengalihkan ke Daftar...' : loading ? 'Memproses...' : 'Login'}
-            </button>
-          </form>
         )}
 
         {showResendButton && (

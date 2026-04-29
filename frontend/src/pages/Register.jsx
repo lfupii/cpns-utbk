@@ -13,7 +13,6 @@ export default function Register() {
   const [infoMessage, setInfoMessage] = useState('');
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [googleRedirectInProgress, setGoogleRedirectInProgress] = useState(false);
-  const [showEmailForm, setShowEmailForm] = useState(false);
   const { register, registerWithGoogle, resendVerification, loading, error: authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -24,7 +23,6 @@ export default function Register() {
     setError('');
     setInfoMessage('');
     setSuccessMessage('');
-    setShowEmailForm(true);
 
     if (password.length < 6) {
       setError('Password harus minimal 6 karakter');
@@ -43,7 +41,6 @@ export default function Register() {
   };
 
   const handleResendVerification = async () => {
-    setShowEmailForm(true);
     const targetEmail = (registeredEmail || email).trim().toLowerCase();
     if (!targetEmail) {
       setError('Masukkan email terlebih dahulu.');
@@ -80,12 +77,6 @@ export default function Register() {
   const handleGoogleRegister = useCallback(async (credential) => {
     await completeGoogleRegistration(credential);
   }, [completeGoogleRegistration]);
-
-  const handleShowEmailForm = useCallback(() => {
-    setShowEmailForm(true);
-    setError('');
-    setInfoMessage('');
-  }, []);
 
   useEffect(() => {
     if (!hasGoogleAuth) {
@@ -157,8 +148,86 @@ export default function Register() {
           </div>
         )}
 
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-gray-700 font-semibold mb-2">Nama Lengkap</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
+              placeholder="John Doe"
+              required
+              disabled={googleRedirectInProgress}
+            />
+          </div>
+
+          <div className="mb-4">
+            <p className="mb-2 text-sm font-semibold text-red-600">
+              * gunakan email aktif untuk melakukan verifikasi. *
+            </p>
+            <label className="block text-gray-700 font-semibold mb-2">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
+              placeholder="you@example.com"
+              required
+              disabled={googleRedirectInProgress}
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-gray-700 font-semibold mb-2">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
+              placeholder="••••••••"
+              required
+              disabled={googleRedirectInProgress}
+            />
+            <p className="text-gray-500 text-sm mt-1">Minimal 6 karakter</p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || googleRedirectInProgress}
+            className="w-full btn-primary mb-4 disabled:opacity-50"
+          >
+            {googleRedirectInProgress ? 'Menyiapkan Akun Google...' : loading ? 'Memproses...' : 'Daftar'}
+          </button>
+
+          <p className="text-sm text-gray-500 text-center mb-4">
+            Dengan mendaftar, Anda menyetujui{' '}
+            <Link to="/terms" className="text-blue-600 font-semibold hover:underline">
+              Syarat &amp; Ketentuan
+            </Link>{' '}
+            ,{' '}
+            <Link to="/terms#privacy-policy" className="text-blue-600 font-semibold hover:underline">
+              Kebijakan Privasi
+            </Link>
+            , dan memahami{' '}
+            <Link to="/terms#refund-policy" className="text-blue-600 font-semibold hover:underline">
+              Kebijakan Refund
+            </Link>
+            .
+          </p>
+        </form>
+
         {hasGoogleAuth && (
           <>
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase tracking-[0.2em] text-gray-400">
+                <span className="bg-white px-3">Atau daftar dengan Google</span>
+              </div>
+            </div>
+
             <div className="mb-6">
               <GoogleAuthButton
                 onCredential={handleGoogleRegister}
@@ -167,93 +236,7 @@ export default function Register() {
                 locale="id"
               />
             </div>
-
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase tracking-[0.2em] text-gray-400">
-                <span className="bg-white px-3">Atau daftar dengan email</span>
-              </div>
-            </div>
           </>
-        )}
-
-        <button
-          type="button"
-          onClick={handleShowEmailForm}
-          disabled={googleRedirectInProgress}
-          className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Daftar dengan Email
-        </button>
-
-        {showEmailForm && (
-          <form onSubmit={handleSubmit} className="mt-6">
-            <div className="mb-4">
-              <label className="block text-gray-700 font-semibold mb-2">Nama Lengkap</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
-                placeholder="John Doe"
-                required
-                disabled={googleRedirectInProgress}
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-gray-700 font-semibold mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
-                placeholder="you@example.com"
-                required
-                disabled={googleRedirectInProgress}
-              />
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-gray-700 font-semibold mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
-                placeholder="••••••••"
-                required
-                disabled={googleRedirectInProgress}
-              />
-              <p className="text-gray-500 text-sm mt-1">Minimal 6 karakter</p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || googleRedirectInProgress}
-              className="w-full btn-primary mb-4 disabled:opacity-50"
-            >
-              {googleRedirectInProgress ? 'Menyiapkan Akun Google...' : loading ? 'Memproses...' : 'Daftar'}
-            </button>
-
-            <p className="text-sm text-gray-500 text-center mb-4">
-              Dengan mendaftar, Anda menyetujui{' '}
-              <Link to="/terms" className="text-blue-600 font-semibold hover:underline">
-                Syarat &amp; Ketentuan
-              </Link>{' '}
-              ,{' '}
-              <Link to="/terms#privacy-policy" className="text-blue-600 font-semibold hover:underline">
-                Kebijakan Privasi
-              </Link>
-              , dan memahami{' '}
-              <Link to="/terms#refund-policy" className="text-blue-600 font-semibold hover:underline">
-                Kebijakan Refund
-              </Link>
-              .
-            </p>
-          </form>
         )}
 
         {registeredEmail && (

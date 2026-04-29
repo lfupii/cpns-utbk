@@ -201,6 +201,7 @@ CORS_ALLOWED_ORIGINS=https://tocpnsutbk.com,https://www.tocpnsutbk.com
 
 JWT_SECRET_KEY=GANTI_DENGAN_RANDOM_SECRET_YANG_PANJANG
 TOKEN_EXPIRY=86400
+GOOGLE_CLIENT_ID=ISI_GOOGLE_WEB_CLIENT_ID
 
 MIDTRANS_IS_PRODUCTION=true
 MIDTRANS_SERVER_KEY=Mid-server-XXXXXXXX
@@ -228,6 +229,7 @@ Buat file production lokal sebelum build:
 VITE_API_URL=https://api.tocpnsutbk.com
 VITE_IS_PRODUCTION=true
 VITE_MIDTRANS_CLIENT_KEY=Mid-client-XXXXXXXX
+VITE_GOOGLE_CLIENT_ID=ISI_GOOGLE_WEB_CLIENT_ID
 ```
 
 ## 5. Build frontend production

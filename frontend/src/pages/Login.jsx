@@ -10,6 +10,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [showResendButton, setShowResendButton] = useState(false);
+  const [googleRedirectPending, setGoogleRedirectPending] = useState(false);
   const { login, loginWithGoogle, resendVerification, loading, error: authError } = useAuth();
   const navigate = useNavigate();
   const hasGoogleAuth = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim());
@@ -50,11 +51,14 @@ export default function Login() {
     setError('');
     setInfoMessage('');
     setShowResendButton(false);
+    setGoogleRedirectPending(false);
 
     const result = await loginWithGoogle(credential);
     if (result.success) {
       navigate('/');
     } else if (result.data?.requires_google_registration) {
+      setGoogleRedirectPending(true);
+      setInfoMessage('Akun Google belum terdaftar. Kami sedang mengarahkan Anda ke halaman daftar...');
       setPendingGoogleCredential(credential);
       navigate('/register', {
         state: {
@@ -64,6 +68,7 @@ export default function Login() {
         },
       });
     } else {
+      setGoogleRedirectPending(false);
       setError(result.message || 'Login dengan Google gagal.');
     }
   }, [loginWithGoogle, navigate]);
@@ -93,7 +98,7 @@ export default function Login() {
             <div className="mb-6">
               <GoogleAuthButton
                 onCredential={handleGoogleLogin}
-                disabled={loading}
+                disabled={loading || googleRedirectPending}
                 text="continue_with"
               />
               <p className="text-xs text-center text-gray-500 mt-3">
@@ -122,9 +127,10 @@ export default function Login() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
               placeholder="you@example.com"
               required
+              disabled={googleRedirectPending}
             />
           </div>
 
@@ -134,18 +140,19 @@ export default function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
               placeholder="••••••••"
               required
+              disabled={googleRedirectPending}
             />
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || googleRedirectPending}
             className="w-full btn-primary mb-4 disabled:opacity-50"
           >
-            {loading ? 'Memproses...' : 'Login'}
+            {googleRedirectPending ? 'Mengalihkan ke Daftar...' : loading ? 'Memproses...' : 'Login'}
           </button>
         </form>
 

@@ -106,7 +106,19 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8 relative overflow-hidden">
+        {googleRedirectInProgress && (
+          <div className="absolute inset-0 z-10 bg-white/90 backdrop-blur-[1px] flex items-center justify-center px-6">
+            <div className="w-full max-w-sm rounded-2xl border border-blue-100 bg-white shadow-lg p-6 text-center">
+              <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
+              <h2 className="text-lg font-bold text-slate-800">Menyelesaikan Daftar Google</h2>
+              <p className="text-sm text-slate-600 mt-2">
+                Kami sedang mengaktifkan akun Anda dan akan langsung melanjutkan login otomatis.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-600">Ujiin</h1>
           <p className="text-gray-600 mt-2">Daftar Akun Baru</p>
@@ -170,9 +182,10 @@ export default function Register() {
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
               placeholder="John Doe"
               required
+              disabled={googleRedirectInProgress}
             />
           </div>
 
@@ -182,9 +195,10 @@ export default function Register() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
               placeholder="you@example.com"
               required
+              disabled={googleRedirectInProgress}
             />
           </div>
 
@@ -194,19 +208,20 @@ export default function Register() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 disabled:bg-slate-100"
               placeholder="••••••••"
               required
+              disabled={googleRedirectInProgress}
             />
             <p className="text-gray-500 text-sm mt-1">Minimal 6 karakter</p>
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || googleRedirectInProgress}
             className="w-full btn-primary mb-4 disabled:opacity-50"
           >
-            {loading ? 'Memproses...' : 'Daftar'}
+            {googleRedirectInProgress ? 'Menyiapkan Akun Google...' : loading ? 'Memproses...' : 'Daftar'}
           </button>
 
           <p className="text-sm text-gray-500 text-center mb-4">
@@ -237,7 +252,7 @@ export default function Register() {
             <button
               type="button"
               onClick={handleResendVerification}
-              disabled={loading}
+              disabled={loading || googleRedirectInProgress}
               className="w-full btn btn-outline mt-3 disabled:opacity-50"
             >
               Kirim ulang email verifikasi

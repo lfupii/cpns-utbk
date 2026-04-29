@@ -20,6 +20,103 @@ class AuthController {
         return date('Y-m-d H:i:s', time() + (EMAIL_VERIFICATION_EXPIRY_HOURS * 3600));
     }
 
+    private function buildGoogleOnlyPassword(string $googleId): string {
+        return 'google-auth-only:' . hash('sha256', $googleId);
+    }
+
+    private function isGoogleOnlyPassword(?string $password): bool {
+        return is_string($password) && strpos($password, 'google-auth-only:') === 0;
+    }
+
+    private function issueAuthenticatedSession(array $user, string $message): void {
+        $email = $this->normalizeEmail((string) ($user['email'] ?? ''));
+        $role = (string) ($user['role'] ?? 'user');
+        $token = JWTHandler::generateToken((int) $user['id'], $role);
+
+        sendResponse('success', $message, [
+            'userId' => (int) $user['id'],
+            'email' => $email,
+            'full_name' => $user['full_name'] ?? null,
+            'role' => $role,
+            'email_verified' => !empty($user['email_verified_at']),
+            'token' => $token,
+        ]);
+    }
+
+    private function findGoogleUserCandidate(string $googleId, string $email): ?array {
+        $query = "SELECT id, email, password, full_name, role, email_verified_at, google_id
+                  FROM users
+                  WHERE google_id = ? OR email = ?
+                  ORDER BY CASE WHEN google_id = ? THEN 0 ELSE 1 END
+                  LIMIT 1";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('sss', $googleId, $email, $googleId);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+
+        return $user ?: null;
+    }
+
+    private function upsertGoogleLinkedUser(array $user, string $googleId, string $email, string $fullName): array {
+        if (!empty($user['google_id']) && $user['google_id'] !== $googleId) {
+            sendResponse('error', 'Email ini sudah terhubung dengan akun Google lain.', null, 409);
+        }
+
+        $resolvedName = trim((string) ($user['full_name'] ?? ''));
+        if ($resolvedName === '') {
+            $resolvedName = $fullName;
+        }
+
+        $updateQuery = "UPDATE users
+                        SET email = ?,
+                            full_name = ?,
+                            google_id = ?,
+                            email_verified_at = COALESCE(email_verified_at, NOW()),
+                            email_verification_token = NULL,
+                            email_verification_sent_at = NULL,
+                            email_verification_expires_at = NULL
+                        WHERE id = ?";
+        $updateStmt = $this->mysqli->prepare($updateQuery);
+        $userId = (int) $user['id'];
+        $updateStmt->bind_param('sssi', $email, $resolvedName, $googleId, $userId);
+        $updateStmt->execute();
+
+        $user['email'] = $email;
+        $user['full_name'] = $resolvedName;
+        $user['google_id'] = $googleId;
+        $user['email_verified_at'] = date('Y-m-d H:i:s');
+
+        return $user;
+    }
+
+    private function createGoogleUser(string $googleId, string $email, string $fullName): array {
+        $role = 'user';
+        $password = $this->buildGoogleOnlyPassword($googleId);
+        $insertQuery = "INSERT INTO users (
+                            email,
+                            password,
+                            full_name,
+                            role,
+                            google_id,
+                            email_verified_at
+                        ) VALUES (?, ?, ?, ?, ?, NOW())";
+        $insertStmt = $this->mysqli->prepare($insertQuery);
+        $insertStmt->bind_param('sssss', $email, $password, $fullName, $role, $googleId);
+
+        if (!$insertStmt->execute()) {
+            sendResponse('error', 'Gagal membuat akun Google.', null, 500);
+        }
+
+        return [
+            'id' => $insertStmt->insert_id,
+            'email' => $email,
+            'full_name' => $fullName,
+            'role' => $role,
+            'email_verified_at' => date('Y-m-d H:i:s'),
+            'google_id' => $googleId,
+        ];
+    }
+
     private function persistVerificationToken(int $userId): string {
         $token = UserNotificationService::generateVerificationToken();
         $expiresAt = $this->buildVerificationExpiryAt();
@@ -117,6 +214,160 @@ class AuthController {
         ];
     }
 
+    private function requestJson(string $url): array {
+        $statusCode = 0;
+        $body = false;
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 10,
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json',
+                ],
+            ]);
+
+            $body = curl_exec($ch);
+            $statusCode = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+        } else {
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'timeout' => 10,
+                    'ignore_errors' => true,
+                    'header' => "Accept: application/json\r\n",
+                ],
+            ]);
+
+            $body = @file_get_contents($url, false, $context);
+            $responseHeaders = function_exists('http_get_last_response_headers')
+                ? http_get_last_response_headers()
+                : ($http_response_header ?? []);
+
+            if (isset($responseHeaders[0]) && preg_match('/\s(\d{3})\s/', $responseHeaders[0], $matches)) {
+                $statusCode = (int) $matches[1];
+            }
+        }
+
+        if ($body === false || $body === '') {
+            return [
+                'success' => false,
+                'status_code' => $statusCode,
+                'message' => 'Respons Google tidak tersedia.',
+            ];
+        }
+
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            return [
+                'success' => false,
+                'status_code' => $statusCode,
+                'message' => 'Respons Google tidak valid.',
+            ];
+        }
+
+        return [
+            'success' => $statusCode >= 200 && $statusCode < 300,
+            'status_code' => $statusCode,
+            'data' => $decoded,
+        ];
+    }
+
+    private function verifyGoogleCredential(string $credential): array {
+        if (GOOGLE_CLIENT_ID === '') {
+            return [
+                'success' => false,
+                'message' => 'Login Google belum dikonfigurasi di server.',
+                'http_code' => 503,
+            ];
+        }
+
+        if ($credential === '') {
+            return [
+                'success' => false,
+                'message' => 'Token Google tidak ditemukan.',
+                'http_code' => 400,
+            ];
+        }
+
+        $response = $this->requestJson(
+            'https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($credential)
+        );
+
+        if (!$response['success']) {
+            return [
+                'success' => false,
+                'message' => 'Token Google tidak valid atau tidak dapat diverifikasi.',
+                'http_code' => 401,
+            ];
+        }
+
+        $payload = $response['data'] ?? [];
+        $googleId = trim((string) ($payload['sub'] ?? ''));
+        $email = $this->normalizeEmail((string) ($payload['email'] ?? ''));
+        $fullName = trim((string) ($payload['name'] ?? ''));
+        $issuer = trim((string) ($payload['iss'] ?? ''));
+        $audience = trim((string) ($payload['aud'] ?? ''));
+        $emailVerified = filter_var($payload['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $expiresAt = (int) ($payload['exp'] ?? 0);
+        $allowedAudiences = array_values(array_filter(array_map('trim', explode(',', GOOGLE_CLIENT_ID))));
+
+        if ($googleId === '' || $email === '') {
+            return [
+                'success' => false,
+                'message' => 'Profil Google tidak lengkap.',
+                'http_code' => 422,
+            ];
+        }
+
+        if (!$emailVerified) {
+            return [
+                'success' => false,
+                'message' => 'Email Google belum terverifikasi.',
+                'http_code' => 403,
+            ];
+        }
+
+        if (!in_array($issuer, ['accounts.google.com', 'https://accounts.google.com'], true)) {
+            return [
+                'success' => false,
+                'message' => 'Penerbit token Google tidak valid.',
+                'http_code' => 401,
+            ];
+        }
+
+        if ($expiresAt > 0 && $expiresAt < time()) {
+            return [
+                'success' => false,
+                'message' => 'Token Google sudah kedaluwarsa.',
+                'http_code' => 401,
+            ];
+        }
+
+        if (empty($allowedAudiences) || !in_array($audience, $allowedAudiences, true)) {
+            return [
+                'success' => false,
+                'message' => 'Google Client ID tidak cocok.',
+                'http_code' => 401,
+            ];
+        }
+
+        if ($fullName === '') {
+            $fullName = preg_replace('/@.*$/', '', $email) ?: 'Pengguna Google';
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'google_id' => $googleId,
+                'email' => $email,
+                'full_name' => $fullName,
+            ],
+        ];
+    }
+
     private function renderVerificationPage(string $title, string $message, bool $success): void {
         http_response_code($success ? 200 : 400);
         header('Content-Type: text/html; charset=UTF-8');
@@ -170,13 +421,20 @@ class AuthController {
         $birth_date = $data['birth_date'] ?? null;
 
         // Check if email already exists
-        $checkQuery = "SELECT id, email_verified_at FROM users WHERE email = ?";
+        $checkQuery = "SELECT id, email_verified_at, google_id FROM users WHERE email = ?";
         $stmt = $this->mysqli->prepare($checkQuery);
         $stmt->bind_param('s', $email);
         $stmt->execute();
         $existingUser = $stmt->get_result()->fetch_assoc();
 
         if ($existingUser) {
+            if (!empty($existingUser['google_id'])) {
+                sendResponse('error', 'Email sudah terdaftar dengan akun Google. Silakan lanjut dengan Google.', [
+                    'email' => $email,
+                    'google_auth_available' => true,
+                ], 409);
+            }
+
             if (empty($existingUser['email_verified_at'])) {
                 sendResponse('error', 'Email sudah terdaftar tetapi belum diverifikasi. Silakan kirim ulang email verifikasi.', [
                     'email' => $email,
@@ -249,7 +507,7 @@ class AuthController {
         $email = $this->normalizeEmail((string) $data['email']);
         $password = $data['password'];
 
-        $query = "SELECT id, password, full_name, role, email_verified_at FROM users WHERE email = ?";
+        $query = "SELECT id, email, password, full_name, role, email_verified_at, google_id FROM users WHERE email = ?";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('s', $email);
         $stmt->execute();
@@ -261,7 +519,14 @@ class AuthController {
 
         $user = $result->fetch_assoc();
 
-        if (!password_verify($password, $user['password'])) {
+        if (!empty($user['google_id']) && $this->isGoogleOnlyPassword((string) ($user['password'] ?? ''))) {
+            sendResponse('error', 'Akun ini terdaftar dengan Google. Silakan masuk menggunakan Google.', [
+                'email' => $email,
+                'google_auth_available' => true,
+            ], 401);
+        }
+
+        if (!password_verify($password, (string) ($user['password'] ?? ''))) {
             sendResponse('error', 'Email atau password salah', null, 401);
         }
 
@@ -272,15 +537,52 @@ class AuthController {
             ], 403);
         }
 
-        $token = JWTHandler::generateToken($user['id'], $user['role'] ?? 'user');
-        sendResponse('success', 'Login berhasil', [
-            'userId' => $user['id'],
-            'email' => $email,
-            'full_name' => $user['full_name'],
-            'role' => $user['role'] ?? 'user',
-            'email_verified' => true,
-            'token' => $token
-        ]);
+        $this->issueAuthenticatedSession($user, 'Login berhasil');
+    }
+
+    public function authenticateWithGoogle() {
+        $data = json_decode(file_get_contents('php://input'), true);
+        $credential = trim((string) ($data['credential'] ?? $data['id_token'] ?? ''));
+        $intent = trim((string) ($data['intent'] ?? 'login'));
+
+        $verification = $this->verifyGoogleCredential($credential);
+        if (!$verification['success']) {
+            sendResponse('error', $verification['message'], null, $verification['http_code'] ?? 401);
+        }
+
+        $googleProfile = $verification['data'];
+        $googleId = $googleProfile['google_id'];
+        $email = $googleProfile['email'];
+        $fullName = $googleProfile['full_name'];
+
+        if (!in_array($intent, ['login', 'register'], true)) {
+            sendResponse('error', 'Mode autentikasi Google tidak valid.', null, 400);
+        }
+
+        $user = $this->findGoogleUserCandidate($googleId, $email);
+
+        if ($user) {
+            $wasGoogleLinked = !empty($user['google_id']);
+            $user = $this->upsertGoogleLinkedUser($user, $googleId, $email, $fullName);
+
+            $message = $intent === 'register'
+                ? ($wasGoogleLinked ? 'Akun Google sudah terdaftar. Login berhasil.' : 'Daftar dengan Google berhasil dan akun langsung aktif.')
+                : ($wasGoogleLinked ? 'Login dengan Google berhasil.' : 'Akun berhasil dihubungkan ke Google dan login berhasil.');
+
+            $this->issueAuthenticatedSession($user, $message);
+        }
+
+        if ($intent === 'login') {
+            sendResponse('error', 'Akun Google belum terdaftar. Lanjutkan daftar dengan Google.', [
+                'code' => 'google_registration_required',
+                'requires_google_registration' => true,
+                'email' => $email,
+                'full_name' => $fullName,
+            ], 404);
+        }
+
+        $user = $this->createGoogleUser($googleId, $email, $fullName);
+        $this->issueAuthenticatedSession($user, 'Daftar dengan Google berhasil dan akun langsung aktif.');
     }
 
     public function getProfile() {
@@ -584,6 +886,8 @@ if (strpos($requestPath, '/api/auth/register') !== false && $requestMethod === '
     $controller->resendVerificationEmail();
 } elseif (strpos($requestPath, '/api/auth/login') !== false && $requestMethod === 'POST') {
     $controller->login();
+} elseif (strpos($requestPath, '/api/auth/google') !== false && $requestMethod === 'POST') {
+    $controller->authenticateWithGoogle();
 } elseif (strpos($requestPath, '/api/auth/active-packages') !== false && $requestMethod === 'GET') {
     $controller->getActivePackages();
 } elseif (strpos($requestPath, '/api/auth/test-history') !== false && $requestMethod === 'GET') {

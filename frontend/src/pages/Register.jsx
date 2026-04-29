@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import GoogleAuthButton from '../components/GoogleAuthButton';
+import { clearPendingGoogleCredential, getPendingGoogleCredential } from '../utils/googleAuth';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -10,8 +12,11 @@ export default function Register() {
   const [successMessage, setSuccessMessage] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [registeredEmail, setRegisteredEmail] = useState('');
-  const { register, resendVerification, loading, error: authError } = useAuth();
+  const [googleRedirectInProgress, setGoogleRedirectInProgress] = useState(false);
+  const { register, registerWithGoogle, resendVerification, loading, error: authError } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const hasGoogleAuth = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim());
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,6 +57,53 @@ export default function Register() {
     }
   };
 
+  const completeGoogleRegistration = useCallback(async (credential) => {
+    setError('');
+    setInfoMessage('');
+    setSuccessMessage('');
+    setGoogleRedirectInProgress(true);
+
+    const result = await registerWithGoogle(credential);
+    if (result.success) {
+      clearPendingGoogleCredential();
+      navigate('/');
+    } else {
+      clearPendingGoogleCredential();
+      setGoogleRedirectInProgress(false);
+      setError(result.message || 'Daftar dengan Google gagal.');
+    }
+  }, [navigate, registerWithGoogle]);
+
+  const handleGoogleRegister = useCallback(async (credential) => {
+    await completeGoogleRegistration(credential);
+  }, [completeGoogleRegistration]);
+
+  useEffect(() => {
+    if (!hasGoogleAuth) {
+      return;
+    }
+
+    const pendingCredential = getPendingGoogleCredential();
+    const requiresGoogleRegistration = Boolean(location.state?.googleRegistrationRequired);
+    if (!requiresGoogleRegistration || !pendingCredential) {
+      return;
+    }
+
+    clearPendingGoogleCredential();
+
+    if (location.state?.email) {
+      setEmail(location.state.email);
+      setRegisteredEmail(location.state.email);
+    }
+
+    if (location.state?.fullName) {
+      setFullName(location.state.fullName);
+    }
+
+    setInfoMessage('Menyelesaikan pendaftaran Google Anda...');
+    completeGoogleRegistration(pendingCredential);
+  }, [completeGoogleRegistration, hasGoogleAuth, location.state]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8">
@@ -76,6 +128,39 @@ export default function Register() {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             {authError || error}
           </div>
+        )}
+
+        {location.state?.googleRegistrationRequired && !error && (
+          <div className="bg-slate-100 border border-slate-300 text-slate-700 px-4 py-3 rounded mb-4">
+            Akun Google Anda belum terdaftar. Kami sedang melanjutkan proses daftar dengan Google, lalu akun akan langsung login otomatis.
+          </div>
+        )}
+
+        {hasGoogleAuth && (
+          <>
+            <div className="mb-6">
+              <GoogleAuthButton
+                onCredential={handleGoogleRegister}
+                disabled={loading || googleRedirectInProgress}
+                text="signup_with"
+              />
+              <p className="text-xs text-center text-gray-500 mt-3">
+                Daftar instan dengan Google. Setelah selesai, akun akan langsung aktif dan Anda otomatis masuk.
+              </p>
+              <p className="text-xs text-center text-gray-400 mt-2">
+                Jika Anda datang dari halaman login, proses daftar Google akan diteruskan otomatis di sini.
+              </p>
+            </div>
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase tracking-[0.2em] text-gray-400">
+                <span className="bg-white px-3">Atau daftar dengan email</span>
+              </div>
+            </div>
+          </>
         )}
 
         <form onSubmit={handleSubmit}>

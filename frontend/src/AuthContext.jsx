@@ -115,6 +115,70 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async (credential) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.post('/auth/google', {
+        credential,
+        intent: 'login',
+      });
+      const { token, userId, email, full_name, role } = response.data.data;
+      persistSession({ token, userId, email, full_name, role });
+      return {
+        success: true,
+        message: response.data.message,
+        data: response.data.data,
+      };
+    } catch (err) {
+      if (err.response?.status === 401) {
+        clearSession();
+      }
+      const message = err.response?.data?.message || 'Login Google gagal';
+      setError(message);
+      return {
+        success: false,
+        status: err.response?.status || 0,
+        message,
+        data: err.response?.data?.data || null,
+      };
+    } finally {
+      setLoading(false);
+    }
+  }, [clearSession, persistSession]);
+
+  const registerWithGoogle = useCallback(async (credential) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.post('/auth/google', {
+        credential,
+        intent: 'register',
+      });
+      const { token, userId, email, full_name, role } = response.data.data;
+      persistSession({ token, userId, email, full_name, role });
+      return {
+        success: true,
+        message: response.data.message,
+        data: response.data.data,
+      };
+    } catch (err) {
+      if (err.response?.status === 401) {
+        clearSession();
+      }
+      const message = err.response?.data?.message || 'Daftar Google gagal';
+      setError(message);
+      return {
+        success: false,
+        status: err.response?.status || 0,
+        message,
+        data: err.response?.data?.data || null,
+      };
+    } finally {
+      setLoading(false);
+    }
+  }, [clearSession, persistSession]);
+
   const resendVerification = useCallback(async (email) => {
     setLoading(true);
     setError(null);
@@ -256,7 +320,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, error, authReady, login, register, resendVerification, getVerificationStatus, verifyEmail, refreshProfile, logout, isAuthenticated, isAdmin }}
+      value={{ user, token, loading, error, authReady, login, register, loginWithGoogle, registerWithGoogle, resendVerification, getVerificationStatus, verifyEmail, refreshProfile, logout, isAuthenticated, isAdmin }}
     >
       {children}
     </AuthContext.Provider>

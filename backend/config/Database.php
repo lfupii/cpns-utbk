@@ -24,6 +24,7 @@ define('DB_PORT', (int) env('DB_PORT', 3306));
 // API Configuration
 define('API_URL', env('API_URL', 'http://localhost:8000'));
 define('FRONTEND_URL', env('FRONTEND_URL', 'http://localhost:5173'));
+define('GOOGLE_CLIENT_ID', trim((string) env('GOOGLE_CLIENT_ID', env('VITE_GOOGLE_CLIENT_ID', ''))));
 
 // JWT Secret Key
 define('JWT_SECRET_KEY', env('JWT_SECRET_KEY', 'your_super_secret_jwt_key_change_this_in_production'));
@@ -175,6 +176,16 @@ function ensureEmailVerificationSchema(mysqli $mysqli): void {
 
     if (!databaseColumnExists($mysqli, 'users', 'email_verification_expires_at')) {
         $mysqli->query("ALTER TABLE users ADD COLUMN email_verification_expires_at TIMESTAMP NULL AFTER email_verification_sent_at");
+    }
+}
+
+function ensureGoogleAuthSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'users')) {
+        return;
+    }
+
+    if (!databaseColumnExists($mysqli, 'users', 'google_id')) {
+        $mysqli->query("ALTER TABLE users ADD COLUMN google_id VARCHAR(255) UNIQUE DEFAULT NULL AFTER password");
     }
 }
 
@@ -1116,6 +1127,7 @@ function bootstrapDefaultAdmin(mysqli $mysqli): void {
 }
 
 ensureEmailVerificationSchema($mysqli);
+ensureGoogleAuthSchema($mysqli);
 ensureTestWorkflowSchema($mysqli);
 ensureTestAttemptProgressSchema($mysqli);
 ensureAttemptQuestionFlagsSchema($mysqli);

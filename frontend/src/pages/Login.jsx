@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import GoogleAuthButton from '../components/GoogleAuthButton';
+import { setPendingGoogleCredential } from '../utils/googleAuth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -8,8 +10,9 @@ export default function Login() {
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [showResendButton, setShowResendButton] = useState(false);
-  const { login, resendVerification, loading, error: authError } = useAuth();
+  const { login, loginWithGoogle, resendVerification, loading, error: authError } = useAuth();
   const navigate = useNavigate();
+  const hasGoogleAuth = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim());
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,6 +46,28 @@ export default function Login() {
     }
   };
 
+  const handleGoogleLogin = useCallback(async (credential) => {
+    setError('');
+    setInfoMessage('');
+    setShowResendButton(false);
+
+    const result = await loginWithGoogle(credential);
+    if (result.success) {
+      navigate('/');
+    } else if (result.data?.requires_google_registration) {
+      setPendingGoogleCredential(credential);
+      navigate('/register', {
+        state: {
+          googleRegistrationRequired: true,
+          email: result.data?.email || '',
+          fullName: result.data?.full_name || '',
+        },
+      });
+    } else {
+      setError(result.message || 'Login dengan Google gagal.');
+    }
+  }, [loginWithGoogle, navigate]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8">
@@ -61,6 +86,33 @@ export default function Login() {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             {authError || error}
           </div>
+        )}
+
+        {hasGoogleAuth && (
+          <>
+            <div className="mb-6">
+              <GoogleAuthButton
+                onCredential={handleGoogleLogin}
+                disabled={loading}
+                text="continue_with"
+              />
+              <p className="text-xs text-center text-gray-500 mt-3">
+                Gunakan tombol ini jika akun Anda sebelumnya sudah pernah didaftarkan dengan Google.
+              </p>
+              <p className="text-xs text-center text-gray-400 mt-2">
+                Jika akun Google belum terdaftar, Anda akan diarahkan ke halaman daftar lalu otomatis dilanjutkan.
+              </p>
+            </div>
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase tracking-[0.2em] text-gray-400">
+                <span className="bg-white px-3">Atau login dengan email</span>
+              </div>
+            </div>
+          </>
         )}
 
         <form onSubmit={handleSubmit}>

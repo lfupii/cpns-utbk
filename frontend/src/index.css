@@ -12681,3 +12681,253 @@ html[data-theme='dark'] .alert {
   background: rgba(86, 24, 24, 0.5);
   border-color: rgba(239, 68, 68, 0.28);
 }
+
+@media (max-width: 1024px) {
+  .learning-workspace:not(.learning-workspace-focus) {
+    align-items: start;
+    gap: 0.95rem;
+  }
+
+  .learning-workspace:not(.learning-workspace-focus) .learning-main-panel {
+    order: -1;
+  }
+
+  .learning-workspace:not(.learning-workspace-focus) .learning-sidebar {
+    order: 1;
+  }
+
+  .learning-dashboard-shell {
+    padding: 1.15rem;
+    border-radius: 1.15rem;
+  }
+
+  .learning-dashboard-shell::after {
+    display: none;
+  }
+
+  .learning-dashboard-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .learning-dashboard-header h2 {
+    margin-top: 0.25rem;
+    font-size: clamp(1.35rem, 4vw, 1.8rem);
+    line-height: 1.12;
+    letter-spacing: -0.035em;
+  }
+
+  .learning-dashboard-header p {
+    display: none;
+  }
+
+  .learning-dashboard-header .account-package-tag {
+    min-height: 26px;
+    padding: 0 0.65rem;
+    font-size: 0.62rem;
+  }
+
+  .learning-path-score {
+    width: auto;
+    min-width: 78px;
+    padding: 0.55rem 0.65rem;
+    border-radius: 0.78rem;
+  }
+
+  .learning-path-score strong {
+    font-size: 1.08rem;
+  }
+
+  .learning-path-score span {
+    margin-top: 0.16rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.02em;
+  }
+
+  .learning-dashboard-shell > .learning-progress-track {
+    height: 8px;
+    margin-top: 0.75rem;
+  }
+
+  .learning-dashboard-focus {
+    margin-top: 0.85rem;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .learning-dashboard-card {
+    padding: 0.95rem 1rem;
+    border-radius: 0.9rem;
+  }
+
+  .learning-dashboard-card h3 {
+    font-size: 1.18rem;
+    line-height: 1.14;
+  }
+
+  .learning-dashboard-card p:not(.learning-sidebar-label) {
+    font-size: 0.84rem;
+    line-height: 1.45;
+  }
+
+  .learning-dashboard-card .learning-hero-actions {
+    gap: 0.55rem;
+  }
+
+  .learning-dashboard-card .learning-hero-actions .btn {
+    flex: 1 1 11rem;
+    width: auto;
+    min-height: 38px;
+    padding: 0 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .learning-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .learning-summary-grid div {
+    padding: 0.7rem 0.68rem 0.72rem 0.78rem;
+    border-radius: 0.82rem;
+  }
+
+  .learning-summary-grid span {
+    font-size: 0.62rem;
+    line-height: 1.2;
+    letter-spacing: 0;
+  }
+
+  .learning-summary-grid strong {
+    margin-top: 0.18rem;
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  .learning-path-list {
+    margin-top: 0.9rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.65rem;
+  }
+
+  .learning-path-card {
+    min-height: 0;
+    padding: 0.75rem 0.8rem;
+    border-radius: 0.9rem;
+    gap: 0.65rem;
+  }
+
+  .learning-path-index {
+    width: 34px;
+    height: 34px;
+    font-size: 0.78rem;
+  }
+
+  .learning-path-copy strong {
+    font-size: 0.9rem;
+  }
+
+  .learning-path-copy small {
+    font-size: 0.74rem;
+  }
+
+  .learning-path-step {
+    min-height: 26px;
+    padding: 0 0.55rem;
+    font-size: 0.64rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .learning-workspace:not(.learning-workspace-focus) {
+    margin-top: 0.95rem;
+  }
+
+  .learning-dashboard-shell {
+    padding: 1rem;
+  }
+
+  .learning-dashboard-header {
+    gap: 0.65rem;
+  }
+
+  .learning-dashboard-header h2 {
+    font-size: 1.28rem;
+  }
+
+  .learning-path-score {
+    min-width: 70px;
+  }
+
+  .learning-dashboard-card .learning-hero-actions .btn {
+    width: auto;
+    min-width: 0;
+  }
+
+  .learning-path-list {
+    display: flex;
+    gap: 0.65rem;
+    overflow-x: auto;
+    padding: 0.05rem 0.05rem 0.35rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .learning-path-card {
+    flex: 0 0 min(78vw, 304px);
+    grid-template-columns: auto minmax(0, 1fr);
+    scroll-snap-align: start;
+  }
+
+  .learning-path-copy strong,
+  .learning-path-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .learning-path-steps {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .learning-dashboard-header {
+    grid-template-columns: minmax(0, 1fr) 66px;
+  }
+
+  .learning-dashboard-header .account-package-tag {
+    max-width: 100%;
+  }
+
+  .learning-path-score {
+    min-width: 0;
+    padding: 0.48rem 0.5rem;
+  }
+
+  .learning-path-score strong {
+    font-size: 0.98rem;
+  }
+
+  .learning-path-score span {
+    font-size: 0.54rem;
+  }
+
+  .learning-summary-grid {
+    gap: 0.42rem;
+  }
+
+  .learning-summary-grid div {
+    padding: 0.62rem 0.48rem 0.64rem 0.58rem;
+  }
+
+  .learning-summary-grid span {
+    font-size: 0.56rem;
+  }
+
+  .learning-summary-grid strong {
+    font-size: 0.94rem;
+  }
+}

@@ -1365,8 +1365,11 @@ export default function Learning() {
                       <button
                         type="button"
                         key={section.code}
-                        className={section.code === resumeSection?.code ? 'learning-mobile-section-tab learning-mobile-section-tab-active' : 'learning-mobile-section-tab'}
-                        onClick={() => jumpToSectionMaterial(section.code)}
+                        className={section.code === activeSection?.code ? 'learning-mobile-section-tab learning-mobile-section-tab-active' : 'learning-mobile-section-tab'}
+                        onClick={() => {
+                          setActiveSectionCode(section.code);
+                          setActiveTopicIndex(0);
+                        }}
                       >
                         {section.session_name || section.name || `Subtest ${index + 1}`}
                       </button>
@@ -1375,36 +1378,44 @@ export default function Learning() {
 
                   <div className="learning-mobile-list-head">
                     <h2>Daftar Materi</h2>
-                    <button type="button" onClick={() => setMaterialsExpanded(true)}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (activeSection) {
+                          jumpToSectionMaterial(activeSection.code, 0);
+                        }
+                      }}
+                    >
                       Lihat Semua <span aria-hidden="true">›</span>
                     </button>
                   </div>
 
                   <div className="learning-mobile-material-list">
-                    {sections.map((section, index) => {
-                      const materialDone = Boolean(section.progress.material_read);
-                      const subtestDone = Boolean(section.progress.subtest_test_completed);
-                      const sectionPercent = (Number(materialDone) + Number(subtestDone)) * 50;
-                      const topicCount = getSectionTopics(section).length;
-                      const questionCount = Math.max(0, Number(section.mini_test_question_count || section.target_question_count || 0));
-                      const accentClass = ['blue', 'green', 'pink'][index % 3];
+                    {activeSectionTopics.map((topic, topicIndex) => {
+                      const pageCount = Number(topic.visible_page_count || topic.pages?.length || topic.total_page_count || 0);
+                      const totalPageCount = Math.max(pageCount, Number(topic.total_page_count || 0));
+                      const topicPercent = activeSection?.progress?.material_read ? 100 : 0;
+                      const accentClass = ['blue', 'green', 'pink'][topicIndex % 3];
 
                       return (
                         <button
                           type="button"
-                          key={section.code}
+                          key={`${activeSection?.code || 'section'}-topic-${topicIndex}`}
                           className={`learning-mobile-material-card learning-mobile-material-card-${accentClass}`}
-                          onClick={() => jumpToSectionMaterial(section.code)}
+                          onClick={() => activeSection && jumpToSectionMaterial(activeSection.code, topicIndex)}
                         >
                           <span className="learning-mobile-material-icon" aria-hidden="true" />
                           <span className="learning-mobile-material-copy">
-                            <strong>{section.name}</strong>
-                            <small>{topicCount || 1} materi • {questionCount || 0} soal</small>
+                            <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
+                            <small>
+                              {pageCount || 1} halaman materi
+                              {totalPageCount > pageCount ? ` • ${totalPageCount - pageCount} terkunci` : ''}
+                            </small>
                             <span className="learning-mobile-material-progress">
                               <span>
-                                <span style={{ width: `${sectionPercent}%` }} />
+                                <span style={{ width: `${topicPercent}%` }} />
                               </span>
-                              <small>{sectionPercent}% selesai</small>
+                              <small>{topicPercent}% selesai</small>
                             </span>
                           </span>
                           <span className="learning-mobile-material-action">
@@ -1414,6 +1425,11 @@ export default function Learning() {
                         </button>
                       );
                     })}
+                    {activeSectionTopics.length === 0 && (
+                      <div className="learning-mobile-material-empty">
+                        Materi untuk subtest ini belum tersedia.
+                      </div>
+                    )}
                   </div>
 
                   <nav className="learning-mobile-bottom-nav" aria-label="Navigasi belajar">

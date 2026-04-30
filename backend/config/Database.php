@@ -329,6 +329,19 @@ function ensureAttemptQuestionFlagsSchema(mysqli $mysqli): void {
     }
 }
 
+function ensureTryoutScoringSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'test_results')) {
+        return;
+    }
+
+    if (!databaseColumnExists($mysqli, 'test_results', 'score_details_json')) {
+        $mysqli->query(
+            "ALTER TABLE test_results
+             ADD COLUMN score_details_json LONGTEXT NULL AFTER percentage"
+        );
+    }
+}
+
 function ensureLearningProgressSchema(mysqli $mysqli): void {
     if (!databaseTableExists($mysqli, 'users') || !databaseTableExists($mysqli, 'test_packages')) {
         return;
@@ -1131,5 +1144,6 @@ ensureGoogleAuthSchema($mysqli);
 ensureTestWorkflowSchema($mysqli);
 ensureTestAttemptProgressSchema($mysqli);
 ensureAttemptQuestionFlagsSchema($mysqli);
+ensureTryoutScoringSchema($mysqli);
 ensureLearningProgressSchema($mysqli);
 bootstrapDefaultAdmin($mysqli);

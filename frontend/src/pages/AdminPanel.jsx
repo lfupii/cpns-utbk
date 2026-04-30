@@ -45,12 +45,69 @@ const CSV_TEMPLATE_ROW = {
   option_e_image_url: '',
 };
 
-const createOption = (index, text = '', isCorrect = false, imageUrl = '') => ({
+const clampPointValue = (value, fallback = 1) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+
+  return Math.min(5, Math.max(1, Math.round(numericValue)));
+};
+
+const createOption = (index, text = '', isCorrect = false, imageUrl = '', scoreWeight = index + 1) => ({
   letter: String.fromCharCode(65 + index),
   text,
   image_url: imageUrl,
   is_correct: isCorrect,
+  score_weight: clampPointValue(scoreWeight, Math.min(5, index + 1)),
 });
+
+const TKP_PATTERN = /(^|[^a-z0-9])tkp([^a-z0-9]|$)|karakteristik pribadi/i;
+
+function isTkpSection(section) {
+  if (!section) {
+    return false;
+  }
+
+  return TKP_PATTERN.test(`${section.code || ''} ${section.name || section.section_name || ''}`);
+}
+
+function getOptionScoreWeight(option, fallback = 1) {
+  if (option?.score_weight != null) {
+    return clampPointValue(option.score_weight, fallback);
+  }
+
+  const rawCorrectValue = option?.is_correct;
+  const numericCorrectValue = Number(rawCorrectValue);
+  if (Number.isFinite(numericCorrectValue) && numericCorrectValue > 1) {
+    return clampPointValue(numericCorrectValue, fallback);
+  }
+
+  return rawCorrectValue ? 5 : fallback;
+}
+
+function normalizeOptionsForScoringMode(options, usesPointScoring) {
+  const normalizedOptions = (options || []).map((option, index) => ({
+    ...option,
+    letter: option.letter || String.fromCharCode(65 + index),
+    score_weight: getOptionScoreWeight(option, Math.min(5, index + 1)),
+    is_correct: Boolean(option.is_correct),
+  }));
+
+  if (usesPointScoring) {
+    return normalizedOptions.map((option, index) => ({
+      ...option,
+      score_weight: getOptionScoreWeight(option, Math.min(5, index + 1)),
+      is_correct: false,
+    }));
+  }
+
+  const correctIndex = normalizedOptions.findIndex((option) => Boolean(option.is_correct));
+  return normalizedOptions.map((option, index) => ({
+    ...option,
+    is_correct: correctIndex >= 0 ? index === correctIndex : index === 0,
+  }));
+}
 
 const createEmptyQuestionForm = (sectionCode = '') => ({
   question_id: null,
@@ -547,6 +604,12 @@ export default function AdminPanel() {
     () => packageSections.find((section) => String(section.code) === String(activeLearningSection?.code || '')) || null,
     [activeLearningSection?.code, packageSections]
   );
+  const activeQuestionSection = useMemo(
+    () => packageSections.find((section) => String(section.code) === String(questionForm.section_code || '')) || null,
+    [packageSections, questionForm.section_code]
+  );
+  const usesQuestionPointScoring = isTkpSection(activeQuestionSection);
+  const usesLearningPointScoring = isTkpSection(activeLearningWorkflowSection || activeLearningSection);
   const activeMaterialTopics = useMemo(
     () => (activeLearningSection ? getMaterialTopics(activeLearningSection.material) : []),
     [activeLearningSection]
@@ -926,14 +989,18 @@ export default function AdminPanel() {
         letter: option.letter || String.fromCharCode(65 + optionIndex),
         text: option.text || '',
         image_url: option.image_url || '',
-        is_correct: Boolean(Number(option.is_correct)),
+        is_correct: Number(option.is_correct) > 0,
+        score_weight: getOptionScoreWeight(option, Math.min(5, optionIndex + 1)),
       })),
     }));
 
-    setLearningQuestionsForm(normalizedQuestions);
+    setLearningQuestionsForm(normalizedQuestions.map((question) => ({
+      ...question,
+      options: normalizeOptionsForScoringMode(question.options, usesLearningPointScoring),
+    })));
     setActiveLearningQuestionIndex(0);
     setExpandedLearningQuestionKey('');
-  }, [activeLearningSection]);
+  }, [activeLearningSection, usesLearningPointScoring]);
 
   useEffect(() => {
     setQuestionForm((current) => {
@@ -941,9 +1008,14 @@ export default function AdminPanel() {
         return current;
       }
 
-      return createEmptyQuestionForm(defaultSectionCode);
+      const defaultSection = packageSections.find((section) => String(section.code) === String(defaultSectionCode));
+      const nextForm = createEmptyQuestionForm(defaultSectionCode);
+      return {
+        ...nextForm,
+        options: normalizeOptionsForScoringMode(nextForm.options, isTkpSection(defaultSection)),
+      };
     });
-  }, [defaultSectionCode]);
+  }, [defaultSectionCode, packageSections]);
 
   useEffect(() => {
     if (!questionSectionFilter) {
@@ -1046,7 +1118,12 @@ export default function AdminPanel() {
   }, [questions, requestedPreviewId]);
 
   const resetQuestionForm = () => {
-    setQuestionForm(createEmptyQuestionForm(preferredSectionCode));
+    const preferredSection = packageSections.find((section) => String(section.code) === String(preferredSectionCode));
+    const nextForm = createEmptyQuestionForm(preferredSectionCode);
+    setQuestionForm({
+      ...nextForm,
+      options: normalizeOptionsForScoringMode(nextForm.options, isTkpSection(preferredSection)),
+    });
     setShowQuestionEditor(false);
   };
 
@@ -1283,6 +1360,14 @@ export default function AdminPanel() {
     setQuestionForm((current) => ({
       ...current,
       [name]: value,
+      ...(name === 'section_code'
+        ? {
+            options: normalizeOptionsForScoringMode(
+              current.options,
+              isTkpSection(packageSections.find((section) => String(section.code) === String(value)))
+            ),
+          }
+        : {}),
     }));
   };
 
@@ -1310,7 +1395,10 @@ export default function AdminPanel() {
       if (current.options.length >= 5) return current;
       return {
         ...current,
-        options: [...current.options, createOption(current.options.length)],
+        options: normalizeOptionsForScoringMode(
+          [...current.options, createOption(current.options.length)],
+          usesQuestionPointScoring
+        ),
       };
     });
   };
@@ -1326,13 +1414,13 @@ export default function AdminPanel() {
           letter: String.fromCharCode(65 + optionIndex),
         }));
 
-      if (!nextOptions.some((option) => option.is_correct)) {
+      if (!usesQuestionPointScoring && !nextOptions.some((option) => option.is_correct)) {
         nextOptions[0].is_correct = true;
       }
 
       return {
         ...current,
-        options: nextOptions,
+        options: normalizeOptionsForScoringMode(nextOptions, usesQuestionPointScoring),
       };
     });
   };
@@ -1355,7 +1443,8 @@ export default function AdminPanel() {
           letter: option.letter || String.fromCharCode(65 + index),
           text: option.text,
           image_url: option.image_url,
-          is_correct: option.is_correct,
+          is_correct: usesQuestionPointScoring ? getOptionScoreWeight(option, Math.min(5, index + 1)) : option.is_correct,
+          score_weight: usesQuestionPointScoring ? getOptionScoreWeight(option, Math.min(5, index + 1)) : (option.is_correct ? 5 : 0),
         })),
     };
 
@@ -1466,6 +1555,10 @@ export default function AdminPanel() {
   };
 
   const setLearningQuestionCorrectOption = (questionIndex, optionIndex) => {
+    if (usesLearningPointScoring) {
+      return;
+    }
+
     setLearningQuestionsForm((current) => current.map((question, index) => (
       index === questionIndex
         ? {
@@ -1481,7 +1574,16 @@ export default function AdminPanel() {
 
   const addLearningQuestion = () => {
     const nextQuestionIndex = learningQuestionsForm.length;
-    setLearningQuestionsForm((current) => [...current, createEmptyLearningQuestion(current.length + 1)]);
+    setLearningQuestionsForm((current) => {
+      const nextQuestion = createEmptyLearningQuestion(current.length + 1);
+      return [
+        ...current,
+        {
+          ...nextQuestion,
+          options: normalizeOptionsForScoringMode(nextQuestion.options, usesLearningPointScoring),
+        },
+      ];
+    });
     setActiveLearningQuestionIndex(nextQuestionIndex);
   };
 
@@ -1515,6 +1617,15 @@ export default function AdminPanel() {
         questions: learningQuestionsForm.map((question, index) => ({
           ...question,
           question_order: index + 1,
+          options: (question.options || []).map((option, optionIndex) => ({
+            ...option,
+            is_correct: usesLearningPointScoring
+              ? getOptionScoreWeight(option, Math.min(5, optionIndex + 1))
+              : option.is_correct,
+            score_weight: usesLearningPointScoring
+              ? getOptionScoreWeight(option, Math.min(5, optionIndex + 1))
+              : (option.is_correct ? 5 : 0),
+          })),
         })),
       });
       await refreshAdminData(Number(selectedPackageId));
@@ -3178,7 +3289,9 @@ export default function AdminPanel() {
                                             <div key={`learning-preview-option-${rowKey}-${option.letter}-${optionIndex}`} className="admin-option-preview-card">
                                               <div className="admin-option-preview-head">
                                                 <strong>{option.letter}.</strong>
-                                                {option.is_correct && (
+                                                {usesLearningPointScoring ? (
+                                                  <span className="admin-correct-badge">{getOptionScoreWeight(option)} poin</span>
+                                                ) : option.is_correct && (
                                                   <span className="admin-correct-badge">Jawaban Benar</span>
                                                 )}
                                               </div>
@@ -3526,7 +3639,9 @@ export default function AdminPanel() {
                                       <div key={option.id || `${question.id}-${option.letter}`} className="admin-option-preview-card">
                                         <div className="admin-option-preview-head">
                                           <strong>{option.letter}.</strong>
-                                          {Number(option.is_correct) === 1 && (
+                                          {isTkpSection({ code: question.section_code, name: question.section_name }) ? (
+                                            <span className="admin-correct-badge">{getOptionScoreWeight(option)} poin</span>
+                                          ) : Number(option.is_correct) > 0 && (
                                             <span className="admin-correct-badge">Jawaban Benar</span>
                                           )}
                                         </div>
@@ -3689,13 +3804,29 @@ export default function AdminPanel() {
                           <div className="admin-options-editor-list">
                             {(question.options || []).map((option, optionIndex) => (
                               <div key={`learning-option-${questionIndex}-${optionIndex}`} className="admin-option-row">
-                                <button
-                                  type="button"
-                                  className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
-                                  onClick={() => setLearningQuestionCorrectOption(questionIndex, optionIndex)}
-                                >
-                                  {option.is_correct ? 'Benar' : 'Pilih'}
-                                </button>
+                                {usesLearningPointScoring ? (
+                                  <label className="admin-point-control">
+                                    <span>Poin</span>
+                                    <select
+                                      value={getOptionScoreWeight(option, Math.min(5, optionIndex + 1))}
+                                      onChange={(event) => updateLearningQuestionOption(questionIndex, optionIndex, 'score_weight', Number(event.target.value))}
+                                    >
+                                      {[1, 2, 3, 4, 5].map((point) => (
+                                        <option key={point} value={point}>
+                                          {point}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
+                                    onClick={() => setLearningQuestionCorrectOption(questionIndex, optionIndex)}
+                                  >
+                                    {option.is_correct ? 'Benar' : 'Pilih'}
+                                  </button>
+                                )}
                                 <strong>{option.letter}</strong>
                                 <input
                                   name={`learning_option_text_${questionIndex}_${optionIndex}`}
@@ -3899,7 +4030,9 @@ export default function AdminPanel() {
                                   <div key={option.id || `${question.id}-${option.letter}`} className="admin-option-preview-card">
                                     <div className="admin-option-preview-head">
                                       <strong>{option.letter}.</strong>
-                                    {Number(option.is_correct) === 1 && (
+                                    {isTkpSection({ code: question.section_code, name: question.section_name }) ? (
+                                      <span className="admin-correct-badge">{getOptionScoreWeight(option)} poin</span>
+                                    ) : Number(option.is_correct) > 0 && (
                                       <span className="admin-correct-badge">Jawaban Benar</span>
                                     )}
                                   </div>
@@ -3998,13 +4131,29 @@ export default function AdminPanel() {
                     {questionForm.options.map((option, index) => (
                       <div key={`${option.letter}-${index}`} className="admin-option-editor-card">
                         <div className="admin-option-editor-head">
-                          <button
-                            type="button"
-                            className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
-                            onClick={() => handleCorrectOptionChange(index)}
-                          >
-                            {option.is_correct ? 'Benar' : 'Pilih'}
-                          </button>
+                          {usesQuestionPointScoring ? (
+                            <label className="admin-point-control">
+                              <span>Poin</span>
+                              <select
+                                value={getOptionScoreWeight(option, Math.min(5, index + 1))}
+                                onChange={(event) => handleOptionFieldChange(index, 'score_weight', Number(event.target.value))}
+                              >
+                                {[1, 2, 3, 4, 5].map((point) => (
+                                  <option key={point} value={point}>
+                                    {point}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : (
+                            <button
+                              type="button"
+                              className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
+                              onClick={() => handleCorrectOptionChange(index)}
+                            >
+                              {option.is_correct ? 'Benar' : 'Pilih'}
+                            </button>
+                          )}
                           <span className="admin-option-letter">{option.letter}</span>
                           <button
                             type="button"

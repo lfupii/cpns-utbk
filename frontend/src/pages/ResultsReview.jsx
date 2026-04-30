@@ -2,11 +2,28 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../api';
 
-function ReviewOption({ option }) {
-  const optionClasses = option.is_correct
+function parseScoreDetails(rawValue) {
+  if (!rawValue) {
+    return null;
+  }
+
+  if (typeof rawValue === 'object') {
+    return rawValue;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function ReviewOption({ option, isPointQuestion = false }) {
+  const optionClasses = !isPointQuestion && option.is_correct
     ? 'border-green-300 bg-green-50'
     : option.is_selected
-    ? 'border-red-200 bg-red-50'
+    ? isPointQuestion ? 'border-blue-200 bg-blue-50' : 'border-red-200 bg-red-50'
     : 'border-gray-200 bg-gray-50';
 
   return (
@@ -29,7 +46,12 @@ function ReviewOption({ option }) {
               Jawaban Anda
             </span>
           )}
-          {option.is_correct && (
+          {isPointQuestion && (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {Number(option.score_value || 0)} poin
+            </span>
+          )}
+          {!isPointQuestion && option.is_correct && (
             <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
               Jawaban Benar
             </span>
@@ -59,6 +81,7 @@ export default function ResultsReview() {
           correct_answers: Number(rawResults.correct_answers || 0),
           score: Number(rawResults.score || 0),
           percentage: Number(rawResults.percentage || 0),
+          score_details: parseScoreDetails(rawResults.score_details || rawResults.score_details_json),
           review_items: Array.isArray(rawResults.review_items) ? rawResults.review_items : [],
         });
       } catch (err) {
@@ -83,6 +106,8 @@ export default function ResultsReview() {
   }, [activeIndex, reviewItems.length]);
 
   const activeItem = reviewItems[activeIndex] || null;
+  const scoreDetails = results?.score_details || {};
+  const isCpnsPointScore = scoreDetails.scoring_type === 'cpns_skd_points';
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Memuat pembahasan...</div>;
@@ -114,9 +139,16 @@ export default function ResultsReview() {
     );
   }
 
-  const activeStatusLabel = !activeItem.is_answered ? 'Tidak Dijawab' : activeItem.is_correct ? 'Benar' : 'Salah';
+  const isPointQuestion = activeItem.scoring_type === 'point';
+  const activeStatusLabel = !activeItem.is_answered
+    ? 'Tidak Dijawab'
+    : isPointQuestion
+    ? `${Number(activeItem.score_awarded || 0)} poin`
+    : activeItem.is_correct ? 'Benar' : 'Salah';
   const activeStatusClasses = !activeItem.is_answered
     ? 'bg-gray-100 text-gray-700'
+    : isPointQuestion
+    ? 'bg-blue-100 text-blue-700'
     : activeItem.is_correct
     ? 'bg-green-100 text-green-700'
     : 'bg-red-100 text-red-700';
@@ -150,14 +182,33 @@ export default function ResultsReview() {
               <p className="text-sm text-gray-600">Total Soal</p>
               <p className="mt-1 text-2xl font-bold text-gray-900">{results.total_questions}</p>
             </div>
-            <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
-              <p className="text-sm text-green-700">Jawaban Benar</p>
-              <p className="mt-1 text-2xl font-bold text-green-700">{results.correct_answers}</p>
-            </div>
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-              <p className="text-sm text-red-700">Jawaban Salah</p>
-              <p className="mt-1 text-2xl font-bold text-red-700">{results.total_questions - results.correct_answers}</p>
-            </div>
+            {isCpnsPointScore ? (
+              <>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                  <p className="text-sm text-blue-700">Total Skor</p>
+                  <p className="mt-1 text-2xl font-bold text-blue-700">
+                    {Number(scoreDetails.total_score || results.score).toLocaleString('id-ID')} poin
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-sm text-gray-600">Status PG</p>
+                  <p className={`mt-1 text-2xl font-bold ${scoreDetails.passing?.passed_all ? 'text-green-700' : 'text-red-700'}`}>
+                    {scoreDetails.passing?.passed_all ? 'Lulus' : 'Belum'}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+                  <p className="text-sm text-green-700">Jawaban Benar</p>
+                  <p className="mt-1 text-2xl font-bold text-green-700">{results.correct_answers}</p>
+                </div>
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                  <p className="text-sm text-red-700">Jawaban Salah</p>
+                  <p className="mt-1 text-2xl font-bold text-red-700">{results.total_questions - results.correct_answers}</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -165,7 +216,7 @@ export default function ResultsReview() {
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Navigasi Soal</h2>
-              <p className="text-sm text-gray-600">Hijau berarti benar, merah berarti salah, abu berarti tidak dijawab.</p>
+              <p className="text-sm text-gray-600">Hijau berarti benar, merah berarti salah, biru berarti soal berpoin TKP, abu berarti tidak dijawab.</p>
             </div>
             <p className="text-sm font-semibold text-gray-500">
               Soal aktif: {activeItem.number} / {reviewItems.length}
@@ -176,6 +227,8 @@ export default function ResultsReview() {
             {reviewItems.map((item, index) => {
               const chipClasses = !item.is_answered
                 ? 'border-gray-200 bg-gray-100 text-gray-700'
+                : item.scoring_type === 'point'
+                ? 'border-blue-300 bg-blue-100 text-blue-800'
                 : item.is_correct
                 ? 'border-green-300 bg-green-100 text-green-800'
                 : 'border-red-300 bg-red-100 text-red-800';
@@ -230,7 +283,11 @@ export default function ResultsReview() {
 
           <div className="space-y-3">
             {activeItem.options.map((option) => (
-              <ReviewOption key={option.id || `${activeItem.id}-${option.letter}`} option={option} />
+              <ReviewOption
+                key={option.id || `${activeItem.id}-${option.letter}`}
+                option={option}
+                isPointQuestion={isPointQuestion}
+              />
             ))}
           </div>
 

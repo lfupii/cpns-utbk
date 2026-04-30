@@ -5210,6 +5210,26 @@ html[data-theme='dark'] .theme-toggle-thumb {
   color: #047857;
 }
 
+.admin-point-control {
+  display: grid;
+  min-width: 76px;
+  gap: 0.25rem;
+  color: #51627f;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-point-control select {
+  min-height: 42px;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(45, 140, 255, 0.24);
+  background: #eff6ff;
+  color: #1d4ed8;
+  font: inherit;
+  text-align: center;
+}
+
 .admin-option-letter {
   display: inline-flex;
   align-items: center;
@@ -12055,10 +12075,15 @@ html[data-theme='dark'] .admin-doc-closing-input,
 html[data-theme='dark'] .admin-word-ribbon button,
 html[data-theme='dark'] .admin-word-ribbon select,
 html[data-theme='dark'] .admin-ribbon-tab,
+html[data-theme='dark'] .admin-point-control select,
 html[data-theme='dark'] .admin-correct-toggle {
   background: rgba(8, 14, 26, 0.94);
   border-color: rgba(112, 142, 186, 0.28);
   color: #e9f1fb;
+}
+
+html[data-theme='dark'] .admin-point-control {
+  color: #b9c8df;
 }
 
 html[data-theme='dark'] .form-group label,

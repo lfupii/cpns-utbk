@@ -790,6 +790,21 @@ class LearningController {
         }
     }
 
+    private function isTkpSection(?string $sectionCode, ?string $sectionName = null): bool {
+        $haystack = strtolower(trim((string) $sectionCode . ' ' . (string) $sectionName));
+
+        return preg_match('/(^|[^a-z0-9])tkp([^a-z0-9]|$)/', $haystack) === 1
+            || strpos($haystack, 'karakteristik pribadi') !== false;
+    }
+
+    private function getOptionScoreValue(int $rawValue, bool $isTkpSection): int {
+        if ($isTkpSection) {
+            return min(5, max(1, $rawValue));
+        }
+
+        return $rawValue > 0 ? 5 : 0;
+    }
+
     private function decodeSectionTestResult(?string $raw): ?array {
         $decoded = json_decode((string) ($raw ?? ''), true);
         if (!is_array($decoded)) {
@@ -802,6 +817,9 @@ class LearningController {
             'total_questions' => (int) ($decoded['total_questions'] ?? 0),
             'answered_count' => (int) ($decoded['answered_count'] ?? 0),
             'time_taken' => (int) ($decoded['time_taken'] ?? 0),
+            'scoring_type' => (string) ($decoded['scoring_type'] ?? 'percentage'),
+            'max_score' => (int) ($decoded['max_score'] ?? 0),
+            'percentage' => round((float) ($decoded['percentage'] ?? $decoded['score'] ?? 0), 2),
         ];
     }
 
@@ -853,6 +871,7 @@ class LearningController {
     }
 
     private function buildSectionTestReviewItems(array $attempt, int $packageId, string $sectionCode): array {
+        $isTkp = $this->isTkpSection($sectionCode);
         $query = "SELECT q.id,
                          q.question_text,
                          q.question_image_url,
@@ -885,12 +904,25 @@ class LearningController {
             $selectedOptionId = isset($answerMap[(string) $questionId]) ? (int) $answerMap[(string) $questionId] : null;
             $options = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
             $correctOptionId = null;
+            $selectedScore = 0;
 
-            $normalizedOptions = array_map(static function (array $option) use ($selectedOptionId, &$correctOptionId): array {
+            $optionScores = array_map(static function (array $option) use ($isTkp): int {
+                $rawScore = (int) ($option['is_correct'] ?? 0);
+
+                return $isTkp ? min(5, max(1, $rawScore)) : ($rawScore > 0 ? 5 : 0);
+            }, $options);
+            $bestOptionScore = count($optionScores) > 0 ? max($optionScores) : 5;
+
+            $normalizedOptions = array_map(function (array $option) use ($selectedOptionId, &$correctOptionId, &$selectedScore, $isTkp, $bestOptionScore): array {
                 $optionId = (int) ($option['id'] ?? 0);
-                $isCorrect = !empty($option['is_correct']);
+                $rawScore = (int) ($option['is_correct'] ?? 0);
+                $scoreValue = $this->getOptionScoreValue($rawScore, $isTkp);
+                $isCorrect = !$isTkp && $scoreValue > 0;
                 if ($isCorrect) {
                     $correctOptionId = $optionId;
+                }
+                if ($selectedOptionId !== null && $selectedOptionId === $optionId) {
+                    $selectedScore = $scoreValue;
                 }
 
                 return [
@@ -899,6 +931,8 @@ class LearningController {
                     'text' => (string) ($option['text'] ?? ''),
                     'image_url' => ($option['image_url'] ?? null) ?: null,
                     'is_correct' => $isCorrect,
+                    'score_value' => $scoreValue,
+                    'is_best_score' => $isTkp && $scoreValue === $bestOptionScore,
                     'is_selected' => $selectedOptionId !== null && $selectedOptionId === $optionId,
                 ];
             }, $options);
@@ -911,7 +945,10 @@ class LearningController {
                 'selected_option_id' => $selectedOptionId,
                 'correct_option_id' => $correctOptionId,
                 'is_answered' => $selectedOptionId !== null && $selectedOptionId > 0,
-                'is_correct' => $selectedOptionId !== null && $correctOptionId !== null && $selectedOptionId === $correctOptionId,
+                'is_correct' => !$isTkp && $selectedOptionId !== null && $correctOptionId !== null && $selectedOptionId === $correctOptionId,
+                'scoring_type' => $isTkp ? 'point' : 'correct_wrong',
+                'score_awarded' => $selectedScore,
+                'max_score' => $bestOptionScore,
                 'options' => $normalizedOptions,
             ];
         }
@@ -1049,6 +1086,7 @@ class LearningController {
             if (!$section) {
                 throw new RuntimeException('Subtest tidak ditemukan pada paket ini', 404);
             }
+            $usesPointScoring = $this->isTkpSection($sectionCode, (string) ($section['name'] ?? ''));
 
             $this->assertActiveAccess($userId, $packageId, $isAdmin);
 
@@ -1068,13 +1106,32 @@ class LearningController {
 
             $questionIds = [];
             $correctAnswers = 0;
+            $totalScore = 0;
+            $maxScoreByQuestion = [];
+            $selectedScoreByQuestion = [];
             while ($row = $result->fetch_assoc()) {
                 $questionId = (int) $row['question_id'];
                 $optionId = (int) $row['option_id'];
+                $rawScore = (int) ($row['is_correct'] ?? 0);
+                $scoreValue = $this->getOptionScoreValue($rawScore, $usesPointScoring);
                 $questionIds[$questionId] = true;
+                $maxScoreByQuestion[$questionId] = max($maxScoreByQuestion[$questionId] ?? 0, $scoreValue);
 
-                if (($answerMap[(string) $questionId] ?? 0) === $optionId && (int) $row['is_correct'] === 1) {
-                    $correctAnswers++;
+                if (($answerMap[(string) $questionId] ?? 0) === $optionId) {
+                    $totalScore += $scoreValue;
+                    $selectedScoreByQuestion[$questionId] = $scoreValue;
+                    if (!$usesPointScoring && $scoreValue >= 5) {
+                        $correctAnswers++;
+                    }
+                }
+            }
+
+            if ($usesPointScoring) {
+                $correctAnswers = 0;
+                foreach ($selectedScoreByQuestion as $questionId => $selectedScore) {
+                    if ($selectedScore === ($maxScoreByQuestion[$questionId] ?? 5)) {
+                        $correctAnswers++;
+                    }
                 }
             }
 
@@ -1085,7 +1142,13 @@ class LearningController {
 
             $durationSeconds = (int) ($attempt['duration_seconds'] ?? 0);
             $attemptState = $this->computeSectionTestAttemptState($attempt, $durationSeconds);
-            $score = round(($correctAnswers / $totalQuestions) * 100, 2);
+            $maxScore = array_sum($maxScoreByQuestion);
+            $percentage = $maxScore > 0
+                ? round(($totalScore / $maxScore) * 100, 2)
+                : round(($correctAnswers / $totalQuestions) * 100, 2);
+            $score = $usesPointScoring
+                ? $totalScore
+                : round(($correctAnswers / $totalQuestions) * 100, 2);
             $timeTaken = $durationSeconds > 0
                 ? min($durationSeconds, (int) ($attemptState['elapsed_seconds'] ?? 0))
                 : (int) ($attemptState['elapsed_seconds'] ?? 0);
@@ -1095,6 +1158,9 @@ class LearningController {
                 'total_questions' => $totalQuestions,
                 'answered_count' => count($answerMap),
                 'time_taken' => $timeTaken,
+                'scoring_type' => $usesPointScoring ? 'point' : 'percentage',
+                'max_score' => $usesPointScoring ? $maxScore : 100,
+                'percentage' => $percentage,
             ];
             $resultJson = json_encode($resultPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 

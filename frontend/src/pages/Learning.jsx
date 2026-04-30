@@ -32,6 +32,11 @@ function formatScore(result) {
   const correct = Number(result.correct_answers ?? 0);
   const total = Number(result.total_questions ?? 0);
 
+  if (result.scoring_type === 'point') {
+    const maxScore = Number(result.max_score ?? 0);
+    return `${score.toLocaleString('id-ID')} poin${maxScore > 0 ? ` dari ${maxScore.toLocaleString('id-ID')}` : ''}`;
+  }
+
   return `${score.toLocaleString('id-ID')} - ${correct}/${total} benar`;
 }
 

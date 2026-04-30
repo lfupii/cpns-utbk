@@ -4,6 +4,23 @@ import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 import { formatDateTime } from '../utils/date';
 
+function parseScoreDetails(rawValue) {
+  if (!rawValue) {
+    return null;
+  }
+
+  if (typeof rawValue === 'object') {
+    return rawValue;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 export default function TestHistory() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,6 +36,7 @@ export default function TestHistory() {
           percentage: Number(item.percentage || 0),
           total_questions: Number(item.total_questions || 0),
           correct_answers: Number(item.correct_answers || 0),
+          score_details: parseScoreDetails(item.score_details || item.score_details_json),
         }));
         setHistory(normalized);
       } catch (err) {
@@ -67,10 +85,21 @@ export default function TestHistory() {
                 </div>
 
                 <div className="account-history-score">
-                  <strong>{item.percentage.toFixed(1)}%</strong>
-                  <span>
-                    {item.correct_answers}/{item.total_questions} benar
-                  </span>
+                  {item.score_details?.scoring_type === 'cpns_skd_points' ? (
+                    <>
+                      <strong>{Number(item.score_details.total_score || item.score).toLocaleString('id-ID')} poin</strong>
+                      <span>
+                        {item.score_details.passing?.passed_all ? 'Lulus PG' : 'Belum lulus PG'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{item.percentage.toFixed(1)}%</strong>
+                      <span>
+                        {item.correct_answers}/{item.total_questions} benar
+                      </span>
+                    </>
+                  )}
                 </div>
 
                 <div className="account-history-action">

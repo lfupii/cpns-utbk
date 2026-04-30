@@ -19,6 +19,7 @@ class TestController {
                     tr.correct_answers,
                     tr.score,
                     tr.percentage,
+                    tr.score_details_json,
                     tr.time_taken,
                     DATE_FORMAT(tr.created_at, '%d-%m-%Y %H:%i:%s') AS completed_at,
                     tp.name AS package_name,
@@ -204,7 +205,23 @@ class TestController {
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
 
-        return $result ?: null;
+        return $this->hydrateResultRow($result ?: null);
+    }
+
+    private function hydrateResultRow(?array $result): ?array {
+        if (!$result) {
+            return null;
+        }
+
+        $result['score_details'] = $this->decodeScoreDetails($result['score_details_json'] ?? null);
+
+        return $result;
+    }
+
+    private function decodeScoreDetails(?string $raw): ?array {
+        $decoded = json_decode((string) ($raw ?? ''), true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 
     private function buildQuestionShuffleKey(int $attemptId, array $question): string {
@@ -240,6 +257,201 @@ class TestController {
         });
 
         return $questions;
+    }
+
+    private function isTkpSection(?string $sectionCode, ?string $sectionName = null): bool {
+        $haystack = strtolower(trim((string) $sectionCode . ' ' . (string) $sectionName));
+
+        return preg_match('/(^|[^a-z0-9])tkp([^a-z0-9]|$)/', $haystack) === 1
+            || strpos($haystack, 'karakteristik pribadi') !== false;
+    }
+
+    private function getCpnsPassingGrade(?string $sectionCode, ?string $sectionName = null): ?int {
+        $haystack = strtolower(trim((string) $sectionCode . ' ' . (string) $sectionName));
+
+        if (preg_match('/(^|[^a-z0-9])twk([^a-z0-9]|$)/', $haystack) === 1) {
+            return 65;
+        }
+
+        if (preg_match('/(^|[^a-z0-9])tiu([^a-z0-9]|$)/', $haystack) === 1) {
+            return 80;
+        }
+
+        if ($this->isTkpSection($sectionCode, $sectionName)) {
+            return 166;
+        }
+
+        return null;
+    }
+
+    private function getOptionScoreValue(int $rawValue, bool $isTkpSection): int {
+        if ($isTkpSection) {
+            return min(5, max(1, $rawValue));
+        }
+
+        return $rawValue > 0 ? 5 : 0;
+    }
+
+    private function buildLegacyScoreDetails(int $attemptId, array $attempt, int $totalQuestions, int $correctAnswers, float $score, float $percentage): array {
+        return [
+            'mode' => TestWorkflow::detectMode($attempt),
+            'scoring_type' => 'percentage',
+            'total_questions' => $totalQuestions,
+            'correct_answers' => $correctAnswers,
+            'total_score' => $score,
+            'max_score' => 100,
+            'percentage' => round($percentage, 2),
+            'sections' => [],
+        ];
+    }
+
+    private function calculateCpnsScoreDetails(int $attemptId, array $attempt): array {
+        $packageId = (int) ($attempt['package_id'] ?? 0);
+        $query = "SELECT q.id AS question_id,
+                         q.section_code,
+                         q.section_name,
+                         q.section_order,
+                         qo.id AS option_id,
+                         qo.is_correct AS option_score,
+                         ua.selected_option_id
+                  FROM questions q
+                  LEFT JOIN question_options qo ON qo.question_id = q.id
+                  LEFT JOIN user_answers ua ON ua.question_id = q.id AND ua.attempt_id = ?
+                  WHERE q.package_id = ?
+                  ORDER BY q.section_order ASC, q.id ASC, qo.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('ii', $attemptId, $packageId);
+        $stmt->execute();
+        $rows = $stmt->get_result();
+
+        $questions = [];
+        while ($row = $rows->fetch_assoc()) {
+            $questionId = (int) ($row['question_id'] ?? 0);
+            if ($questionId <= 0) {
+                continue;
+            }
+
+            if (!isset($questions[$questionId])) {
+                $questions[$questionId] = [
+                    'id' => $questionId,
+                    'section_code' => (string) ($row['section_code'] ?? ''),
+                    'section_name' => (string) ($row['section_name'] ?? ''),
+                    'section_order' => (int) ($row['section_order'] ?? 1),
+                    'selected_option_id' => isset($row['selected_option_id']) ? (int) $row['selected_option_id'] : null,
+                    'options' => [],
+                ];
+            }
+
+            $optionId = (int) ($row['option_id'] ?? 0);
+            if ($optionId > 0) {
+                $questions[$questionId]['options'][] = [
+                    'id' => $optionId,
+                    'score' => (int) ($row['option_score'] ?? 0),
+                ];
+            }
+        }
+
+        $sections = [];
+        $totalScore = 0;
+        $maxScore = 0;
+        $correctAnswers = 0;
+        $answeredCount = 0;
+
+        foreach ($questions as $question) {
+            $sectionCode = (string) ($question['section_code'] ?? '');
+            $sectionName = (string) ($question['section_name'] ?? '');
+            $sectionOrder = (int) ($question['section_order'] ?? 1);
+            $sectionKey = $sectionCode !== '' ? $sectionCode : 'general';
+            $isTkp = $this->isTkpSection($sectionCode, $sectionName);
+
+            if (!isset($sections[$sectionKey])) {
+                $passingGrade = $this->getCpnsPassingGrade($sectionCode, $sectionName);
+                $sections[$sectionKey] = [
+                    'code' => $sectionKey,
+                    'name' => $sectionName !== '' ? $sectionName : strtoupper($sectionKey),
+                    'order' => $sectionOrder,
+                    'scoring_type' => $isTkp ? 'point' : 'correct_wrong',
+                    'total_questions' => 0,
+                    'answered_count' => 0,
+                    'correct_answers' => 0,
+                    'wrong_answers' => 0,
+                    'score' => 0,
+                    'max_score' => 0,
+                    'passing_grade' => $passingGrade,
+                    'passed' => $passingGrade === null ? null : false,
+                ];
+            }
+
+            $questionMaxScore = 5;
+            if ($isTkp) {
+                $optionScores = array_map(static function (array $option): int {
+                    return min(5, max(1, (int) ($option['score'] ?? 0)));
+                }, $question['options']);
+                $questionMaxScore = count($optionScores) > 0 ? max($optionScores) : 5;
+            }
+
+            $selectedOptionId = $question['selected_option_id'];
+            $awardedScore = 0;
+            foreach ($question['options'] as $option) {
+                if ($selectedOptionId !== null && (int) ($option['id'] ?? 0) === $selectedOptionId) {
+                    $awardedScore = $this->getOptionScoreValue((int) ($option['score'] ?? 0), $isTkp);
+                    break;
+                }
+            }
+
+            $sections[$sectionKey]['total_questions']++;
+            $sections[$sectionKey]['score'] += $awardedScore;
+            $sections[$sectionKey]['max_score'] += $questionMaxScore;
+            $totalScore += $awardedScore;
+            $maxScore += $questionMaxScore;
+
+            if ($selectedOptionId !== null && $selectedOptionId > 0) {
+                $sections[$sectionKey]['answered_count']++;
+                $answeredCount++;
+            }
+
+            if (!$isTkp && $awardedScore >= 5) {
+                $sections[$sectionKey]['correct_answers']++;
+                $correctAnswers++;
+            } elseif (!$isTkp && $selectedOptionId !== null && $selectedOptionId > 0) {
+                $sections[$sectionKey]['wrong_answers']++;
+            }
+        }
+
+        foreach ($sections as &$section) {
+            if ($section['passing_grade'] !== null) {
+                $section['passed'] = (int) $section['score'] >= (int) $section['passing_grade'];
+            }
+        }
+        unset($section);
+
+        usort($sections, static function (array $left, array $right): int {
+            return ((int) ($left['order'] ?? 0)) <=> ((int) ($right['order'] ?? 0));
+        });
+
+        $passingSections = array_values(array_filter($sections, static function (array $section): bool {
+            return $section['passing_grade'] !== null;
+        }));
+        $passedAll = count($passingSections) > 0
+            ? count(array_filter($passingSections, static fn(array $section): bool => $section['passed'] === true)) === count($passingSections)
+            : null;
+
+        return [
+            'mode' => TestWorkflow::MODE_CPNS_CAT,
+            'scoring_type' => 'cpns_skd_points',
+            'total_questions' => count($questions),
+            'answered_count' => $answeredCount,
+            'correct_answers' => $correctAnswers,
+            'total_score' => $totalScore,
+            'max_score' => $maxScore,
+            'percentage' => $maxScore > 0 ? round(($totalScore / $maxScore) * 100, 2) : 0,
+            'passing' => [
+                'passed_all' => $passedAll,
+                'passed_count' => count(array_filter($passingSections, static fn(array $section): bool => $section['passed'] === true)),
+                'total' => count($passingSections),
+            ],
+            'sections' => $sections,
+        ];
     }
 
     private function getResultReviewItems(int $attemptId, array $attempt): array {
@@ -280,10 +492,26 @@ class TestController {
             $options = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
             $selectedOptionId = isset($row['selected_option_id']) ? (int) $row['selected_option_id'] : null;
             $correctOptionId = null;
+            $sectionCode = (string) ($row['section_code'] ?? '');
+            $sectionName = (string) ($row['section_name'] ?? '');
+            $isTkp = $this->isTkpSection($sectionCode, $sectionName);
+            $selectedRawScore = isset($row['selected_is_correct']) ? (int) ($row['selected_is_correct'] ?? 0) : 0;
+            $selectedScore = $selectedOptionId !== null
+                ? $this->getOptionScoreValue($selectedRawScore, $isTkp)
+                : 0;
 
-            $normalizedOptions = array_map(static function (array $option) use ($selectedOptionId, &$correctOptionId): array {
+            $optionScores = array_map(static function (array $option) use ($isTkp): int {
+                $rawScore = (int) ($option['is_correct'] ?? 0);
+
+                return $isTkp ? min(5, max(1, $rawScore)) : ($rawScore > 0 ? 5 : 0);
+            }, $options);
+            $bestOptionScore = count($optionScores) > 0 ? max($optionScores) : 5;
+
+            $normalizedOptions = array_map(function (array $option) use ($selectedOptionId, &$correctOptionId, $isTkp, $bestOptionScore): array {
                 $optionId = (int) ($option['id'] ?? 0);
-                $isCorrect = !empty($option['is_correct']);
+                $rawScore = (int) ($option['is_correct'] ?? 0);
+                $scoreValue = $this->getOptionScoreValue($rawScore, $isTkp);
+                $isCorrect = !$isTkp && $scoreValue > 0;
                 if ($isCorrect) {
                     $correctOptionId = $optionId;
                 }
@@ -294,6 +522,8 @@ class TestController {
                     'text' => (string) ($option['text'] ?? ''),
                     'image_url' => ($option['image_url'] ?? null) ?: null,
                     'is_correct' => $isCorrect,
+                    'score_value' => $scoreValue,
+                    'is_best_score' => $isTkp && $scoreValue === $bestOptionScore,
                     'is_selected' => $selectedOptionId !== null && $optionId === $selectedOptionId,
                 ];
             }, $options);
@@ -303,14 +533,17 @@ class TestController {
                 'question_text' => (string) ($row['question_text'] ?? ''),
                 'question_image_url' => ($row['question_image_url'] ?? null) ?: null,
                 'question_image_layout' => (string) ($row['question_image_layout'] ?? 'top'),
-                'section_code' => (string) ($row['section_code'] ?? ''),
-                'section_name' => (string) ($row['section_name'] ?? ''),
+                'section_code' => $sectionCode,
+                'section_name' => $sectionName,
                 'section_order' => (int) ($row['section_order'] ?? 1),
                 'explanation_notes' => trim((string) ($row['explanation_notes'] ?? '')),
                 'selected_option_id' => $selectedOptionId,
                 'correct_option_id' => $correctOptionId,
                 'is_answered' => $selectedOptionId !== null && $selectedOptionId > 0,
-                'is_correct' => isset($row['selected_is_correct']) ? (int) ($row['selected_is_correct'] ?? 0) === 1 : false,
+                'is_correct' => !$isTkp && $selectedScore >= 5,
+                'scoring_type' => $isTkp ? 'point' : 'correct_wrong',
+                'score_awarded' => $selectedScore,
+                'max_score' => $bestOptionScore,
                 'options' => $normalizedOptions,
             ];
         }
@@ -560,16 +793,29 @@ class TestController {
             }
 
             $packageQuestionIds = $this->getPackageQuestionIds((int) $attempt['package_id']);
-            $correctQuery = 'SELECT COUNT(*) AS total FROM user_answers WHERE attempt_id = ? AND is_correct = 1';
-            $stmt = $this->mysqli->prepare($correctQuery);
-            $stmt->bind_param('i', $attemptId);
-            $stmt->execute();
-            $correctRow = $stmt->get_result()->fetch_assoc();
+            $workflowMode = (string) ($workflow['mode'] ?? TestWorkflow::MODE_STANDARD);
 
-            $totalQuestions = count($packageQuestionIds);
-            $correctAnswers = (int) ($correctRow['total'] ?? 0);
-            $percentage = $totalQuestions > 0 ? ($correctAnswers / $totalQuestions) * 100 : 0;
-            $score = round($percentage, 2);
+            if ($workflowMode === TestWorkflow::MODE_CPNS_CAT) {
+                $scoreDetails = $this->calculateCpnsScoreDetails($attemptId, $attempt);
+                $totalQuestions = (int) ($scoreDetails['total_questions'] ?? count($packageQuestionIds));
+                $correctAnswers = (int) ($scoreDetails['correct_answers'] ?? 0);
+                $percentage = (float) ($scoreDetails['percentage'] ?? 0);
+                $score = round((float) ($scoreDetails['total_score'] ?? 0), 2);
+            } else {
+                $correctQuery = 'SELECT COUNT(*) AS total FROM user_answers WHERE attempt_id = ? AND is_correct = 1';
+                $stmt = $this->mysqli->prepare($correctQuery);
+                $stmt->bind_param('i', $attemptId);
+                $stmt->execute();
+                $correctRow = $stmt->get_result()->fetch_assoc();
+
+                $totalQuestions = count($packageQuestionIds);
+                $correctAnswers = (int) ($correctRow['total'] ?? 0);
+                $percentage = $totalQuestions > 0 ? ($correctAnswers / $totalQuestions) * 100 : 0;
+                $score = round($percentage, 2);
+                $scoreDetails = $this->buildLegacyScoreDetails($attemptId, $attempt, $totalQuestions, $correctAnswers, $score, $percentage);
+            }
+
+            $scoreDetailsJson = json_encode($scoreDetails, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
             $updateAttempt = $this->mysqli->prepare(
                 "UPDATE test_attempts SET status = 'completed', end_time = NOW() WHERE id = ?"
@@ -578,11 +824,11 @@ class TestController {
             $updateAttempt->execute();
 
             $insertResult = $this->mysqli->prepare(
-                'INSERT INTO test_results (attempt_id, user_id, package_id, total_questions, correct_answers, score, percentage, time_taken)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, TIMESTAMPDIFF(SECOND, ?, NOW()))'
+                'INSERT INTO test_results (attempt_id, user_id, package_id, total_questions, correct_answers, score, percentage, score_details_json, time_taken)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, TIMESTAMPDIFF(SECOND, ?, NOW()))'
             );
             $insertResult->bind_param(
-                'iiiiidds',
+                'iiiiiddss',
                 $attemptId,
                 $userId,
                 $attempt['package_id'],
@@ -590,6 +836,7 @@ class TestController {
                 $correctAnswers,
                 $score,
                 $percentage,
+                $scoreDetailsJson,
                 $attempt['start_time']
             );
             $insertResult->execute();

@@ -845,6 +845,7 @@ class AuthController {
                     tr.correct_answers,
                     tr.score,
                     tr.percentage,
+                    tr.score_details_json,
                     tr.created_at AS result_created_at
                   FROM test_attempts ta
                   JOIN test_packages tp ON tp.id = ta.package_id

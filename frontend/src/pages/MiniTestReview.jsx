@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../api';
 
-function ReviewOption({ option }) {
-  const optionClasses = option.is_correct
+function ReviewOption({ option, isPointQuestion = false }) {
+  const optionClasses = !isPointQuestion && option.is_correct
     ? 'border-green-300 bg-green-50'
     : option.is_selected
-    ? 'border-red-200 bg-red-50'
+    ? isPointQuestion ? 'border-blue-200 bg-blue-50' : 'border-red-200 bg-red-50'
     : 'border-gray-200 bg-gray-50';
 
   return (
@@ -29,7 +29,12 @@ function ReviewOption({ option }) {
               Jawaban Anda
             </span>
           )}
-          {option.is_correct && (
+          {isPointQuestion && (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {Number(option.score_value || 0)} poin
+            </span>
+          )}
+          {!isPointQuestion && option.is_correct && (
             <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
               Jawaban Benar
             </span>
@@ -86,6 +91,7 @@ export default function MiniTestReview() {
   const result = reviewData?.result || {};
   const totalQuestions = Number(result.total_questions || reviewItems.length || 0);
   const correctAnswers = Number(result.correct_answers || 0);
+  const isPointReview = result.scoring_type === 'point' || activeItem?.scoring_type === 'point';
   const unansweredCount = reviewItems.filter((item) => !item.is_answered).length;
   const wrongAnswers = Math.max(0, totalQuestions - correctAnswers - unansweredCount);
 
@@ -119,9 +125,15 @@ export default function MiniTestReview() {
     );
   }
 
-  const activeStatusLabel = !activeItem.is_answered ? 'Tidak Dijawab' : activeItem.is_correct ? 'Benar' : 'Salah';
+  const activeStatusLabel = !activeItem.is_answered
+    ? 'Tidak Dijawab'
+    : isPointReview
+    ? `${Number(activeItem.score_awarded || 0)} poin`
+    : activeItem.is_correct ? 'Benar' : 'Salah';
   const activeStatusClasses = !activeItem.is_answered
     ? 'bg-gray-100 text-gray-700'
+    : isPointReview
+    ? 'bg-blue-100 text-blue-700'
     : activeItem.is_correct
     ? 'bg-green-100 text-green-700'
     : 'bg-red-100 text-red-700';
@@ -155,14 +167,31 @@ export default function MiniTestReview() {
               <p className="text-sm text-gray-600">Total Soal</p>
               <p className="mt-1 text-2xl font-bold text-gray-900">{totalQuestions}</p>
             </div>
-            <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
-              <p className="text-sm text-green-700">Jawaban Benar</p>
-              <p className="mt-1 text-2xl font-bold text-green-700">{correctAnswers}</p>
-            </div>
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-              <p className="text-sm text-red-700">Jawaban Salah</p>
-              <p className="mt-1 text-2xl font-bold text-red-700">{wrongAnswers}</p>
-            </div>
+            {isPointReview ? (
+              <>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                  <p className="text-sm text-blue-700">Total Poin</p>
+                  <p className="mt-1 text-2xl font-bold text-blue-700">
+                    {Number(result.score || 0)} / {Number(result.max_score || 0)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm text-slate-700">Persentase Poin</p>
+                  <p className="mt-1 text-2xl font-bold text-slate-700">{Number(result.percentage || 0).toFixed(1)}%</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+                  <p className="text-sm text-green-700">Jawaban Benar</p>
+                  <p className="mt-1 text-2xl font-bold text-green-700">{correctAnswers}</p>
+                </div>
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                  <p className="text-sm text-red-700">Jawaban Salah</p>
+                  <p className="mt-1 text-2xl font-bold text-red-700">{wrongAnswers}</p>
+                </div>
+              </>
+            )}
             <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
               <p className="text-sm text-gray-600">Belum Dijawab</p>
               <p className="mt-1 text-2xl font-bold text-gray-900">{unansweredCount}</p>
@@ -174,7 +203,7 @@ export default function MiniTestReview() {
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Navigasi Soal</h2>
-              <p className="text-sm text-gray-600">Hijau berarti benar, merah berarti salah, abu berarti tidak dijawab.</p>
+              <p className="text-sm text-gray-600">Hijau berarti benar, merah berarti salah, biru berarti soal berpoin TKP, abu berarti tidak dijawab.</p>
             </div>
             <p className="text-sm font-semibold text-gray-500">
               Soal aktif: {activeItem.number} / {reviewItems.length}
@@ -185,6 +214,8 @@ export default function MiniTestReview() {
             {reviewItems.map((item, index) => {
               const chipClasses = !item.is_answered
                 ? 'border-gray-200 bg-gray-100 text-gray-700'
+                : item.scoring_type === 'point'
+                ? 'border-blue-300 bg-blue-100 text-blue-800'
                 : item.is_correct
                 ? 'border-green-300 bg-green-100 text-green-800'
                 : 'border-red-300 bg-red-100 text-red-800';
@@ -241,7 +272,11 @@ export default function MiniTestReview() {
 
           <div className="space-y-3">
             {activeItem.options.map((option) => (
-              <ReviewOption key={option.id || `${activeItem.id}-${option.letter}`} option={option} />
+              <ReviewOption
+                key={option.id || `${activeItem.id}-${option.letter}`}
+                option={option}
+                isPointQuestion={isPointReview}
+              />
             ))}
           </div>
 

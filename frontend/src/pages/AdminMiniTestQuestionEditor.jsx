@@ -4,12 +4,69 @@ import AccountShell from '../components/AccountShell';
 import apiClient from '../api';
 import { downloadQuestionExtractFile, hasQuestionExtractContent } from '../utils/questionExtract';
 
-const createOption = (index, text = '', isCorrect = false, imageUrl = '') => ({
+const clampPointValue = (value, fallback = 1) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+
+  return Math.min(5, Math.max(1, Math.round(numericValue)));
+};
+
+const createOption = (index, text = '', isCorrect = false, imageUrl = '', scoreWeight = index + 1) => ({
   letter: String.fromCharCode(65 + index),
   text,
   image_url: imageUrl,
   is_correct: isCorrect,
+  score_weight: clampPointValue(scoreWeight, Math.min(5, index + 1)),
 });
+
+const TKP_PATTERN = /(^|[^a-z0-9])tkp([^a-z0-9]|$)|karakteristik pribadi/i;
+
+function isTkpSection(section) {
+  if (!section) {
+    return false;
+  }
+
+  return TKP_PATTERN.test(`${section.code || ''} ${section.name || ''}`);
+}
+
+function getOptionScoreWeight(option, fallback = 1) {
+  if (option?.score_weight != null) {
+    return clampPointValue(option.score_weight, fallback);
+  }
+
+  const rawCorrectValue = option?.is_correct;
+  const numericCorrectValue = Number(rawCorrectValue);
+  if (Number.isFinite(numericCorrectValue) && numericCorrectValue > 1) {
+    return clampPointValue(numericCorrectValue, fallback);
+  }
+
+  return rawCorrectValue ? 5 : fallback;
+}
+
+function normalizeOptionsForScoringMode(options, usesPointScoring) {
+  const normalizedOptions = (options || []).map((option, index) => ({
+    ...option,
+    letter: option.letter || String.fromCharCode(65 + index),
+    score_weight: getOptionScoreWeight(option, Math.min(5, index + 1)),
+    is_correct: Boolean(option.is_correct),
+  }));
+
+  if (usesPointScoring) {
+    return normalizedOptions.map((option, index) => ({
+      ...option,
+      score_weight: getOptionScoreWeight(option, Math.min(5, index + 1)),
+      is_correct: false,
+    }));
+  }
+
+  const correctIndex = normalizedOptions.findIndex((option) => Boolean(option.is_correct));
+  return normalizedOptions.map((option, index) => ({
+    ...option,
+    is_correct: correctIndex >= 0 ? index === correctIndex : index === 0,
+  }));
+}
 
 const createEmptyLearningQuestion = (order = 1) => ({
   id: null,
@@ -81,7 +138,8 @@ function questionToForm(question, fallbackOrder = 1) {
         letter: option.letter || String.fromCharCode(65 + index),
         text: option.text || '',
         image_url: option.image_url || '',
-        is_correct: Boolean(Number(option.is_correct)),
+        is_correct: Number(option.is_correct) > 0,
+        score_weight: getOptionScoreWeight(option, Math.min(5, index + 1)),
       }))
     : [
         createOption(0),
@@ -128,6 +186,7 @@ export default function AdminMiniTestQuestionEditor() {
     () => sections.find((section) => String(section.code) === String(sectionCode)) || null,
     [sectionCode, sections]
   );
+  const usesPointScoring = isTkpSection(activeSection);
   const selectedQuestion = useMemo(
     () => sectionQuestions.find((question) => Number(question.id) === numericQuestionId) || null,
     [numericQuestionId, sectionQuestions]
@@ -202,7 +261,11 @@ export default function AdminMiniTestQuestionEditor() {
     if (isCreating) {
       const draftQuestion = draftIndex >= 0 ? sectionQuestions[draftIndex] || null : null;
       const fallbackOrder = draftIndex >= 0 ? draftIndex + 1 : sectionQuestions.length + 1;
-      const nextForm = draftQuestion ? questionToForm(draftQuestion, fallbackOrder) : createEmptyLearningQuestion(fallbackOrder);
+      const rawNextForm = draftQuestion ? questionToForm(draftQuestion, fallbackOrder) : createEmptyLearningQuestion(fallbackOrder);
+      const nextForm = {
+        ...rawNextForm,
+        options: normalizeOptionsForScoringMode(rawNextForm.options, usesPointScoring),
+      };
       setQuestionForm(nextForm);
       setShowQuestionImageTools(Boolean(nextForm.question_image_url));
       setOpenOptionImageEditors(buildOptionImageEditorState(nextForm.options));
@@ -214,11 +277,15 @@ export default function AdminMiniTestQuestionEditor() {
       return;
     }
 
-    const nextForm = questionToForm(selectedQuestion, selectedQuestion.question_order || 1);
+    const rawNextForm = questionToForm(selectedQuestion, selectedQuestion.question_order || 1);
+    const nextForm = {
+      ...rawNextForm,
+      options: normalizeOptionsForScoringMode(rawNextForm.options, usesPointScoring),
+    };
     setQuestionForm(nextForm);
     setShowQuestionImageTools(Boolean(nextForm.question_image_url));
     setOpenOptionImageEditors(buildOptionImageEditorState(nextForm.options));
-  }, [activeSection, draftIndex, isCreating, loading, sectionQuestions, selectedQuestion]);
+  }, [activeSection, draftIndex, isCreating, loading, sectionQuestions, selectedQuestion, usesPointScoring]);
 
   const handleExtractDownload = () => {
     if (!canExtractQuestion) {
@@ -293,7 +360,10 @@ export default function AdminMiniTestQuestionEditor() {
 
       return {
         ...current,
-        options: [...current.options, createOption(current.options.length)],
+        options: normalizeOptionsForScoringMode(
+          [...current.options, createOption(current.options.length)],
+          usesPointScoring
+        ),
       };
     });
   };
@@ -320,13 +390,13 @@ export default function AdminMiniTestQuestionEditor() {
           letter: String.fromCharCode(65 + optionIndex),
         }));
 
-      if (!nextOptions.some((option) => option.is_correct) && nextOptions[0]) {
+      if (!usesPointScoring && !nextOptions.some((option) => option.is_correct) && nextOptions[0]) {
         nextOptions[0].is_correct = true;
       }
 
       return {
         ...current,
-        options: nextOptions,
+        options: normalizeOptionsForScoringMode(nextOptions, usesPointScoring),
       };
     });
   };
@@ -416,7 +486,8 @@ export default function AdminMiniTestQuestionEditor() {
         letter: option.letter || String.fromCharCode(65 + index),
         text: option.text,
         image_url: option.image_url,
-        is_correct: option.is_correct,
+        is_correct: usesPointScoring ? getOptionScoreWeight(option, Math.min(5, index + 1)) : option.is_correct,
+        score_weight: usesPointScoring ? getOptionScoreWeight(option, Math.min(5, index + 1)) : (option.is_correct ? 5 : 0),
       })),
     };
 
@@ -546,7 +617,9 @@ export default function AdminMiniTestQuestionEditor() {
                     <div key={option.id || `${selectedQuestion.id}-${option.letter}`} className="admin-option-preview-card">
                       <div className="admin-option-preview-head">
                         <strong>{option.letter}.</strong>
-                        {Number(option.is_correct) === 1 && (
+                        {usesPointScoring ? (
+                          <span className="admin-correct-badge">{getOptionScoreWeight(option)} poin</span>
+                        ) : Number(option.is_correct) > 0 && (
                           <span className="admin-correct-badge">Jawaban Benar</span>
                         )}
                       </div>
@@ -689,13 +762,29 @@ export default function AdminMiniTestQuestionEditor() {
                     return (
                       <div key={`${option.letter}-mini-test-${index}`} className="admin-option-editor-card admin-option-editor-card-inline">
                         <div className="admin-option-row admin-option-row-rich">
-                          <button
-                            type="button"
-                            className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
-                            onClick={() => handleCorrectOptionChange(index)}
-                          >
-                            {option.is_correct ? 'Benar' : 'Pilih'}
-                          </button>
+                          {usesPointScoring ? (
+                            <label className="admin-point-control">
+                              <span>Poin</span>
+                              <select
+                                value={getOptionScoreWeight(option, Math.min(5, index + 1))}
+                                onChange={(event) => handleOptionFieldChange(index, 'score_weight', Number(event.target.value))}
+                              >
+                                {[1, 2, 3, 4, 5].map((point) => (
+                                  <option key={point} value={point}>
+                                    {point}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : (
+                            <button
+                              type="button"
+                              className={`admin-correct-toggle ${option.is_correct ? 'admin-correct-toggle-active' : ''}`}
+                              onClick={() => handleCorrectOptionChange(index)}
+                            >
+                              {option.is_correct ? 'Benar' : 'Pilih'}
+                            </button>
+                          )}
                           <span className="admin-option-letter">{option.letter}</span>
                           <div className="admin-option-input-stack">
                             <input

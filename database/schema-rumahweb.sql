@@ -230,6 +230,7 @@ CREATE TABLE test_results (
   correct_answers INT NOT NULL,
   score DECIMAL(5,2) NOT NULL,
   percentage DECIMAL(5,2) NOT NULL,
+  score_details_json LONGTEXT NULL,
   time_taken INT COMMENT 'dalam detik',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (attempt_id) REFERENCES test_attempts(id) ON DELETE CASCADE,

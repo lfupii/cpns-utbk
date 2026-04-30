@@ -243,7 +243,7 @@ class AdminController {
                 $letter = (string) ($option['letter'] ?? 'A');
                 $text = (string) ($option['text'] ?? '');
                 $imageUrl = ($option['image_url'] ?? null) ?: null;
-                $isCorrect = !empty($option['is_correct']) ? 1 : 0;
+                $isCorrect = (int) ($option['is_correct'] ?? 0);
                 $insertOption->bind_param('isssi', $draftQuestionId, $letter, $text, $imageUrl, $isCorrect);
                 $insertOption->execute();
             }
@@ -451,6 +451,50 @@ class AdminController {
         ];
 
         return in_array($mode, $allowedModes, true) ? $mode : TestWorkflow::MODE_STANDARD;
+    }
+
+    private function isTkpSection(?string $sectionCode, ?string $sectionName = null): bool {
+        $haystack = strtolower(trim((string) $sectionCode . ' ' . (string) $sectionName));
+
+        return preg_match('/(^|[^a-z0-9])tkp([^a-z0-9]|$)/', $haystack) === 1
+            || strpos($haystack, 'karakteristik pribadi') !== false;
+    }
+
+    private function normalizePointValue($value, int $fallback = 1): int {
+        if (is_bool($value)) {
+            return $value ? 5 : $fallback;
+        }
+
+        if (is_numeric($value)) {
+            return min(5, max(1, (int) $value));
+        }
+
+        $normalized = strtolower(trim((string) $value));
+        if ($normalized === 'true' || $normalized === 'benar') {
+            return 5;
+        }
+
+        if ($normalized === 'false' || $normalized === 'salah' || $normalized === '') {
+            return $fallback;
+        }
+
+        return min(5, max(1, (int) $normalized));
+    }
+
+    private function readOptionPointValue(array $option, int $fallback = 1): int {
+        if (array_key_exists('score_weight', $option)) {
+            return $this->normalizePointValue($option['score_weight'], $fallback);
+        }
+
+        if (array_key_exists('point', $option)) {
+            return $this->normalizePointValue($option['point'], $fallback);
+        }
+
+        if (array_key_exists('points', $option)) {
+            return $this->normalizePointValue($option['points'], $fallback);
+        }
+
+        return $this->normalizePointValue($option['is_correct'] ?? null, $fallback);
     }
 
     private function getWorkflowSection(int $packageId, string $sectionCode, string $workspace = self::WORKSPACE_PUBLISHED): array {
@@ -806,7 +850,7 @@ class AdminController {
                 'letter' => strtoupper(substr($letter, 0, 5)),
                 'text' => trim((string) ($option['text'] ?? '')),
                 'image_url' => trim((string) ($option['image_url'] ?? '')),
-                'is_correct' => !empty($option['is_correct']) ? 1 : 0,
+                'is_correct' => (int) ($option['is_correct'] ?? 0),
             ];
         }
 
@@ -831,7 +875,7 @@ class AdminController {
                 'letter' => strtoupper(substr($letter, 0, 5)),
                 'text' => trim((string) ($option['text'] ?? '')),
                 'image_url' => trim((string) ($option['image_url'] ?? '')),
-                'is_correct' => !empty($option['is_correct']) ? 1 : 0,
+                'is_correct' => (int) ($option['is_correct'] ?? 0),
             ];
         }
 
@@ -999,7 +1043,7 @@ class AdminController {
         return $normalized;
     }
 
-    private function normalizeLearningQuestionPayload(array $data, int $order): array {
+    private function normalizeLearningQuestionPayload(array $data, int $order, bool $usesPointScoring = false): array {
         $questionText = trim((string) ($data['question_text'] ?? ''));
         $questionImageUrl = $this->normalizeMediaUrl($data['question_image_url'] ?? null);
         $explanationNotes = trim((string) ($data['explanation_notes'] ?? ''));
@@ -1025,13 +1069,15 @@ class AdminController {
             $letter = strtoupper(substr(trim((string) ($option['letter'] ?? chr(65 + $index))), 0, 5));
             $text = trim((string) ($option['text'] ?? ''));
             $imageUrl = $this->normalizeMediaUrl($option['image_url'] ?? null);
-            $isCorrect = !empty($option['is_correct']);
+            $scoreValue = $usesPointScoring
+                ? $this->readOptionPointValue($option, min(5, $index + 1))
+                : (!empty($option['is_correct']) ? 1 : 0);
 
             if ($text === '' && $imageUrl === null) {
                 continue;
             }
 
-            if ($isCorrect) {
+            if (!$usesPointScoring && $scoreValue > 0) {
                 $correctCount++;
             }
 
@@ -1039,7 +1085,7 @@ class AdminController {
                 'letter' => $letter,
                 'text' => $text,
                 'image_url' => $imageUrl,
-                'is_correct' => $isCorrect ? 1 : 0,
+                'is_correct' => $scoreValue,
             ];
         }
 
@@ -1047,7 +1093,7 @@ class AdminController {
             sendResponse('error', 'Mini test minimal memiliki 2 opsi berisi teks atau gambar', null, 422);
         }
 
-        if ($correctCount !== 1) {
+        if (!$usesPointScoring && $correctCount !== 1) {
             sendResponse('error', 'Setiap soal mini test harus memiliki tepat 1 jawaban benar', null, 422);
         }
 
@@ -1116,6 +1162,11 @@ class AdminController {
             throw new RuntimeException('Bagian/subtes soal tidak valid untuk paket ini', 422);
         }
 
+        $usesPointScoring = $this->isTkpSection(
+            $sectionCode,
+            (string) ($sectionLookup[$sectionCode]['name'] ?? '')
+        );
+
         if (!is_array($options) || count($options) < 2) {
             throw new RuntimeException('Minimal harus ada 2 opsi jawaban', 422);
         }
@@ -1126,7 +1177,9 @@ class AdminController {
             $letter = trim((string) ($option['letter'] ?? ''));
             $text = trim((string) ($option['text'] ?? ''));
             $imageUrl = $this->normalizeMediaUrl($option['image_url'] ?? null);
-            $isCorrect = !empty($option['is_correct']);
+            $scoreValue = $usesPointScoring
+                ? $this->readOptionPointValue($option, min(5, $index + 1))
+                : (!empty($option['is_correct']) ? 1 : 0);
 
             if ($letter === '') {
                 $letter = chr(65 + $index);
@@ -1136,7 +1189,7 @@ class AdminController {
                 throw new RuntimeException('Setiap opsi jawaban harus memiliki teks atau gambar', 422);
             }
 
-            if ($isCorrect) {
+            if (!$usesPointScoring && $scoreValue > 0) {
                 $correctCount++;
             }
 
@@ -1144,11 +1197,11 @@ class AdminController {
                 'letter' => strtoupper(substr($letter, 0, 5)),
                 'text' => $text,
                 'image_url' => $imageUrl,
-                'is_correct' => $isCorrect ? 1 : 0,
+                'is_correct' => $scoreValue,
             ];
         }
 
-        if ($correctCount !== 1) {
+        if (!$usesPointScoring && $correctCount !== 1) {
             throw new RuntimeException('Harus ada tepat 1 jawaban benar', 422);
         }
 
@@ -2103,7 +2156,11 @@ class AdminController {
             $this->ensurePackageDraftExists($packageId);
         }
 
-        $this->getWorkflowSection($packageId, $sectionCode, $workspace);
+        [, , $workflowSection] = $this->getWorkflowSection($packageId, $sectionCode, $workspace);
+        $usesPointScoring = $this->isTkpSection(
+            (string) ($workflowSection['code'] ?? $sectionCode),
+            (string) ($workflowSection['name'] ?? '')
+        );
         if (!is_array($questions) || count($questions) < 1) {
             sendResponse('error', 'Minimal isi 1 soal mini test', null, 422);
         }
@@ -2114,7 +2171,7 @@ class AdminController {
                 sendResponse('error', 'Format soal mini test tidak valid', null, 422);
             }
 
-            $normalizedQuestions[] = $this->normalizeLearningQuestionPayload($question, $index + 1);
+            $normalizedQuestions[] = $this->normalizeLearningQuestionPayload($question, $index + 1, $usesPointScoring);
         }
 
         $this->mysqli->begin_transaction();
@@ -2325,7 +2382,7 @@ class AdminController {
                 $letter = (string) ($option['letter'] ?? 'A');
                 $text = (string) ($option['text'] ?? '');
                 $imageUrl = ($option['image_url'] ?? null) ?: null;
-                $isCorrect = !empty($option['is_correct']) ? 1 : 0;
+                $isCorrect = (int) ($option['is_correct'] ?? 0);
                 $insertOption->bind_param('isssi', $publishedQuestionId, $letter, $text, $imageUrl, $isCorrect);
                 $insertOption->execute();
             }

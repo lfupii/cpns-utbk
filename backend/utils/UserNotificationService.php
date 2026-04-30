@@ -51,20 +51,55 @@ class UserNotificationService {
         $wrongAnswers = max(0, $totalQuestions - $correctAnswers);
         $percentage = number_format((float) ($payload['percentage'] ?? 0), 2, ',', '.');
         $score = number_format((float) ($payload['score'] ?? 0), 2, ',', '.');
+        $scoreDetails = self::decodeScoreDetails($payload['score_details_json'] ?? null);
+        $isCpnsPointScore = ($scoreDetails['scoring_type'] ?? '') === 'cpns_skd_points';
+        $totalScore = $isCpnsPointScore
+            ? number_format((float) ($scoreDetails['total_score'] ?? $payload['score'] ?? 0), 0, ',', '.')
+            : $score;
+        $maxScore = $isCpnsPointScore
+            ? number_format((float) ($scoreDetails['max_score'] ?? 0), 0, ',', '.')
+            : null;
+        $passing = is_array($scoreDetails['passing'] ?? null) ? $scoreDetails['passing'] : [];
+        $passedAll = $passing['passed_all'] ?? null;
+        $passingLabel = $passedAll === null
+            ? '-'
+            : ($passedAll ? 'Lulus passing grade semua subtest' : 'Belum lulus passing grade semua subtest');
         $completedAt = trim((string) ($payload['completed_at'] ?? ''));
         $timeTaken = self::formatDuration((int) ($payload['time_taken'] ?? 0));
         $prayer = self::resolvePrayer($categoryName, $packageName);
-
-        $htmlBody = self::wrapTemplate(
-            'Hasil tryout kamu sudah siap',
-            '
-                <p>Halo <strong>' . self::escape($fullName) . '</strong>,</p>
-                <p>Terima kasih sudah berlatih bersama <strong>Ujiin</strong>. Berikut hasil tryout kamu untuk paket <strong>' . self::escape($packageName) . '</strong>.</p>
-                <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#f8fafc;border-radius:14px;overflow:hidden;">
+        $sectionRowsHtml = self::buildCpnsSectionRowsHtml($scoreDetails);
+        $sectionRowsText = self::buildCpnsSectionRowsText($scoreDetails);
+        $scoreRowsHtml = $isCpnsPointScore
+            ? '
                     <tr>
-                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Kategori</strong></td>
-                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . self::escape($categoryName) . '</td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Total skor</strong></td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . self::escape($totalScore . ($maxScore ? ' / ' . $maxScore : '')) . ' poin</td>
                     </tr>
+                    <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Status PG</strong></td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . self::escape($passingLabel) . '</td>
+                    </tr>'
+            : '
+                    <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Skor</strong></td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . $score . '</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Persentase</strong></td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . $percentage . '%</td>
+                    </tr>';
+        $answeredCount = (int) ($scoreDetails['answered_count'] ?? max(0, $totalQuestions - $wrongAnswers));
+        $answerRowsHtml = $isCpnsPointScore
+            ? '
+                    <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Total soal</strong></td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . $totalQuestions . '</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Terjawab</strong></td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . $answeredCount . '</td>
+                    </tr>'
+            : '
                     <tr>
                         <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Total soal</strong></td>
                         <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . $totalQuestions . '</td>
@@ -76,15 +111,23 @@ class UserNotificationService {
                     <tr>
                         <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Jawaban salah / kosong</strong></td>
                         <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . $wrongAnswers . '</td>
-                    </tr>
+                    </tr>';
+        $answerRowsText = $isCpnsPointScore
+            ? "- Total soal: {$totalQuestions}\n- Terjawab: {$answeredCount}\n"
+            : "- Total soal: {$totalQuestions}\n- Jawaban benar: {$correctAnswers}\n- Jawaban salah/kosong: {$wrongAnswers}\n";
+
+        $htmlBody = self::wrapTemplate(
+            'Hasil tryout kamu sudah siap',
+            '
+                <p>Halo <strong>' . self::escape($fullName) . '</strong>,</p>
+                <p>Terima kasih sudah berlatih bersama <strong>Ujiin</strong>. Berikut hasil tryout kamu untuk paket <strong>' . self::escape($packageName) . '</strong>.</p>
+                <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#f8fafc;border-radius:14px;overflow:hidden;">
                     <tr>
-                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Skor</strong></td>
-                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . $score . '</td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Kategori</strong></td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . self::escape($categoryName) . '</td>
                     </tr>
-                    <tr>
-                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Persentase</strong></td>
-                        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . $percentage . '%</td>
-                    </tr>
+                    ' . $answerRowsHtml . '
+                    ' . $scoreRowsHtml . '
                     <tr>
                         <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Waktu pengerjaan</strong></td>
                         <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' . self::escape($timeTaken) . '</td>
@@ -94,6 +137,7 @@ class UserNotificationService {
                         <td style="padding:12px 16px;">' . self::escape($completedAt !== '' ? $completedAt : '-') . '</td>
                     </tr>
                 </table>
+                ' . $sectionRowsHtml . '
                 <p>Terima kasih telah mempercayakan proses latihanmu bersama <strong>Ujiin</strong>. Setiap tryout yang kamu kerjakan adalah langkah nyata untuk memperkuat kesiapanmu.</p>
                 <p>' . self::escape($prayer) . '</p>
             '
@@ -103,11 +147,11 @@ class UserNotificationService {
             . "Terima kasih sudah berlatih bersama Ujiin.\n"
             . "Berikut hasil tryout {$packageName}:\n"
             . "- Kategori: {$categoryName}\n"
-            . "- Total soal: {$totalQuestions}\n"
-            . "- Jawaban benar: {$correctAnswers}\n"
-            . "- Jawaban salah/kosong: {$wrongAnswers}\n"
-            . "- Skor: {$score}\n"
-            . "- Persentase: {$percentage}%\n"
+            . $answerRowsText
+            . ($isCpnsPointScore
+                ? "- Total skor: {$totalScore}" . ($maxScore ? " / {$maxScore}" : "") . " poin\n- Status PG: {$passingLabel}\n"
+                : "- Skor: {$score}\n- Persentase: {$percentage}%\n")
+            . $sectionRowsText
             . "- Waktu pengerjaan: {$timeTaken}\n"
             . "- Selesai pada: " . ($completedAt !== '' ? $completedAt : '-') . "\n\n"
             . "Terima kasih telah mempercayakan proses latihanmu bersama Ujiin.\n"
@@ -120,6 +164,78 @@ class UserNotificationService {
             $htmlBody,
             $textBody
         );
+    }
+
+    private static function decodeScoreDetails($raw): ?array {
+        $decoded = json_decode((string) ($raw ?? ''), true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    private static function buildCpnsSectionRowsHtml(?array $scoreDetails): string {
+        if (($scoreDetails['scoring_type'] ?? '') !== 'cpns_skd_points' || !is_array($scoreDetails['sections'] ?? null)) {
+            return '';
+        }
+
+        $rows = '';
+        foreach ($scoreDetails['sections'] as $section) {
+            if (!is_array($section)) {
+                continue;
+            }
+
+            $name = (string) ($section['name'] ?? strtoupper((string) ($section['code'] ?? 'Subtest')));
+            $score = number_format((float) ($section['score'] ?? 0), 0, ',', '.');
+            $maxScore = number_format((float) ($section['max_score'] ?? 0), 0, ',', '.');
+            $passingGrade = $section['passing_grade'] ?? null;
+            $passed = $section['passed'] ?? null;
+            $status = $passed === null ? '-' : ($passed ? 'Lulus' : 'Belum lulus');
+
+            $rows .= '<tr>'
+                . '<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">' . self::escape($name) . '</td>'
+                . '<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">' . self::escape($score . ' / ' . $maxScore) . '</td>'
+                . '<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">' . self::escape($passingGrade === null ? '-' : (string) $passingGrade) . '</td>'
+                . '<td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">' . self::escape($status) . '</td>'
+                . '</tr>';
+        }
+
+        if ($rows === '') {
+            return '';
+        }
+
+        return '
+            <p><strong>Rincian nilai per subtest</strong></p>
+            <table style="width:100%;border-collapse:collapse;margin:12px 0 20px;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+                <tr style="background:#f8fafc;">
+                    <th align="left" style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">Subtest</th>
+                    <th align="left" style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">Nilai</th>
+                    <th align="left" style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">PG</th>
+                    <th align="left" style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">Status</th>
+                </tr>
+                ' . $rows . '
+            </table>';
+    }
+
+    private static function buildCpnsSectionRowsText(?array $scoreDetails): string {
+        if (($scoreDetails['scoring_type'] ?? '') !== 'cpns_skd_points' || !is_array($scoreDetails['sections'] ?? null)) {
+            return '';
+        }
+
+        $lines = "\nRincian subtest:\n";
+        foreach ($scoreDetails['sections'] as $section) {
+            if (!is_array($section)) {
+                continue;
+            }
+
+            $name = (string) ($section['name'] ?? strtoupper((string) ($section['code'] ?? 'Subtest')));
+            $score = number_format((float) ($section['score'] ?? 0), 0, ',', '.');
+            $maxScore = number_format((float) ($section['max_score'] ?? 0), 0, ',', '.');
+            $passingGrade = $section['passing_grade'] ?? '-';
+            $passed = $section['passed'] ?? null;
+            $status = $passed === null ? '-' : ($passed ? 'Lulus' : 'Belum lulus');
+            $lines .= "- {$name}: {$score} / {$maxScore} poin, PG {$passingGrade}, {$status}\n";
+        }
+
+        return $lines . "\n";
     }
 
     private static function wrapTemplate(string $title, string $content): string {

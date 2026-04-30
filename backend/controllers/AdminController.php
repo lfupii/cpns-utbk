@@ -120,7 +120,8 @@ class AdminController {
                         'letter', qo.option_letter,
                         'text', qo.option_text,
                         'image_url', qo.option_image_url,
-                        'is_correct', qo.is_correct
+                        'is_correct', qo.is_correct,
+                        'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                       ) ORDER BY qo.id SEPARATOR ','
                     ) AS options
                   FROM questions q
@@ -205,7 +206,8 @@ class AdminController {
                         'letter', qo.option_letter,
                         'text', qo.option_text,
                         'image_url', qo.option_image_url,
-                        'is_correct', qo.is_correct
+                        'is_correct', qo.is_correct,
+                        'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                       ) ORDER BY qo.id SEPARATOR ','
                     ) AS options
                   FROM learning_section_questions q
@@ -223,8 +225,8 @@ class AdminController {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $insertOption = $this->mysqli->prepare(
-            "INSERT INTO learning_section_question_option_drafts (question_id, option_letter, option_text, option_image_url, is_correct)
-             VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO learning_section_question_option_drafts (question_id, option_letter, option_text, option_image_url, is_correct, score_weight)
+             VALUES (?, ?, ?, ?, ?, ?)"
         );
 
         while ($row = $result->fetch_assoc()) {
@@ -244,7 +246,8 @@ class AdminController {
                 $text = (string) ($option['text'] ?? '');
                 $imageUrl = ($option['image_url'] ?? null) ?: null;
                 $isCorrect = (int) ($option['is_correct'] ?? 0);
-                $insertOption->bind_param('isssi', $draftQuestionId, $letter, $text, $imageUrl, $isCorrect);
+                $scoreWeight = (int) ($option['score_weight'] ?? ($isCorrect ? 5 : 0));
+                $insertOption->bind_param('isssii', $draftQuestionId, $letter, $text, $imageUrl, $isCorrect, $scoreWeight);
                 $insertOption->execute();
             }
         }
@@ -851,6 +854,7 @@ class AdminController {
                 'text' => trim((string) ($option['text'] ?? '')),
                 'image_url' => trim((string) ($option['image_url'] ?? '')),
                 'is_correct' => (int) ($option['is_correct'] ?? 0),
+                'score_weight' => (int) ($option['score_weight'] ?? ($option['is_correct'] ? 5 : 0)),
             ];
         }
 
@@ -876,6 +880,7 @@ class AdminController {
                 'text' => trim((string) ($option['text'] ?? '')),
                 'image_url' => trim((string) ($option['image_url'] ?? '')),
                 'is_correct' => (int) ($option['is_correct'] ?? 0),
+                'score_weight' => (int) ($option['score_weight'] ?? ($option['is_correct'] ? 5 : 0)),
             ];
         }
 
@@ -1085,7 +1090,8 @@ class AdminController {
                 'letter' => $letter,
                 'text' => $text,
                 'image_url' => $imageUrl,
-                'is_correct' => $scoreValue,
+                'is_correct' => $usesPointScoring ? ($scoreValue === 5 ? 1 : 0) : $scoreValue,
+                'score_weight' => $usesPointScoring ? $scoreValue : ($scoreValue > 0 ? 5 : 0),
             ];
         }
 
@@ -1197,7 +1203,8 @@ class AdminController {
                 'letter' => strtoupper(substr($letter, 0, 5)),
                 'text' => $text,
                 'image_url' => $imageUrl,
-                'is_correct' => $scoreValue,
+                'is_correct' => $usesPointScoring ? ($scoreValue === 5 ? 1 : 0) : $scoreValue,
+                'score_weight' => $usesPointScoring ? $scoreValue : ($scoreValue > 0 ? 5 : 0),
             ];
         }
 
@@ -1255,17 +1262,19 @@ class AdminController {
         $questionId = (int) $insertQuestion->insert_id;
 
         $insertOption = $this->mysqli->prepare(sprintf(
-            'INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct) VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct, score_weight) VALUES (?, ?, ?, ?, ?, ?)',
             $tables['question_options']
         ));
         foreach ($payload['options'] as $option) {
+            $scoreWeight = (int) ($option['score_weight'] ?? ($option['is_correct'] ? 5 : 0));
             $insertOption->bind_param(
-                'isssi',
+                'isssii',
                 $questionId,
                 $option['letter'],
                 $option['text'],
                 $option['image_url'],
-                $option['is_correct']
+                $option['is_correct'],
+                $scoreWeight
             );
             $insertOption->execute();
         }
@@ -1598,7 +1607,8 @@ class AdminController {
                         'letter', qo.option_letter,
                         'text', qo.option_text,
                         'image_url', qo.option_image_url,
-                        'is_correct', qo.is_correct
+                        'is_correct', qo.is_correct,
+                        'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                       ) ORDER BY qo.id SEPARATOR ','
                   ) AS options
                   FROM %s q
@@ -1624,7 +1634,8 @@ class AdminController {
                         'letter', qo.option_letter,
                         'text', qo.option_text,
                         'image_url', qo.option_image_url,
-                        'is_correct', qo.is_correct
+                        'is_correct', qo.is_correct,
+                        'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                       ) ORDER BY qo.id SEPARATOR ','
                   ) AS options
                   FROM questions q
@@ -1648,7 +1659,8 @@ class AdminController {
                         'letter', qo.option_letter,
                         'text', qo.option_text,
                         'image_url', qo.option_image_url,
-                        'is_correct', qo.is_correct
+                        'is_correct', qo.is_correct,
+                        'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                       ) ORDER BY qo.id SEPARATOR ','
                   ) AS options
                   FROM question_drafts q
@@ -1764,16 +1776,18 @@ class AdminController {
             $deleteOptions->execute();
 
             $insertOption = $this->mysqli->prepare(
-                sprintf('INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct) VALUES (?, ?, ?, ?, ?)', $tables['question_options'])
+                sprintf('INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct, score_weight) VALUES (?, ?, ?, ?, ?, ?)', $tables['question_options'])
             );
             foreach ($payload['options'] as $option) {
+                $scoreWeight = (int) ($option['score_weight'] ?? ($option['is_correct'] ? 5 : 0));
                 $insertOption->bind_param(
-                    'isssi',
+                    'isssii',
                     $questionId,
                     $option['letter'],
                     $option['text'],
                     $option['image_url'],
-                    $option['is_correct']
+                    $option['is_correct'],
+                    $scoreWeight
                 );
                 $insertOption->execute();
             }
@@ -1959,7 +1973,8 @@ class AdminController {
                             'letter', qo.option_letter,
                             'text', qo.option_text,
                             'image_url', qo.option_image_url,
-                            'is_correct', qo.is_correct
+                            'is_correct', qo.is_correct,
+                            'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                           ) ORDER BY qo.id SEPARATOR ','
                         ) AS options
                       FROM {$questionTable} q
@@ -2205,8 +2220,8 @@ class AdminController {
             );
             $insertOption = $this->mysqli->prepare(
                 sprintf(
-                    'INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct)
-                     VALUES (?, ?, ?, ?, ?)',
+                    'INSERT INTO %s (question_id, option_letter, option_text, option_image_url, is_correct, score_weight)
+                     VALUES (?, ?, ?, ?, ?, ?)',
                     $tables['learning_question_options']
                 )
             );
@@ -2239,13 +2254,15 @@ class AdminController {
                     $text = $option['text'];
                     $imageUrl = $option['image_url'];
                     $isCorrect = $option['is_correct'];
-                    $insertOption->bind_param('isssi', $questionId, $letter, $text, $imageUrl, $isCorrect);
+                    $scoreWeight = (int) ($option['score_weight'] ?? ($isCorrect ? 5 : 0));
+                    $insertOption->bind_param('isssii', $questionId, $letter, $text, $imageUrl, $isCorrect, $scoreWeight);
                     $insertOption->execute();
                     $savedQuestion['options'][] = [
                         'letter' => $letter,
                         'text' => $text,
                         'image_url' => $imageUrl,
                         'is_correct' => $isCorrect,
+                        'score_weight' => $scoreWeight,
                     ];
                 }
 
@@ -2277,7 +2294,8 @@ class AdminController {
                         'letter', qo.option_letter,
                         'text', qo.option_text,
                         'image_url', qo.option_image_url,
-                        'is_correct', qo.is_correct
+                        'is_correct', qo.is_correct,
+                        'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                       ) ORDER BY qo.id SEPARATOR ','
                     ) AS options
                   FROM question_drafts q
@@ -2344,7 +2362,8 @@ class AdminController {
                         'letter', qo.option_letter,
                         'text', qo.option_text,
                         'image_url', qo.option_image_url,
-                        'is_correct', qo.is_correct
+                        'is_correct', qo.is_correct,
+                        'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                       ) ORDER BY qo.id SEPARATOR ','
                     ) AS options
                   FROM learning_section_question_drafts q
@@ -2362,8 +2381,8 @@ class AdminController {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $insertOption = $this->mysqli->prepare(
-            'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, option_image_url, is_correct)
-             VALUES (?, ?, ?, ?, ?)'
+            'INSERT INTO learning_section_question_options (question_id, option_letter, option_text, option_image_url, is_correct, score_weight)
+             VALUES (?, ?, ?, ?, ?, ?)'
         );
 
         while ($row = $result->fetch_assoc()) {
@@ -2383,7 +2402,8 @@ class AdminController {
                 $text = (string) ($option['text'] ?? '');
                 $imageUrl = ($option['image_url'] ?? null) ?: null;
                 $isCorrect = (int) ($option['is_correct'] ?? 0);
-                $insertOption->bind_param('isssi', $publishedQuestionId, $letter, $text, $imageUrl, $isCorrect);
+                $scoreWeight = (int) ($option['score_weight'] ?? ($isCorrect ? 5 : 0));
+                $insertOption->bind_param('isssii', $publishedQuestionId, $letter, $text, $imageUrl, $isCorrect, $scoreWeight);
                 $insertOption->execute();
             }
         }

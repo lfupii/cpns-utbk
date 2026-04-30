@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
+import BrandLogo from '../components/BrandLogo';
 import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
+import ProfileDropdown from '../components/ProfileDropdown';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
 import {
@@ -14,6 +16,184 @@ import { isMaterialPdfVisualHtml } from '../utils/materialPagination';
 
 const EMPTY_ARRAY = [];
 const EMPTY_OBJECT = {};
+const CALENDAR_WEEKDAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+const DASHBOARD_TOPIC_ACCENTS = ['blue', 'green', 'pink', 'cyan'];
+
+function LearningIcon({ name }) {
+  switch (name) {
+    case 'dashboard':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.6" />
+          <rect x="14" y="3" width="7" height="5" rx="1.6" />
+          <rect x="14" y="12" width="7" height="9" rx="1.6" />
+          <rect x="3" y="14" width="7" height="7" rx="1.6" />
+        </svg>
+      );
+    case 'book':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v15.5a.5.5 0 0 1-.8.4A6.8 6.8 0 0 0 15 18.5H6.5A2.5 2.5 0 0 1 4 16V6.5Z" />
+          <path d="M12 6v12" />
+          <path d="M12 8.2c1.1-.8 2.3-1.2 3.8-1.2H20" />
+        </svg>
+      );
+    case 'target':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8" />
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v3" />
+          <path d="m19 5-2 2" />
+          <path d="m22 12-3 0" />
+        </svg>
+      );
+    case 'history':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      );
+    case 'review':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4.5 4v-4H7.5A2.5 2.5 0 0 1 5 12.5v-6Z" />
+          <path d="M9 8h6" />
+          <path d="M9 11h4" />
+        </svg>
+      );
+    case 'package':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" />
+          <path d="m4 7.5 8 4.5 8-4.5" />
+          <path d="M12 12v9" />
+        </svg>
+      );
+    case 'profile':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20a8 8 0 0 1 16 0" />
+        </svg>
+      );
+    case 'search':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+      );
+    case 'bell':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9.5 19a2.5 2.5 0 0 0 5 0" />
+          <path d="M6 16.5h12l-1.3-1.7a4.5 4.5 0 0 1-.9-2.7V10a3.8 3.8 0 1 0-7.6 0v2.1a4.5 4.5 0 0 1-.9 2.7L6 16.5Z" />
+        </svg>
+      );
+    case 'play':
+      return (
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8.5 6.8c0-1 .95-1.62 1.8-1.17l8 4.2a1.33 1.33 0 0 1 0 2.36l-8 4.2c-.85.45-1.8-.16-1.8-1.17V6.8Z" />
+        </svg>
+      );
+    case 'arrow-left':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15 18 9 12l6-6" />
+        </svg>
+      );
+    case 'arrow-right':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      );
+    case 'spark':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m12 3 1.55 4.45L18 9l-4.45 1.55L12 15l-1.55-4.45L6 9l4.45-1.55L12 3Z" />
+          <path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" />
+        </svg>
+      );
+    case 'trophy':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 4h8v3a4 4 0 0 1-8 0V4Z" />
+          <path d="M6 6H4a2 2 0 0 0 2 4h1" />
+          <path d="M18 6h2a2 2 0 0 1-2 4h-1" />
+          <path d="M12 11v4" />
+          <path d="M9 21h6" />
+          <path d="M10 15h4v6h-4z" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function formatMonthLabel(date) {
+  try {
+    const monthLabel = new Intl.DateTimeFormat('id-ID', {
+      month: 'long',
+      year: 'numeric',
+    }).format(date);
+    return monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+  } catch (error) {
+    return '';
+  }
+}
+
+function toDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function buildCalendarDays(baseDate, activityKeys) {
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+  const todayKey = toDateKey(baseDate);
+  const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPreviousMonth = new Date(year, month, 0).getDate();
+  const calendarDays = [];
+
+  for (let index = 0; index < 42; index += 1) {
+    const dayNumber = index - firstDayIndex + 1;
+    const inCurrentMonth = dayNumber > 0 && dayNumber <= daysInMonth;
+    const cellDate = inCurrentMonth
+      ? new Date(year, month, dayNumber)
+      : dayNumber <= 0
+      ? new Date(year, month - 1, daysInPreviousMonth + dayNumber)
+      : new Date(year, month + 1, dayNumber - daysInMonth);
+    const dayKey = toDateKey(cellDate);
+
+    calendarDays.push({
+      key: dayKey,
+      label: cellDate.getDate(),
+      inCurrentMonth,
+      isToday: dayKey === todayKey,
+      hasActivity: activityKeys.has(dayKey),
+    });
+  }
+
+  return calendarDays;
+}
+
+function getFirstName(value) {
+  const normalizedName = String(value || '').trim();
+  return normalizedName.split(/\s+/)[0] || 'Pejuang';
+}
 
 function formatTime(seconds) {
   const safeSeconds = Math.max(0, Number(seconds || 0));
@@ -111,7 +291,7 @@ export default function Learning() {
   const { packageId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin, logout, user } = useAuth();
   const numericPackageId = Number(packageId);
   const previewMode = String(searchParams.get('preview') || '').trim().toLowerCase();
   const previewSectionCode = String(searchParams.get('section') || '').trim();
@@ -130,10 +310,15 @@ export default function Learning() {
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [learningSearch, setLearningSearch] = useState('');
   const sectionTestSavingRef = useRef({});
   const sectionTestPendingSaveRef = useRef({});
   const materialViewRef = useRef(null);
   const autoResumeMiniTestRef = useRef(false);
+  const deferredLearningSearch = useDeferredValue(learningSearch.trim().toLowerCase());
+  const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang UTBK';
+  const greetingName = getFirstName(displayName);
+  const viewerRoleLabel = isAdmin ? 'Admin' : 'Siswa';
   const {
     isCompactViewport,
     shouldShowDock: shouldShowFloatingDock,
@@ -331,6 +516,7 @@ export default function Learning() {
     value: formatTime(currentSectionTest.remainingSeconds),
     tone: Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'danger' : 'success',
   }), [currentSectionTest.remainingSeconds]);
+  const notificationCount = Math.max(0, Number(summary.ongoing_attempts || 0) + (hasOngoingSectionAttempt ? 1 : 0));
   const hasPreviousTopic = activeSectionView === 'material' && activeTopicIndex > 0;
   const hasNextTopic = activeSectionView === 'material' && activeTopicIndex < activeSectionTopics.length - 1;
   const isLastTopic = activeSectionView === 'material' && activeSectionTopics.length > 0 && activeTopicIndex === activeSectionTopics.length - 1;
@@ -377,6 +563,100 @@ export default function Learning() {
     [sections]
   );
   const resumeSection = lastReadSection || nextLearningSection || activeSection || null;
+  const totalTopicCount = useMemo(
+    () => sections.reduce((total, section) => total + Math.max(0, Number(section.total_topic_count || getSectionTopics(section).length || 0)), 0),
+    [sections]
+  );
+  const completedTopicCount = useMemo(
+    () => sections.reduce((total, section) => {
+      if (!section.progress.material_read) {
+        return total;
+      }
+
+      return total + Math.max(0, Number(section.total_topic_count || getSectionTopics(section).length || 0));
+    }, 0),
+    [sections]
+  );
+  const activeLearningCount = resumeSection && !resumeSection.progress.material_read ? 1 : 0;
+  const pendingSectionCount = Math.max(0, sections.length - materialDoneCount - activeLearningCount);
+  const totalEstimatedStudyMinutes = useMemo(
+    () => sections.reduce((total, section) => {
+      const materialMinutes = Math.max(0, Number(section.duration_minutes || 0));
+      const miniTestMinutes = Math.max(
+        0,
+        Math.ceil(computeMiniTestDurationSeconds(section, Number(section.mini_test_question_count || 0)) / 60)
+      );
+
+      return total + materialMinutes + miniTestMinutes;
+    }, 0),
+    [sections]
+  );
+  const completedEstimatedStudyMinutes = useMemo(
+    () => sections.reduce((total, section) => {
+      const materialMinutes = Math.max(0, Number(section.duration_minutes || 0));
+      const miniTestMinutes = Math.max(
+        0,
+        Math.ceil(computeMiniTestDurationSeconds(section, Number(section.mini_test_question_count || 0)) / 60)
+      );
+
+      return total
+        + (section.progress.material_read ? materialMinutes : 0)
+        + (section.progress.subtest_test_completed ? miniTestMinutes : 0);
+    }, 0),
+    [sections]
+  );
+  const estimatedStudyProgressPercent = totalEstimatedStudyMinutes > 0
+    ? Math.round((completedEstimatedStudyMinutes / totalEstimatedStudyMinutes) * 100)
+    : milestonePercent;
+  const filteredDashboardTopics = useMemo(() => {
+    const indexedTopics = activeSectionTopics.map((topic, topicIndex) => ({
+      topic,
+      topicIndex,
+    }));
+
+    if (!deferredLearningSearch) {
+      return indexedTopics;
+    }
+
+    return indexedTopics.filter(({ topic }) => {
+      const normalizedTitle = String(topic?.title || '').trim().toLowerCase();
+      const matchedPage = (topic.pages || []).some((page) => String(page?.title || '').trim().toLowerCase().includes(deferredLearningSearch));
+      return normalizedTitle.includes(deferredLearningSearch) || matchedPage;
+    });
+  }, [activeSectionTopics, deferredLearningSearch]);
+  const calendarBaseDate = useMemo(() => new Date(), []);
+  const learningActivityKeys = useMemo(
+    () => new Set(
+      sections
+        .flatMap((section) => [section.progress.material_read_at, section.progress.subtest_test_completed_at])
+        .map((value) => toDateKey(value))
+        .filter(Boolean)
+    ),
+    [sections]
+  );
+  const calendarDays = useMemo(
+    () => buildCalendarDays(calendarBaseDate, learningActivityKeys),
+    [calendarBaseDate, learningActivityKeys]
+  );
+  const calendarMonthLabel = useMemo(
+    () => formatMonthLabel(calendarBaseDate),
+    [calendarBaseDate]
+  );
+  const latestCompletedReviewSection = useMemo(() => {
+    const completedSections = sections
+      .filter((section) => section.progress.subtest_test_completed)
+      .sort((left, right) => {
+        const leftTime = new Date(left.progress.subtest_test_completed_at || 0).getTime();
+        const rightTime = new Date(right.progress.subtest_test_completed_at || 0).getTime();
+        return rightTime - leftTime;
+      });
+
+    return completedSections[0] || null;
+  }, [sections]);
+  const desktopSearchEnabled = contentView === 'dashboard';
+  const desktopSearchPlaceholder = desktopSearchEnabled
+    ? 'Cari materi, mini test, atau topik...'
+    : 'Pencarian cepat tersedia di dashboard';
 
   const scrollToMaterialTop = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -1022,6 +1302,133 @@ export default function Learning() {
     setContentView('dashboard');
   };
 
+  const desktopPageSubtitle = contentView === 'dashboard'
+    ? 'Lanjutkan persiapanmu hari ini.'
+    : contentView === 'tryout'
+    ? 'Kerjakan tryout keseluruhan setelah ritme belajarmu siap.'
+    : activeSectionView === 'mini-test'
+    ? `Latihan singkat ${activeSection?.session_name || activeSection?.name || 'subtest aktif'} sebelum masuk tryout.`
+    : activeTopic?.title || activeSection?.session_name || 'Baca materi per topik dan lanjutkan progresmu.';
+  const sidebarPrimaryItems = [
+    {
+      key: 'dashboard',
+      label: 'Dashboard',
+      hint: 'Ringkasan progres paket',
+      icon: 'dashboard',
+      active: contentView === 'dashboard',
+      onClick: openDashboardView,
+      disabled: false,
+    },
+    {
+      key: 'belajar',
+      label: 'Belajar',
+      hint: activeSection?.session_name || 'Buka materi aktif',
+      icon: 'book',
+      active: contentView === 'materi',
+      onClick: () => {
+        if (resumeSection?.code) {
+          jumpToSectionMaterial(resumeSection.code);
+        }
+      },
+      disabled: !resumeSection?.code,
+    },
+    {
+      key: 'tryout',
+      label: 'Tryout',
+      hint: summary.can_start_tryout ? 'Siap dikerjakan' : 'Selesaikan tahap belajar dulu',
+      icon: 'target',
+      active: contentView === 'tryout',
+      onClick: openTryoutView,
+      disabled: false,
+    },
+    {
+      key: 'history',
+      label: 'Riwayat',
+      hint: 'Cek hasil tryout dan mini test',
+      icon: 'history',
+      active: false,
+      onClick: () => navigate('/test-history'),
+      disabled: false,
+    },
+    {
+      key: 'review',
+      label: 'Pembahasan',
+      hint: latestCompletedReviewSection ? latestCompletedReviewSection.name : 'Belum ada mini test selesai',
+      icon: 'review',
+      active: false,
+      onClick: () => {
+        if (latestCompletedReviewSection) {
+          navigate(`/learning/${numericPackageId}/review/${latestCompletedReviewSection.code}`);
+        }
+      },
+      disabled: !latestCompletedReviewSection,
+    },
+    {
+      key: 'package',
+      label: 'Paket Aktif',
+      hint: packageData?.name || 'Kelola paketmu',
+      icon: 'package',
+      active: false,
+      onClick: () => navigate('/active-packages'),
+      disabled: false,
+    },
+    {
+      key: 'profile',
+      label: 'Profil',
+      hint: 'Atur akun dan preferensi',
+      icon: 'profile',
+      active: false,
+      onClick: () => navigate('/profile'),
+      disabled: false,
+    },
+  ];
+  const dashboardRecommendationItems = [
+    resumeSection && {
+      key: 'resume-material',
+      icon: 'book',
+      title: resumeSection.name || 'Lanjutkan materi',
+      meta: `${resumeSection.session_name || formatActiveTopicLabel(resumeSection)} • ${getSectionTopics(resumeSection).length} topik`,
+      actionLabel: 'Belajar',
+      onClick: () => jumpToSectionMaterial(resumeSection.code),
+    },
+    resumeSection?.progress?.material_read && !resumeSection?.progress?.subtest_test_completed && {
+      key: 'section-mini-test',
+      icon: 'review',
+      title: `Mini Test ${resumeSection.name}`,
+      meta: `${Math.max(0, Number(resumeSection.mini_test_question_count || 0))} soal • ${formatDurationMinutesLabel(computeMiniTestDurationSeconds(resumeSection, Number(resumeSection.mini_test_question_count || 0)))}`,
+      actionLabel: 'Kerjakan',
+      onClick: () => openSectionTestView(resumeSection.code),
+    },
+    summary.can_start_tryout && {
+      key: 'package-tryout',
+      icon: 'target',
+      title: 'Tryout Paket',
+      meta: summary.remaining_attempts == null ? 'Akses admin tanpa batas attempt.' : `${summary.remaining_attempts} kesempatan tersisa`,
+      actionLabel: 'Masuk',
+      onClick: openTryoutView,
+    },
+  ].filter(Boolean);
+  const dashboardAchievementItems = [
+    {
+      key: 'materials',
+      icon: 'spark',
+      value: `${materialDoneCount}/${sections.length || 0}`,
+      label: 'Materi selesai',
+    },
+    {
+      key: 'mini-tests',
+      icon: 'trophy',
+      value: `${subtestDoneCount}/${sections.length || 0}`,
+      label: 'Mini test tuntas',
+    },
+    {
+      key: 'tryouts',
+      icon: 'target',
+      value: String(Number(summary.completed_attempts || 0)),
+      label: 'Tryout selesai',
+    },
+  ];
+
   useEffect(() => {
     if (activeSectionView !== 'mini-test' || !hasAccess || !activeSection?.code) {
       return undefined;
@@ -1173,7 +1580,8 @@ export default function Learning() {
       shellClassName={`account-shell-learning${shouldShowFocusLayout ? ' account-shell-learning-focus' : ''}`}
       title={`Ruang Belajar ${packageData.name}`}
       subtitle="Baca materi per subtest, kerjakan mini test, lalu lanjut ke tryout keseluruhan saat paket aktif."
-      hidePageHeader={isCompactViewport || shouldShowFocusLayout}
+      hideNavbar={!isCompactViewport}
+      hidePageHeader
     >
       {error && <div className="alert">{error}</div>}
       {successMessage && <div className="account-success learning-flash">{successMessage}</div>}
@@ -1199,94 +1607,187 @@ export default function Learning() {
       )}
       <section className={`learning-workspace${shouldShowFocusLayout ? ' learning-workspace-focus' : ''}`}>
         {!shouldShowFocusLayout && (
-        <aside className="learning-sidebar">
-          <div className="learning-sidebar-card">
-            <button
-              type="button"
-              className={contentView === 'dashboard' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
-              onClick={openDashboardView}
-            >
-              Dashboard
-            </button>
-
-            <button
-              type="button"
-              className="learning-sidebar-toggle learning-sidebar-toggle-secondary"
-              onClick={() => setMaterialsExpanded((current) => !current)}
-              aria-expanded={materialsExpanded}
-            >
-              <span>
-                <strong>Materi</strong>
-                <small>{sections.length} subtest tersedia</small>
-              </span>
-              <span>{materialsExpanded ? '▴' : '▾'}</span>
-            </button>
-
-            {materialsExpanded && (
-              <div className="learning-sidebar-list">
-                {sections.map((section) => {
-                  const topics = getSectionTopics(section);
-                  const isTopicActive = contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code;
-                  const isMiniTestActive = contentView === 'materi' && activeSectionView === 'mini-test' && section.code === activeSection?.code;
-                  const isSectionExpanded = Boolean(expandedMaterialSections[section.code]);
-
-                  return (
-                    <div key={section.code} className="admin-section-sidebar-entry">
-                      <button
-                        type="button"
-                        className={isTopicActive || isMiniTestActive || isSectionExpanded ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
-                        onClick={() => toggleMaterialSection(section.code)}
-                      >
-                        <span className="admin-section-sidebar-item-copy">
-                          <strong>{section.name}</strong>
-                          <small>{formatActiveTopicLabel(section)}</small>
-                        </span>
-                        <span className="admin-section-sidebar-caret" aria-hidden="true">
-                          {expandedMaterialSections[section.code] ? '▾' : '▸'}
-                        </span>
-                      </button>
-
-                      {expandedMaterialSections[section.code] && (
-                        <div className="admin-section-sidebar-children">
-                          {topics.map((topic, topicIndex) => (
-                            <button
-                              key={`${section.code}-topic-${topicIndex}`}
-                              type="button"
-                              className={contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code && topicIndex === activeTopicIndex ? 'admin-section-sidebar-child admin-section-sidebar-child-active' : 'admin-section-sidebar-child'}
-                              onClick={() => jumpToSectionMaterial(section.code, topicIndex)}
-                            >
-                              <span>{topicIndex + 1}</span>
-                              <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
-                            </button>
-                          ))}
-                          <button
-                            type="button"
-                            className={isMiniTestActive ? 'admin-section-sidebar-child admin-section-sidebar-child-mini-test admin-section-sidebar-child-active' : 'admin-section-sidebar-child admin-section-sidebar-child-mini-test'}
-                            onClick={() => openSectionTestView(section.code)}
-                          >
-                            <span>MT</span>
-                            <strong>Mini Test Subtest</strong>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+          <aside className="learning-sidebar learning-sidebar-desktop">
+            <div className="learning-sidebar-card learning-sidebar-brand-card">
+              <div className="learning-sidebar-brand-row">
+                <BrandLogo />
+                <button
+                  type="button"
+                  className="learning-sidebar-home-button"
+                  onClick={() => navigate('/')}
+                  aria-label="Kembali ke landing page"
+                >
+                  <LearningIcon name="arrow-left" />
+                </button>
               </div>
-            )}
+              <div className="learning-sidebar-brand-copy">
+                <strong>Ruang Belajar</strong>
+                <small>{packageData.name}</small>
+              </div>
+            </div>
 
-            <button
-              type="button"
-              className={contentView === 'tryout' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
-              onClick={openTryoutView}
-            >
-              Tryout
-            </button>
-          </div>
-        </aside>
+            <div className="learning-sidebar-card learning-sidebar-menu-card">
+              <span className="learning-sidebar-label">Navigasi</span>
+              <div className="learning-sidebar-primary-nav">
+                {sidebarPrimaryItems.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={[
+                      'learning-sidebar-link',
+                      'learning-sidebar-link-rich',
+                      item.active ? 'learning-sidebar-link-active' : '',
+                      item.disabled ? 'learning-sidebar-link-disabled' : '',
+                    ].filter(Boolean).join(' ')}
+                    onClick={item.onClick}
+                    disabled={item.disabled}
+                  >
+                    <span className="learning-sidebar-link-icon" aria-hidden="true">
+                      <LearningIcon name={item.icon} />
+                    </span>
+                    <span className="admin-sidebar-link-copy">
+                      <strong>{item.label}</strong>
+                      <small>{item.hint}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="learning-sidebar-card learning-sidebar-sections-card">
+              <button
+                type="button"
+                className="learning-sidebar-toggle learning-sidebar-toggle-secondary learning-sidebar-toggle-rich"
+                onClick={() => setMaterialsExpanded((current) => !current)}
+                aria-expanded={materialsExpanded}
+              >
+                <span>
+                  <strong>Subtest Paket</strong>
+                  <small>{sections.length} subtest tersedia</small>
+                </span>
+                <span>{materialsExpanded ? '▴' : '▾'}</span>
+              </button>
+
+              {materialsExpanded && (
+                <div className="learning-sidebar-list learning-sidebar-list-stacked">
+                  {sections.map((section) => {
+                    const topics = getSectionTopics(section);
+                    const isTopicActive = contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code;
+                    const isMiniTestActive = contentView === 'materi' && activeSectionView === 'mini-test' && section.code === activeSection?.code;
+                    const isSectionExpanded = Boolean(expandedMaterialSections[section.code]);
+
+                    return (
+                      <div key={section.code} className="admin-section-sidebar-entry">
+                        <button
+                          type="button"
+                          className={isTopicActive || isMiniTestActive || isSectionExpanded ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
+                          onClick={() => toggleMaterialSection(section.code)}
+                        >
+                          <span className="admin-section-sidebar-item-copy">
+                            <strong>{section.name}</strong>
+                            <small>{formatActiveTopicLabel(section)}</small>
+                          </span>
+                          <span className="admin-section-sidebar-caret" aria-hidden="true">
+                            {expandedMaterialSections[section.code] ? '▾' : '▸'}
+                          </span>
+                        </button>
+
+                        {expandedMaterialSections[section.code] && (
+                          <div className="admin-section-sidebar-children">
+                            {topics.map((topic, topicIndex) => (
+                              <button
+                                key={`${section.code}-topic-${topicIndex}`}
+                                type="button"
+                                className={contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code && topicIndex === activeTopicIndex ? 'admin-section-sidebar-child admin-section-sidebar-child-active' : 'admin-section-sidebar-child'}
+                                onClick={() => jumpToSectionMaterial(section.code, topicIndex)}
+                              >
+                                <span>{topicIndex + 1}</span>
+                                <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              className={isMiniTestActive ? 'admin-section-sidebar-child admin-section-sidebar-child-mini-test admin-section-sidebar-child-active' : 'admin-section-sidebar-child admin-section-sidebar-child-mini-test'}
+                              onClick={() => openSectionTestView(section.code)}
+                            >
+                              <span>MT</span>
+                              <strong>Mini Test Subtest</strong>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="learning-sidebar-card learning-sidebar-support-card">
+              <span className="learning-sidebar-support-badge">Landing Page</span>
+              <strong>Kembali ke halaman awal kapan saja.</strong>
+              <p>
+                Logo UJIIN di atas tetap aktif sebagai tombol pulang ke landing page utama.
+              </p>
+              <button type="button" className="learning-sidebar-support-button" onClick={() => navigate('/')}>
+                Kembali ke Home
+              </button>
+            </div>
+          </aside>
         )}
 
         <div className={`learning-main-panel${shouldShowFocusLayout ? ' learning-main-panel-focus' : ''}`}>
+          {!isCompactViewport && (
+            <header className="learning-desktop-topbar">
+              <div className="learning-desktop-topbar-copy">
+                {contentView === 'dashboard' ? (
+                  <h1>
+                    Belajar <span>{packageCategoryLabel}</span>
+                  </h1>
+                ) : (
+                  <h1>
+                    {contentView === 'tryout'
+                      ? 'Menu Tryout'
+                      : activeSectionView === 'mini-test'
+                      ? `Mini Test ${activeSection?.session_name || activeSection?.name || ''}`
+                      : activeSection?.name || 'Materi Subtest'}
+                  </h1>
+                )}
+                <p>{desktopPageSubtitle}</p>
+              </div>
+
+              <div className="learning-desktop-topbar-actions">
+                <label className="learning-desktop-search">
+                  <span className="learning-desktop-search-icon" aria-hidden="true">
+                    <LearningIcon name="search" />
+                  </span>
+                  <input
+                    type="search"
+                    value={learningSearch}
+                    onChange={(event) => setLearningSearch(event.target.value)}
+                    placeholder={desktopSearchPlaceholder}
+                    disabled={!desktopSearchEnabled}
+                    aria-label={desktopSearchEnabled ? 'Cari materi belajar' : 'Pencarian hanya aktif di dashboard'}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="learning-desktop-notification"
+                  onClick={openDashboardView}
+                  aria-label="Notifikasi belajar"
+                >
+                  <LearningIcon name="bell" />
+                  {notificationCount > 0 && <span>{notificationCount}</span>}
+                </button>
+
+                <div className="learning-desktop-profile-block">
+                  <ProfileDropdown displayName={displayName} onLogout={logout} isAdmin={isAdmin} />
+                  <small>{viewerRoleLabel}</small>
+                </div>
+              </div>
+            </header>
+          )}
+
           {shouldShowFocusLayout && (
             <div className="learning-mobile-focus-bar">
               <button
@@ -1461,95 +1962,286 @@ export default function Learning() {
                   </nav>
                 </>
               ) : (
-                <>
-                  <div className="learning-dashboard-header">
-                    <div>
-                      <span className="account-package-tag">{packageData.category_name}</span>
-                      <h2>{packageData.name}</h2>
-                      <p>{packageData.description}</p>
-                    </div>
-                    <div className="learning-path-score" aria-label={`Progress belajar ${milestonePercent} persen`}>
-                      <strong>{milestonePercent}%</strong>
-                      <span>progress</span>
-                    </div>
-                  </div>
+                <section className="learning-studio-dashboard">
+                  <div className="learning-studio-grid">
+                    <div className="learning-studio-primary">
+                      <div className="learning-studio-top-row">
+                        <article className="learning-studio-card learning-studio-progress-card">
+                          <div
+                            className="learning-studio-progress-ring"
+                            style={{ '--learning-dashboard-progress': `${milestonePercent * 3.6}deg` }}
+                            aria-label={`Progress belajar ${milestonePercent} persen`}
+                          >
+                            <strong>{milestonePercent}%</strong>
+                          </div>
 
-                  <div className="learning-progress-track" aria-hidden="true">
-                    <span style={{ width: `${milestonePercent}%` }} />
-                  </div>
+                          <div className="learning-studio-progress-copy">
+                            <div>
+                              <h2>Progress Paket</h2>
+                              <p>{packageData.name}</p>
+                            </div>
 
-                  <div className="learning-dashboard-focus">
-                    <div className="learning-dashboard-card">
-                      <p className="learning-sidebar-label">Riwayat baca terakhir</p>
-                      <h3>{resumeSection?.name || 'Mulai dari materi pertama'}</h3>
-                      <p>
-                        {resumeSection
-                          ? `Terakhir aktif di ${resumeSection.session_name || 'subtest utama'}.`
-                          : 'Belum ada materi yang dibuka. Mulai dari subtest pertama.'}
-                      </p>
-                      <div className="learning-hero-actions">
-                        {resumeSection && (
-                          <button type="button" className="btn btn-primary" onClick={() => jumpToSectionMaterial(resumeSection.code)}>
-                            Lanjutkan Membaca Materi
+                            <div className="learning-studio-progress-stats">
+                              <div>
+                                <span>Total subtest</span>
+                                <strong>{sections.length}</strong>
+                              </div>
+                              <div>
+                                <span>Total topik</span>
+                                <strong>{totalTopicCount}</strong>
+                              </div>
+                              <div>
+                                <span>Selesai dibaca</span>
+                                <strong>{completedTopicCount}</strong>
+                              </div>
+                              <div>
+                                <span>Belum tuntas</span>
+                                <strong>{pendingSectionCount}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+
+                        <article className="learning-studio-card learning-studio-motivation-card">
+                          <div className="learning-studio-motivation-copy">
+                            <span className="learning-studio-kicker">Hai, {greetingName}</span>
+                            <h2>Konsisten belajar adalah kunci sukses meraih impian.</h2>
+                            <p>
+                              Fokuskan sesi hari ini pada topik yang paling dekat dengan tryout dan lanjutkan progresmu sedikit demi sedikit.
+                            </p>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              onClick={() => {
+                                if (resumeSection?.code) {
+                                  jumpToSectionMaterial(resumeSection.code);
+                                }
+                              }}
+                            >
+                              Lanjutkan Belajar
+                            </button>
+                          </div>
+
+                          <div className="learning-studio-mascot" aria-hidden="true">
+                            <div className="learning-studio-mascot-orb" />
+                            <div className="learning-studio-mascot-badge">UJIIN</div>
+                            <img src="/ujiin-logo-light.png" alt="" />
+                          </div>
+                        </article>
+                      </div>
+
+                      <article className="learning-studio-resume-banner">
+                        <div className="learning-studio-resume-copy">
+                          <span>Lanjutkan Materi Terakhir</span>
+                          <h2>{resumeSection?.name || 'Mulai dari materi pertama'}</h2>
+                          <p>{resumeSection?.session_name || formatActiveTopicLabel(resumeSection)}</p>
+                          <div className="learning-studio-resume-track" aria-hidden="true">
+                            <span
+                              style={{
+                                width: `${resumeSection?.progress?.subtest_test_completed ? 100 : resumeSection?.progress?.material_read ? 72 : 38}%`,
+                              }}
+                            />
+                          </div>
+                          <small>
+                            {resumeSection?.progress?.subtest_test_completed
+                              ? 'Subtest ini sudah tuntas, kamu bisa langsung review hasilnya.'
+                              : resumeSection?.progress?.material_read
+                              ? 'Materi selesai dibaca, mini test subtest siap dikerjakan.'
+                              : 'Masih ada materi yang perlu kamu selesaikan terlebih dahulu.'}
+                          </small>
+                        </div>
+
+                        <div className="learning-studio-resume-actions">
+                          {resumeSection && (
+                            <button type="button" className="learning-studio-resume-button" onClick={() => jumpToSectionMaterial(resumeSection.code)}>
+                              <span aria-hidden="true">
+                                <LearningIcon name="play" />
+                              </span>
+                              Lanjutkan Materi
+                            </button>
+                          )}
+                        </div>
+                      </article>
+
+                      <div className="learning-studio-section-tabs" aria-label="Daftar subtest">
+                        {sections.map((section, index) => (
+                          <button
+                            type="button"
+                            key={section.code}
+                            className={section.code === activeSection?.code ? 'learning-studio-section-tab learning-studio-section-tab-active' : 'learning-studio-section-tab'}
+                            onClick={() => {
+                              setActiveSectionCode(section.code);
+                              setActiveTopicIndex(0);
+                            }}
+                          >
+                            {section.session_name || section.name || `Subtest ${index + 1}`}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="learning-studio-material-head">
+                        <div>
+                          <h3>{deferredLearningSearch ? 'Hasil Pencarian Topik' : 'Daftar Materi'}</h3>
+                          <p>
+                            {deferredLearningSearch
+                              ? `${filteredDashboardTopics.length} topik cocok untuk kata kunci "${learningSearch.trim()}".`
+                              : `${activeSectionTopics.length} topik siap dipelajari di ${activeSection?.name || 'subtest aktif'}.`}
+                          </p>
+                        </div>
+                        {activeSection && (
+                          <button type="button" className="learning-studio-link-button" onClick={() => jumpToSectionMaterial(activeSection.code, 0)}>
+                            Lihat Semua <LearningIcon name="arrow-right" />
                           </button>
                         )}
-                        <button type="button" className="btn btn-outline" onClick={openTryoutView}>
-                          Buka Menu Tryout
-                        </button>
+                      </div>
+
+                      <div className="learning-studio-material-grid">
+                        {filteredDashboardTopics.map(({ topic, topicIndex }) => {
+                          const pageCount = Number(topic.visible_page_count || topic.pages?.length || topic.total_page_count || 0);
+                          const totalPageCount = Math.max(pageCount, Number(topic.total_page_count || 0));
+                          const topicPercent = activeSection?.progress?.material_read ? 100 : 0;
+                          const accentClass = DASHBOARD_TOPIC_ACCENTS[topicIndex % DASHBOARD_TOPIC_ACCENTS.length];
+
+                          return (
+                            <button
+                              type="button"
+                              key={`${activeSection?.code || 'section'}-desktop-topic-${topicIndex}`}
+                              className={`learning-studio-topic-card learning-studio-topic-card-${accentClass}`}
+                              onClick={() => activeSection && jumpToSectionMaterial(activeSection.code, topicIndex)}
+                            >
+                              <span className="learning-studio-topic-icon" aria-hidden="true" />
+                              <span className="learning-studio-topic-copy">
+                                <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
+                                <small>
+                                  {pageCount || 1} halaman materi
+                                  {totalPageCount > pageCount ? ` • ${totalPageCount - pageCount} terkunci` : ''}
+                                </small>
+                                <span className="learning-studio-topic-progress">
+                                  <span>
+                                    <span style={{ width: `${topicPercent}%` }} />
+                                  </span>
+                                  <small>{topicPercent}% selesai</small>
+                                </span>
+                              </span>
+                              <span className="learning-studio-topic-action">Belajar</span>
+                            </button>
+                          );
+                        })}
+
+                        {filteredDashboardTopics.length === 0 && (
+                          <div className="learning-studio-empty">
+                            {deferredLearningSearch
+                              ? 'Topik yang kamu cari belum ditemukan di subtest ini.'
+                              : 'Materi untuk subtest ini belum tersedia.'}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className="learning-summary-grid">
-                      <div>
-                        <span>Materi selesai</span>
-                        <strong>{materialDoneCount}/{sections.length}</strong>
-                      </div>
-                      <div>
-                        <span>Mini test selesai</span>
-                        <strong>{subtestDoneCount}/{sections.length}</strong>
-                      </div>
-                      <div>
-                        <span>Sisa tryout</span>
-                        <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
-                      </div>
-                    </div>
-                  </div>
+                    <aside className="learning-studio-secondary">
+                      <article className="learning-studio-card learning-studio-target-card">
+                        <div className="learning-studio-card-head">
+                          <h3>Target Belajar Paket</h3>
+                          <span>{learningActivityKeys.size > 0 ? `${learningActivityKeys.size} hari aktif` : 'Mulai hari ini'}</span>
+                        </div>
 
-                  <div className="learning-path-list">
-                    {sections.map((section, index) => {
-                      const materialDone = Boolean(section.progress.material_read);
-                      const subtestDone = Boolean(section.progress.subtest_test_completed);
-                      const sectionDone = materialDone && subtestDone;
+                        <div className="learning-studio-target-body">
+                          <div
+                            className="learning-studio-target-ring"
+                            style={{ '--learning-dashboard-progress': `${estimatedStudyProgressPercent * 3.6}deg` }}
+                            aria-label={`Target belajar ${estimatedStudyProgressPercent} persen`}
+                          >
+                            <strong>{estimatedStudyProgressPercent}%</strong>
+                          </div>
 
-                      return (
-                        <button
-                          type="button"
-                          key={section.code}
-                          className={[
-                            'learning-path-card',
-                            sectionDone ? 'learning-path-card-done' : '',
-                            section.code === resumeSection?.code ? 'learning-path-card-active' : '',
-                          ].filter(Boolean).join(' ')}
-                          onClick={() => jumpToSectionMaterial(section.code)}
-                        >
-                          <span className="learning-path-index">{index + 1}</span>
-                          <span className="learning-path-copy">
-                            <strong>{section.name}</strong>
-                            <small>{section.session_name || 'Subtest belajar'}</small>
-                          </span>
-                          <span className="learning-path-steps">
-                            <span className={materialDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
-                              Materi
-                            </span>
-                            <span className={subtestDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
-                              Mini test
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
+                          <div className="learning-studio-target-copy">
+                            <strong>{completedEstimatedStudyMinutes} / {totalEstimatedStudyMinutes || 0} menit</strong>
+                            <p>Estimasi ritme belajar dari materi dan mini test yang sudah kamu tuntaskan.</p>
+                            <span>{completedMilestoneSteps} milestone sudah tercatat</span>
+                          </div>
+                        </div>
+                      </article>
+
+                      <article className="learning-studio-card learning-studio-calendar-card">
+                        <div className="learning-studio-card-head">
+                          <h3>Kalender Belajar</h3>
+                          <span>{calendarMonthLabel}</span>
+                        </div>
+
+                        <div className="learning-studio-calendar-weekdays">
+                          {CALENDAR_WEEKDAYS.map((label) => (
+                            <span key={label}>{label}</span>
+                          ))}
+                        </div>
+
+                        <div className="learning-studio-calendar-grid">
+                          {calendarDays.map((day) => (
+                            <div
+                              key={day.key}
+                              className={[
+                                'learning-studio-calendar-day',
+                                day.inCurrentMonth ? 'learning-studio-calendar-day-current' : '',
+                                day.isToday ? 'learning-studio-calendar-day-today' : '',
+                                day.hasActivity ? 'learning-studio-calendar-day-active' : '',
+                              ].filter(Boolean).join(' ')}
+                            >
+                              <span>{day.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+
+                      <article className="learning-studio-card learning-studio-recommendation-card">
+                        <div className="learning-studio-card-head">
+                          <h3>Rekomendasi Untukmu</h3>
+                          <span>{dashboardRecommendationItems.length} aksi</span>
+                        </div>
+
+                        <div className="learning-studio-recommendation-list">
+                          {dashboardRecommendationItems.map((item) => (
+                            <div key={item.key} className="learning-studio-recommendation-item">
+                              <span className="learning-studio-recommendation-icon" aria-hidden="true">
+                                <LearningIcon name={item.icon} />
+                              </span>
+                              <span className="learning-studio-recommendation-copy">
+                                <strong>{item.title}</strong>
+                                <small>{item.meta}</small>
+                              </span>
+                              <button type="button" onClick={item.onClick}>
+                                {item.actionLabel}
+                              </button>
+                            </div>
+                          ))}
+
+                          {dashboardRecommendationItems.length === 0 && (
+                            <div className="learning-studio-empty learning-studio-empty-compact">
+                              Belum ada rekomendasi baru. Coba mulai dari dashboard atau materi pertama.
+                            </div>
+                          )}
+                        </div>
+                      </article>
+
+                      <article className="learning-studio-card learning-studio-achievement-card">
+                        <div className="learning-studio-card-head">
+                          <h3>Pencapaian</h3>
+                          <span>Milestone</span>
+                        </div>
+
+                        <div className="learning-studio-achievement-grid">
+                          {dashboardAchievementItems.map((item) => (
+                            <div key={item.key} className="learning-studio-achievement-item">
+                              <span className="learning-studio-achievement-icon" aria-hidden="true">
+                                <LearningIcon name={item.icon} />
+                              </span>
+                              <strong>{item.value}</strong>
+                              <small>{item.label}</small>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+                    </aside>
                   </div>
-                </>
+                </section>
               )}
             </section>
           )}

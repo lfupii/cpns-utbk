@@ -342,6 +342,26 @@ function ensureTryoutScoringSchema(mysqli $mysqli): void {
     }
 }
 
+function ensureQuestionOptionScoreWeightSchema(mysqli $mysqli): void {
+    $optionTables = [
+        'question_options',
+        'question_option_drafts',
+        'learning_section_question_options',
+        'learning_section_question_option_drafts',
+    ];
+
+    foreach ($optionTables as $tableName) {
+        if (!databaseTableExists($mysqli, $tableName) || databaseColumnExists($mysqli, $tableName, 'score_weight')) {
+            continue;
+        }
+
+        $mysqli->query(
+            "ALTER TABLE {$tableName}
+             ADD COLUMN score_weight TINYINT NULL AFTER is_correct"
+        );
+    }
+}
+
 function ensureLearningProgressSchema(mysqli $mysqli): void {
     if (!databaseTableExists($mysqli, 'users') || !databaseTableExists($mysqli, 'test_packages')) {
         return;
@@ -509,6 +529,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             option_text LONGTEXT NOT NULL,
             option_image_url VARCHAR(1000) DEFAULT NULL,
             is_correct BOOLEAN DEFAULT FALSE,
+            score_weight TINYINT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (question_id) REFERENCES question_drafts(id) ON DELETE CASCADE,
             INDEX (question_id)
@@ -558,6 +579,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             option_text LONGTEXT NOT NULL,
             option_image_url VARCHAR(1000) DEFAULT NULL,
             is_correct BOOLEAN DEFAULT FALSE,
+            score_weight TINYINT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (question_id) REFERENCES learning_section_question_drafts(id) ON DELETE CASCADE,
             INDEX (question_id)
@@ -590,6 +612,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             option_text LONGTEXT NOT NULL,
             option_image_url VARCHAR(1000) DEFAULT NULL,
             is_correct BOOLEAN DEFAULT FALSE,
+            score_weight TINYINT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (question_id) REFERENCES learning_section_questions(id) ON DELETE CASCADE,
             INDEX (question_id)
@@ -1146,4 +1169,5 @@ ensureTestAttemptProgressSchema($mysqli);
 ensureAttemptQuestionFlagsSchema($mysqli);
 ensureTryoutScoringSchema($mysqli);
 ensureLearningProgressSchema($mysqli);
+ensureQuestionOptionScoreWeightSchema($mysqli);
 bootstrapDefaultAdmin($mysqli);

@@ -312,7 +312,7 @@ class TestController {
                          q.section_name,
                          q.section_order,
                          qo.id AS option_id,
-                         qo.is_correct AS option_score,
+                         COALESCE(qo.score_weight, qo.is_correct) AS option_score,
                          ua.selected_option_id
                   FROM questions q
                   LEFT JOIN question_options qo ON qo.question_id = q.id
@@ -471,7 +471,8 @@ class TestController {
                                 'letter', qo.option_letter,
                                 'text', qo.option_text,
                                 'image_url', qo.option_image_url,
-                                'is_correct', qo.is_correct
+                                'is_correct', qo.is_correct,
+                                'score_weight', CAST(COALESCE(qo.score_weight, qo.is_correct) AS UNSIGNED)
                             )
                             ORDER BY qo.id SEPARATOR ','
                          ) AS options
@@ -501,7 +502,7 @@ class TestController {
                 : 0;
 
             $optionScores = array_map(static function (array $option) use ($isTkp): int {
-                $rawScore = (int) ($option['is_correct'] ?? 0);
+                $rawScore = (int) ($option['score_weight'] ?? $option['is_correct'] ?? 0);
 
                 return $isTkp ? min(5, max(1, $rawScore)) : ($rawScore > 0 ? 5 : 0);
             }, $options);
@@ -509,7 +510,7 @@ class TestController {
 
             $normalizedOptions = array_map(function (array $option) use ($selectedOptionId, &$correctOptionId, $isTkp, $bestOptionScore): array {
                 $optionId = (int) ($option['id'] ?? 0);
-                $rawScore = (int) ($option['is_correct'] ?? 0);
+                $rawScore = (int) ($option['score_weight'] ?? $option['is_correct'] ?? 0);
                 $scoreValue = $this->getOptionScoreValue($rawScore, $isTkp);
                 $isCorrect = !$isTkp && $scoreValue > 0;
                 if ($isCorrect) {

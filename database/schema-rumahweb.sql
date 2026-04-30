@@ -87,6 +87,7 @@ CREATE TABLE question_options (
   option_text LONGTEXT NOT NULL,
   option_image_url VARCHAR(1000) DEFAULT NULL,
   is_correct BOOLEAN DEFAULT FALSE,
+  score_weight TINYINT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
   INDEX (question_id)
@@ -175,6 +176,7 @@ CREATE TABLE learning_section_question_options (
   option_text LONGTEXT NOT NULL,
   option_image_url VARCHAR(1000) DEFAULT NULL,
   is_correct BOOLEAN DEFAULT FALSE,
+  score_weight TINYINT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (question_id) REFERENCES learning_section_questions(id) ON DELETE CASCADE,
   INDEX (question_id)

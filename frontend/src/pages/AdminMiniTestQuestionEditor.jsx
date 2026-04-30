@@ -37,12 +37,16 @@ function getOptionScoreWeight(option, fallback = 1) {
   }
 
   const rawCorrectValue = option?.is_correct;
+  if (typeof rawCorrectValue === 'boolean') {
+    return rawCorrectValue ? 5 : fallback;
+  }
+
   const numericCorrectValue = Number(rawCorrectValue);
-  if (Number.isFinite(numericCorrectValue) && numericCorrectValue > 1) {
+  if (Number.isFinite(numericCorrectValue) && numericCorrectValue > 0) {
     return clampPointValue(numericCorrectValue, fallback);
   }
 
-  return rawCorrectValue ? 5 : fallback;
+  return fallback;
 }
 
 function normalizeOptionsForScoringMode(options, usesPointScoring) {

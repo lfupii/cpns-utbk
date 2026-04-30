@@ -344,6 +344,7 @@ export default function Learning() {
   const totalMilestoneSteps = Math.max(1, sections.length * 2 + 1);
   const completedMilestoneSteps = materialDoneCount + subtestDoneCount + (completedTryout ? 1 : 0);
   const milestonePercent = Math.round((completedMilestoneSteps / totalMilestoneSteps) * 100);
+  const packageCategoryLabel = packageData?.category_name || packageData?.name || 'Belajar';
   const sectionLookup = useMemo(
     () => new Map(sections.map((section) => [section.code, section])),
     [sections]
@@ -1167,7 +1168,7 @@ export default function Learning() {
       shellClassName={`account-shell-learning${shouldShowFocusLayout ? ' account-shell-learning-focus' : ''}`}
       title={`Ruang Belajar ${packageData.name}`}
       subtitle="Baca materi per subtest, kerjakan mini test, lalu lanjut ke tryout keseluruhan saat paket aktif."
-      hidePageHeader={shouldShowFocusLayout}
+      hidePageHeader={isCompactViewport || shouldShowFocusLayout}
     >
       {error && <div className="alert">{error}</div>}
       {successMessage && <div className="account-success learning-flash">{successMessage}</div>}
@@ -1299,94 +1300,236 @@ export default function Learning() {
           )}
 
           {contentView === 'dashboard' && (
-            <section className="learning-dashboard-shell">
-              <div className="learning-dashboard-header">
-                <div>
-                  <span className="account-package-tag">{packageData.category_name}</span>
-                  <h2>{packageData.name}</h2>
-                  <p>{packageData.description}</p>
-                </div>
-                <div className="learning-path-score" aria-label={`Progress belajar ${milestonePercent} persen`}>
-                  <strong>{milestonePercent}%</strong>
-                  <span>progress</span>
-                </div>
-              </div>
+            <section className={`learning-dashboard-shell${isCompactViewport ? ' learning-dashboard-shell-app' : ''}`}>
+              {isCompactViewport ? (
+                <>
+                  <div className="learning-mobile-app-head">
+                    <div>
+                      <h1>
+                        Belajar <span>{packageCategoryLabel}</span>
+                      </h1>
+                      <p>Lanjutkan persiapanmu hari ini</p>
+                    </div>
+                    <button type="button" className="learning-mobile-notification" aria-label="Notifikasi">
+                      <span aria-hidden="true">!</span>
+                    </button>
+                  </div>
 
-              <div className="learning-progress-track" aria-hidden="true">
-                <span style={{ width: `${milestonePercent}%` }} />
-              </div>
+                  <div className="learning-mobile-target-card">
+                    <div
+                      className="learning-mobile-progress-ring"
+                      style={{ '--learning-mobile-progress': `${milestonePercent * 3.6}deg` }}
+                      aria-label={`Progress belajar ${milestonePercent} persen`}
+                    >
+                      <strong>{milestonePercent}%</strong>
+                    </div>
+                    <div className="learning-mobile-target-copy">
+                      <h2>Target {packageCategoryLabel}</h2>
+                      <p>Konsisten belajar setiap hari dan tuntaskan milestone paketmu.</p>
+                      <button type="button" onClick={openTryoutView}>
+                        Lihat Detail <span aria-hidden="true">›</span>
+                      </button>
+                    </div>
+                    <div className="learning-mobile-target-brand" aria-hidden="true">
+                      <img src="/ujiin-logo-light.png" alt="" />
+                    </div>
+                  </div>
 
-              <div className="learning-dashboard-focus">
-                <div className="learning-dashboard-card">
-                  <p className="learning-sidebar-label">Riwayat baca terakhir</p>
-                  <h3>{resumeSection?.name || 'Mulai dari materi pertama'}</h3>
-                  <p>
-                    {resumeSection
-                      ? `Terakhir aktif di ${resumeSection.session_name || 'subtest utama'}.`
-                      : 'Belum ada materi yang dibuka. Mulai dari subtest pertama.'}
-                  </p>
-                  <div className="learning-hero-actions">
+                  <div className="learning-mobile-resume-card">
+                    <div className="learning-mobile-resume-copy">
+                      <span>Lanjutkan Materi Terakhir</span>
+                      <h2>{resumeSection?.name || 'Mulai dari materi pertama'}</h2>
+                      <p>{resumeSection?.session_name || formatActiveTopicLabel(resumeSection)}</p>
+                      <div className="learning-mobile-resume-track" aria-hidden="true">
+                        <span style={{ width: `${resumeSection?.progress?.material_read ? 70 : 36}%` }} />
+                      </div>
+                      <small>
+                        {resumeSection?.progress?.material_read
+                          ? 'Mini test subtest siap dikerjakan'
+                          : 'Materi masih perlu dilanjutkan'}
+                      </small>
+                    </div>
                     {resumeSection && (
-                      <button type="button" className="btn btn-primary" onClick={() => jumpToSectionMaterial(resumeSection.code)}>
-                        Lanjutkan Membaca Materi
+                      <button type="button" onClick={() => jumpToSectionMaterial(resumeSection.code)}>
+                        <span aria-hidden="true">▶</span>
+                        Lanjutkan
                       </button>
                     )}
-                    <button type="button" className="btn btn-outline" onClick={openTryoutView}>
-                      Buka Menu Tryout
+                    <div className="learning-mobile-resume-visual" aria-hidden="true">
+                      √x
+                    </div>
+                  </div>
+
+                  <div className="learning-mobile-section-tabs" aria-label="Daftar subtest">
+                    {sections.map((section, index) => (
+                      <button
+                        type="button"
+                        key={section.code}
+                        className={section.code === resumeSection?.code ? 'learning-mobile-section-tab learning-mobile-section-tab-active' : 'learning-mobile-section-tab'}
+                        onClick={() => jumpToSectionMaterial(section.code)}
+                      >
+                        {section.session_name || section.name || `Subtest ${index + 1}`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="learning-mobile-list-head">
+                    <h2>Daftar Materi</h2>
+                    <button type="button" onClick={() => setMaterialsExpanded(true)}>
+                      Lihat Semua <span aria-hidden="true">›</span>
                     </button>
                   </div>
-                </div>
 
-                <div className="learning-summary-grid">
-                  <div>
-                    <span>Materi selesai</span>
-                    <strong>{materialDoneCount}/{sections.length}</strong>
-                  </div>
-                  <div>
-                    <span>Mini test selesai</span>
-                    <strong>{subtestDoneCount}/{sections.length}</strong>
-                  </div>
-                  <div>
-                    <span>Sisa tryout</span>
-                    <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
-                  </div>
-                </div>
-              </div>
+                  <div className="learning-mobile-material-list">
+                    {sections.map((section, index) => {
+                      const materialDone = Boolean(section.progress.material_read);
+                      const subtestDone = Boolean(section.progress.subtest_test_completed);
+                      const sectionPercent = (Number(materialDone) + Number(subtestDone)) * 50;
+                      const topicCount = getSectionTopics(section).length;
+                      const questionCount = Math.max(0, Number(section.mini_test_question_count || section.target_question_count || 0));
+                      const accentClass = ['blue', 'green', 'pink'][index % 3];
 
-              <div className="learning-path-list">
-                {sections.map((section, index) => {
-                  const materialDone = Boolean(section.progress.material_read);
-                  const subtestDone = Boolean(section.progress.subtest_test_completed);
-                  const sectionDone = materialDone && subtestDone;
+                      return (
+                        <button
+                          type="button"
+                          key={section.code}
+                          className={`learning-mobile-material-card learning-mobile-material-card-${accentClass}`}
+                          onClick={() => jumpToSectionMaterial(section.code)}
+                        >
+                          <span className="learning-mobile-material-icon" aria-hidden="true" />
+                          <span className="learning-mobile-material-copy">
+                            <strong>{section.name}</strong>
+                            <small>{topicCount || 1} materi • {questionCount || 0} soal</small>
+                            <span className="learning-mobile-material-progress">
+                              <span>
+                                <span style={{ width: `${sectionPercent}%` }} />
+                              </span>
+                              <small>{sectionPercent}% selesai</small>
+                            </span>
+                          </span>
+                          <span className="learning-mobile-material-action">
+                            <span aria-hidden="true">▯</span>
+                            Belajar
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                  return (
-                    <button
-                      type="button"
-                      key={section.code}
-                      className={[
-                        'learning-path-card',
-                        sectionDone ? 'learning-path-card-done' : '',
-                        section.code === resumeSection?.code ? 'learning-path-card-active' : '',
-                      ].filter(Boolean).join(' ')}
-                      onClick={() => jumpToSectionMaterial(section.code)}
-                    >
-                      <span className="learning-path-index">{index + 1}</span>
-                      <span className="learning-path-copy">
-                        <strong>{section.name}</strong>
-                        <small>{section.session_name || 'Subtest belajar'}</small>
-                      </span>
-                      <span className="learning-path-steps">
-                        <span className={materialDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
-                          Materi
-                        </span>
-                        <span className={subtestDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
-                          Mini test
-                        </span>
-                      </span>
+                  <nav className="learning-mobile-bottom-nav" aria-label="Navigasi belajar">
+                    <Link to="/">
+                      <span aria-hidden="true">⌂</span>
+                      Home
+                    </Link>
+                    <button type="button" className="learning-mobile-bottom-nav-active" onClick={openDashboardView}>
+                      <span aria-hidden="true">▰</span>
+                      Belajar
                     </button>
-                  );
-                })}
-              </div>
+                    <button type="button" onClick={openTryoutView}>
+                      <span aria-hidden="true">☷</span>
+                      Tryout
+                    </button>
+                    <Link to="/test-history">
+                      <span aria-hidden="true">↺</span>
+                      Riwayat
+                    </Link>
+                    <Link to="/profile">
+                      <span aria-hidden="true">○</span>
+                      Profil
+                    </Link>
+                  </nav>
+                </>
+              ) : (
+                <>
+                  <div className="learning-dashboard-header">
+                    <div>
+                      <span className="account-package-tag">{packageData.category_name}</span>
+                      <h2>{packageData.name}</h2>
+                      <p>{packageData.description}</p>
+                    </div>
+                    <div className="learning-path-score" aria-label={`Progress belajar ${milestonePercent} persen`}>
+                      <strong>{milestonePercent}%</strong>
+                      <span>progress</span>
+                    </div>
+                  </div>
+
+                  <div className="learning-progress-track" aria-hidden="true">
+                    <span style={{ width: `${milestonePercent}%` }} />
+                  </div>
+
+                  <div className="learning-dashboard-focus">
+                    <div className="learning-dashboard-card">
+                      <p className="learning-sidebar-label">Riwayat baca terakhir</p>
+                      <h3>{resumeSection?.name || 'Mulai dari materi pertama'}</h3>
+                      <p>
+                        {resumeSection
+                          ? `Terakhir aktif di ${resumeSection.session_name || 'subtest utama'}.`
+                          : 'Belum ada materi yang dibuka. Mulai dari subtest pertama.'}
+                      </p>
+                      <div className="learning-hero-actions">
+                        {resumeSection && (
+                          <button type="button" className="btn btn-primary" onClick={() => jumpToSectionMaterial(resumeSection.code)}>
+                            Lanjutkan Membaca Materi
+                          </button>
+                        )}
+                        <button type="button" className="btn btn-outline" onClick={openTryoutView}>
+                          Buka Menu Tryout
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="learning-summary-grid">
+                      <div>
+                        <span>Materi selesai</span>
+                        <strong>{materialDoneCount}/{sections.length}</strong>
+                      </div>
+                      <div>
+                        <span>Mini test selesai</span>
+                        <strong>{subtestDoneCount}/{sections.length}</strong>
+                      </div>
+                      <div>
+                        <span>Sisa tryout</span>
+                        <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="learning-path-list">
+                    {sections.map((section, index) => {
+                      const materialDone = Boolean(section.progress.material_read);
+                      const subtestDone = Boolean(section.progress.subtest_test_completed);
+                      const sectionDone = materialDone && subtestDone;
+
+                      return (
+                        <button
+                          type="button"
+                          key={section.code}
+                          className={[
+                            'learning-path-card',
+                            sectionDone ? 'learning-path-card-done' : '',
+                            section.code === resumeSection?.code ? 'learning-path-card-active' : '',
+                          ].filter(Boolean).join(' ')}
+                          onClick={() => jumpToSectionMaterial(section.code)}
+                        >
+                          <span className="learning-path-index">{index + 1}</span>
+                          <span className="learning-path-copy">
+                            <strong>{section.name}</strong>
+                            <small>{section.session_name || 'Subtest belajar'}</small>
+                          </span>
+                          <span className="learning-path-steps">
+                            <span className={materialDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
+                              Materi
+                            </span>
+                            <span className={subtestDone ? 'learning-path-step learning-path-step-done' : 'learning-path-step'}>
+                              Mini test
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </section>
           )}
 

@@ -1,25 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import VerifyEmail from './pages/VerifyEmail';
-import Home from './pages/Home';
-import Payment from './pages/Payment';
-import Learning from './pages/Learning';
-import Test from './pages/Test';
-import Results from './pages/Results';
-import ResultsReview from './pages/ResultsReview';
-import MiniTestReview from './pages/MiniTestReview';
-import Profile from './pages/Profile';
-import ActivePackages from './pages/ActivePackages';
-import TestHistory from './pages/TestHistory';
-import AdminPanel from './pages/AdminPanel';
-import AdminLearningMaterialEditor from './pages/AdminLearningMaterialEditor';
-import AdminQuestionEditor from './pages/AdminQuestionEditor';
-import AdminMiniTestQuestionEditor from './pages/AdminMiniTestQuestionEditor';
-import Contact from './pages/Contact';
-import TermsConditions from './pages/TermsConditions';
 import { ThemeProvider } from './ThemeContext';
 import apiClient, { pingApiHealth } from './api';
 import {
@@ -29,6 +10,34 @@ import {
 } from './utils/activeAssessmentSession';
 import 'katex/dist/katex.min.css';
 import './index.css';
+
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const Home = lazy(() => import('./pages/Home'));
+const Payment = lazy(() => import('./pages/Payment'));
+const Learning = lazy(() => import('./pages/Learning'));
+const Test = lazy(() => import('./pages/Test'));
+const Results = lazy(() => import('./pages/Results'));
+const ResultsReview = lazy(() => import('./pages/ResultsReview'));
+const MiniTestReview = lazy(() => import('./pages/MiniTestReview'));
+const Profile = lazy(() => import('./pages/Profile'));
+const ActivePackages = lazy(() => import('./pages/ActivePackages'));
+const TestHistory = lazy(() => import('./pages/TestHistory'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const AdminLearningMaterialEditor = lazy(() => import('./pages/AdminLearningMaterialEditor'));
+const AdminQuestionEditor = lazy(() => import('./pages/AdminQuestionEditor'));
+const AdminMiniTestQuestionEditor = lazy(() => import('./pages/AdminMiniTestQuestionEditor'));
+const Contact = lazy(() => import('./pages/Contact'));
+const TermsConditions = lazy(() => import('./pages/TermsConditions'));
+
+function RouteLoadingFallback() {
+  return (
+    <div className="landing-shell landing-loading" role="status" aria-live="polite">
+      Memuat halaman...
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, authReady } = useAuth();
@@ -166,122 +175,124 @@ function AppRoutes() {
       <MotionEffects />
       <ActiveAssessmentRedirector />
       <div key={location.pathname} className="route-stage">
-        <Routes location={location}>
-          <Route path="/" element={<Home />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/terms" element={<TermsConditions />} />
-          <Route path="/refund-policy" element={<Navigate to="/terms#refund-policy" replace />} />
-          <Route path="/privacy-policy" element={<Navigate to="/terms#privacy-policy" replace />} />
-          <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
-          <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <Register />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route
-            path="/payment/:packageId"
-            element={
-              <ProtectedRoute>
-                <Payment />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/learning/:packageId"
-            element={<Learning />}
-          />
-          <Route
-            path="/learning/:packageId/mini-test/:miniTestSectionCode"
-            element={<Learning />}
-          />
-          <Route
-            path="/test/:packageId"
-            element={
-              <ProtectedRoute>
-                <Test />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/results/:attemptId"
-            element={
-              <ProtectedRoute>
-                <Results />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/results/:attemptId/review"
-            element={
-              <ProtectedRoute>
-                <ResultsReview />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/learning/:packageId/review/:sectionCode"
-            element={
-              <ProtectedRoute>
-                <MiniTestReview />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/active-packages"
-            element={
-              <ProtectedRoute>
-                <ActivePackages />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/test-history"
-            element={
-              <ProtectedRoute>
-                <TestHistory />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <AdminPanel />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/learning-material/:packageId/:sectionCode"
-            element={
-              <AdminRoute>
-                <AdminLearningMaterialEditor />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/question-editor/:packageId/:questionId"
-            element={
-              <AdminRoute>
-                <AdminQuestionEditor />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/mini-test-question-editor/:packageId/:sectionCode/:questionId"
-            element={
-              <AdminRoute>
-                <AdminMiniTestQuestionEditor />
-              </AdminRoute>
-            }
-          />
-          
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <Routes location={location}>
+            <Route path="/" element={<Home />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/terms" element={<TermsConditions />} />
+            <Route path="/refund-policy" element={<Navigate to="/terms#refund-policy" replace />} />
+            <Route path="/privacy-policy" element={<Navigate to="/terms#privacy-policy" replace />} />
+            <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
+            <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <Register />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route
+              path="/payment/:packageId"
+              element={
+                <ProtectedRoute>
+                  <Payment />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/learning/:packageId"
+              element={<Learning />}
+            />
+            <Route
+              path="/learning/:packageId/mini-test/:miniTestSectionCode"
+              element={<Learning />}
+            />
+            <Route
+              path="/test/:packageId"
+              element={
+                <ProtectedRoute>
+                  <Test />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/results/:attemptId"
+              element={
+                <ProtectedRoute>
+                  <Results />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/results/:attemptId/review"
+              element={
+                <ProtectedRoute>
+                  <ResultsReview />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/learning/:packageId/review/:sectionCode"
+              element={
+                <ProtectedRoute>
+                  <MiniTestReview />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/active-packages"
+              element={
+                <ProtectedRoute>
+                  <ActivePackages />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/test-history"
+              element={
+                <ProtectedRoute>
+                  <TestHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminPanel />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/learning-material/:packageId/:sectionCode"
+              element={
+                <AdminRoute>
+                  <AdminLearningMaterialEditor />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/question-editor/:packageId/:questionId"
+              element={
+                <AdminRoute>
+                  <AdminQuestionEditor />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/mini-test-question-editor/:packageId/:sectionCode/:questionId"
+              element={
+                <AdminRoute>
+                  <AdminMiniTestQuestionEditor />
+                </AdminRoute>
+              }
+            />
+
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </Suspense>
       </div>
     </>
   );

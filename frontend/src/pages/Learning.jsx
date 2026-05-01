@@ -853,6 +853,20 @@ export default function Learning() {
   const desktopSearchPlaceholder = desktopSearchEnabled
     ? 'Cari materi, mini test, atau topik...'
     : 'Pencarian cepat tersedia di dashboard';
+  const normalizedPackageLabel = `${packageData?.name || ''} ${packageData?.category_name || ''}`.toLowerCase();
+  const isCpnsLearningPackage = ['cpns', 'skd', 'asn', 'pppk'].some((keyword) => normalizedPackageLabel.includes(keyword));
+  const dashboardMascotSrc = '/mascots/ujiin-study-checklist.png';
+  const sidebarMascotSrc = isCpnsLearningPackage
+    ? '/mascots/ujiin-cpns-clipboard.png'
+    : '/mascots/ujiin-study-checklist.png';
+  const supportCardBadge = viewerIsAuthenticated ? 'Teman Belajar' : 'Preview Belajar';
+  const supportCardTitle = viewerIsAuthenticated
+    ? 'Biar ritme belajarmu tetap rapi dan ringan.'
+    : 'Login untuk simpan progres dan buka seluruh materi.';
+  const supportCardDescription = viewerIsAuthenticated
+    ? 'Lanjutkan materi sedikit demi sedikit, lalu masuk ke mini test saat checklist harianmu mulai penuh.'
+    : 'Kamu sudah bisa lihat cuplikan materi. Login dulu supaya dashboard, milestone, dan mini test ikut aktif.';
+  const supportCardActionLabel = viewerIsAuthenticated ? 'Lihat Paket Aktif' : 'Login Sekarang';
 
   const syncLearningUrl = useCallback(({ view, sectionCode = '', topicIndex = 0 } = {}) => {
     if (isDraftPreview || numericPackageId <= 0) {
@@ -2009,13 +2023,20 @@ export default function Learning() {
             </div>
 
             <div className="learning-sidebar-card learning-sidebar-support-card">
-              <span className="learning-sidebar-support-badge">Landing Page</span>
-              <strong>Kembali ke halaman awal kapan saja.</strong>
+              <span className="learning-sidebar-support-badge">{supportCardBadge}</span>
+              <strong>{supportCardTitle}</strong>
               <p>
-                Logo UJIIN di atas tetap aktif sebagai tombol pulang ke landing page utama.
+                {supportCardDescription}
               </p>
-              <button type="button" className="learning-sidebar-support-button" onClick={() => navigate('/')}>
-                Kembali ke Home
+              <div className="learning-sidebar-support-visual" aria-hidden="true">
+                <img src={sidebarMascotSrc} alt="" />
+              </div>
+              <button
+                type="button"
+                className="learning-sidebar-support-button"
+                onClick={() => navigate(viewerIsAuthenticated ? '/active-packages' : '/login')}
+              >
+                {supportCardActionLabel}
               </button>
             </div>
           </aside>
@@ -2285,6 +2306,16 @@ export default function Learning() {
                                 <strong>{pendingSectionCount}</strong>
                               </div>
                             </div>
+
+                            {activeSection && (
+                              <button
+                                type="button"
+                                className="learning-studio-progress-link"
+                                onClick={() => jumpToSectionMaterial(activeSection.code, 0)}
+                              >
+                                Lihat Detail <LearningIcon name="arrow-right" />
+                              </button>
+                            )}
                           </div>
                         </article>
 
@@ -2311,7 +2342,7 @@ export default function Learning() {
                           <div className="learning-studio-mascot" aria-hidden="true">
                             <div className="learning-studio-mascot-orb" />
                             <div className="learning-studio-mascot-badge">UJIIN</div>
-                            <img src="/ujiin-logo-light.png" alt="" />
+                            <img src={dashboardMascotSrc} alt="" />
                           </div>
                         </article>
                       </div>

@@ -21,13 +21,13 @@ import AdminMiniTestQuestionEditor from './pages/AdminMiniTestQuestionEditor';
 import Contact from './pages/Contact';
 import TermsConditions from './pages/TermsConditions';
 import { ThemeProvider } from './ThemeContext';
-import apiClient from './api';
+import apiClient, { pingApiHealth } from './api';
 import {
-  clearActiveMiniTestSession,
   clearActiveTryoutSession,
   getActiveMiniTestSession,
   getActiveTryoutSession,
 } from './utils/activeAssessmentSession';
+import 'katex/dist/katex.min.css';
 import './index.css';
 
 function ProtectedRoute({ children }) {
@@ -133,9 +133,9 @@ function ActiveAssessmentRedirector() {
         return;
       }
 
-      const learningPath = `/learning/${Number(miniTestSession.packageId)}`;
-      if (currentPath !== learningPath) {
-        navigate(learningPath, { replace: true });
+      const miniTestPath = `/learning/${Number(miniTestSession.packageId)}/mini-test/${encodeURIComponent(miniTestSession.sectionCode)}`;
+      if (currentPath !== miniTestPath) {
+        navigate(miniTestPath, { replace: true });
       }
     };
 
@@ -152,6 +152,10 @@ function ActiveAssessmentRedirector() {
 function AppRoutes() {
   const { isAuthenticated, authReady } = useAuth();
   const location = useLocation();
+
+  useEffect(() => {
+    pingApiHealth();
+  }, []);
 
   if (!authReady) {
     return null;
@@ -181,6 +185,10 @@ function AppRoutes() {
           />
           <Route
             path="/learning/:packageId"
+            element={<Learning />}
+          />
+          <Route
+            path="/learning/:packageId/mini-test/:miniTestSectionCode"
             element={<Learning />}
           />
           <Route

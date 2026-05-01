@@ -7,6 +7,8 @@ const apiClient = axios.create({
   baseURL: API_BASE_URL,
 });
 
+let lastHealthPingAt = 0;
+
 // Add token to requests if exists
 apiClient.interceptors.request.use(
   (config) => {
@@ -45,5 +47,25 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export async function pingApiHealth({ force = false } = {}) {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const now = Date.now();
+  if (!force && now - lastHealthPingAt < 60_000) {
+    return null;
+  }
+
+  lastHealthPingAt = now;
+
+  try {
+    const response = await apiClient.get('/health');
+    return response.data?.data || null;
+  } catch (error) {
+    return null;
+  }
+}
 
 export default apiClient;

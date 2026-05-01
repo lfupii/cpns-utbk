@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
+import LatexContent from '../components/LatexContent';
 import apiClient from '../api';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
 import {
@@ -435,15 +436,6 @@ function createImportPayload(rows, defaultSectionCode) {
       options,
     };
   });
-}
-
-function truncateText(value, length = 110) {
-  const normalized = String(value || '').trim();
-  if (normalized.length <= length) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, length).trim()}...`;
 }
 
 function getLearningQuestionRowKey(question, index) {
@@ -3204,7 +3196,11 @@ export default function AdminPanel() {
                                       </button>
 
                                       <div className="admin-question-row-main">
-                                        <strong>{truncateText(question.question_text || `Soal ${questionIndex + 1}`)}</strong>
+                                        <LatexContent
+                                          content={question.question_text}
+                                          placeholder={`Soal ${questionIndex + 1}`}
+                                          className="admin-question-row-snippet"
+                                        />
                                         <p>
                                           {question.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
                                         </p>
@@ -3246,7 +3242,11 @@ export default function AdminPanel() {
                                       <div className="admin-question-row-detail">
                                         <div className="admin-question-row-detail-main">
                                           <div>
-                                            <h3>{question.question_text || `Soal ${questionIndex + 1}`}</h3>
+                                            <LatexContent
+                                              content={question.question_text}
+                                              placeholder={`Soal ${questionIndex + 1}`}
+                                              className="admin-question-rich-title"
+                                            />
                                             <p className="text-muted">
                                               {question.material_topic
                                                 ? `${activeLearningSection.name} • ${question.material_topic}`
@@ -3299,7 +3299,11 @@ export default function AdminPanel() {
                                                   <span className="admin-correct-badge">Jawaban Benar</span>
                                                 )}
                                               </div>
-                                              <p>{option.text || 'Opsi berbasis gambar'}</p>
+                                              <LatexContent
+                                                content={option.text}
+                                                placeholder="Opsi berbasis gambar"
+                                                className="admin-option-preview-text"
+                                              />
                                               <AdminImagePreview
                                                 src={option.image_url}
                                                 alt={`Opsi ${option.letter}`}
@@ -3311,7 +3315,10 @@ export default function AdminPanel() {
                                         {question.explanation_notes && (
                                           <div className="admin-inline-note">
                                             <strong>Pembahasan mini test</strong>
-                                            <p className="whitespace-pre-line">{question.explanation_notes}</p>
+                                            <LatexContent
+                                              content={question.explanation_notes}
+                                              className="admin-rich-note-text"
+                                            />
                                           </div>
                                         )}
                                       </div>
@@ -3566,7 +3573,11 @@ export default function AdminPanel() {
                                 </button>
 
                                 <div className="admin-question-row-main">
-                                  <strong>{truncateText(question.question_text || 'Soal berbasis gambar')}</strong>
+                                  <LatexContent
+                                    content={question.question_text}
+                                    placeholder="Soal berbasis gambar"
+                                    className="admin-question-row-snippet"
+                                  />
                                   <p>
                                     {question.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
                                   </p>
@@ -3599,7 +3610,11 @@ export default function AdminPanel() {
                                 <div className="admin-question-row-detail">
                                   <div className="admin-question-row-detail-main">
                                     <div>
-                                      <h3>{question.question_text || 'Soal berbasis gambar'}</h3>
+                                      <LatexContent
+                                        content={question.question_text}
+                                        placeholder="Soal berbasis gambar"
+                                        className="admin-question-rich-title"
+                                      />
                                       <p className="text-muted">
                                         {question.section_name || 'Bagian umum'}
                                       </p>
@@ -3649,7 +3664,11 @@ export default function AdminPanel() {
                                             <span className="admin-correct-badge">Jawaban Benar</span>
                                           )}
                                         </div>
-                                        <p>{option.text || 'Opsi berbasis gambar'}</p>
+                                        <LatexContent
+                                          content={option.text}
+                                          placeholder="Opsi berbasis gambar"
+                                          className="admin-option-preview-text"
+                                        />
                                         <AdminImagePreview
                                           src={option.image_url}
                                           alt={`Opsi ${option.letter}`}
@@ -3661,7 +3680,10 @@ export default function AdminPanel() {
                                   {question.explanation_notes && (
                                     <div className="admin-inline-note">
                                       <strong>Pembahasan soal</strong>
-                                      <p className="whitespace-pre-line">{question.explanation_notes}</p>
+                                      <LatexContent
+                                        content={question.explanation_notes}
+                                        className="admin-rich-note-text"
+                                      />
                                     </div>
                                   )}
                                 </div>
@@ -3989,7 +4011,11 @@ export default function AdminPanel() {
                           </button>
 
                           <div className="admin-question-row-main">
-                            <strong>{truncateText(question.question_text || 'Soal berbasis gambar')}</strong>
+                            <LatexContent
+                              content={question.question_text}
+                              placeholder="Soal berbasis gambar"
+                              className="admin-question-row-snippet"
+                            />
                             <p>
                               {question.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
                             </p>

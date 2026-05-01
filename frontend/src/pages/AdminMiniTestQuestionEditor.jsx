@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
-import MathSymbolPalette from '../components/MathSymbolPalette';
+import LatexContent from '../components/LatexContent';
 import apiClient from '../api';
-import useMathTextInput from '../hooks/useMathTextInput';
 import { downloadQuestionExtractFile, hasQuestionExtractContent } from '../utils/questionExtract';
 
 const clampPointValue = (value, fallback = 1) => {
@@ -24,7 +23,6 @@ const createOption = (index, text = '', isCorrect = false, imageUrl = '', scoreW
 });
 
 const TKP_PATTERN = /(^|[^a-z0-9])tkp([^a-z0-9]|$)|karakteristik pribadi/i;
-const TIU_PATTERN = /(^|[^a-z0-9])tiu([^a-z0-9]|$)|intelegensia umum/i;
 
 function isTkpSection(section) {
   if (!section) {
@@ -32,14 +30,6 @@ function isTkpSection(section) {
   }
 
   return TKP_PATTERN.test(`${section.code || ''} ${section.name || ''}`);
-}
-
-function isTiuSection(section) {
-  if (!section) {
-    return false;
-  }
-
-  return TIU_PATTERN.test(`${section.code || ''} ${section.name || ''}`);
 }
 
 function getOptionScoreWeight(option, fallback = 1) {
@@ -202,7 +192,6 @@ export default function AdminMiniTestQuestionEditor() {
     [sectionCode, sections]
   );
   const usesPointScoring = isTkpSection(activeSection);
-  const usesMathSymbolPalette = isTiuSection(activeSection);
   const selectedQuestion = useMemo(
     () => sectionQuestions.find((question) => Number(question.id) === numericQuestionId) || null,
     [numericQuestionId, sectionQuestions]
@@ -230,74 +219,6 @@ export default function AdminMiniTestQuestionEditor() {
     () => hasQuestionExtractContent(extractQuestionSource),
     [extractQuestionSource]
   );
-  const getMathFieldValue = useCallback((fieldKey) => {
-    if (fieldKey === 'question_text' || fieldKey === 'explanation_notes') {
-      return questionForm[fieldKey] || '';
-    }
-
-    const [scope, indexText, fieldName] = String(fieldKey).split(':');
-    if (scope !== 'option') {
-      return '';
-    }
-
-    const optionIndex = Number(indexText);
-    return questionForm.options?.[optionIndex]?.[fieldName] || '';
-  }, [questionForm]);
-  const updateMathFieldValue = useCallback((fieldKey, nextValue) => {
-    setQuestionForm((current) => {
-      if (fieldKey === 'question_text' || fieldKey === 'explanation_notes') {
-        return {
-          ...current,
-          [fieldKey]: nextValue,
-        };
-      }
-
-      const [scope, indexText, fieldName] = String(fieldKey).split(':');
-      if (scope !== 'option') {
-        return current;
-      }
-
-      const optionIndex = Number(indexText);
-      if (!Number.isInteger(optionIndex) || !current.options?.[optionIndex]) {
-        return current;
-      }
-
-      return {
-        ...current,
-        options: current.options.map((option, currentOptionIndex) => (
-          currentOptionIndex === optionIndex ? { ...option, [fieldName]: nextValue } : option
-        )),
-      };
-    });
-  }, []);
-  const getMathFieldLabel = useCallback((fieldKey) => {
-    if (fieldKey === 'question_text') {
-      return 'Pertanyaan';
-    }
-
-    if (fieldKey === 'explanation_notes') {
-      return 'Catatan Pembahasan';
-    }
-
-    const [scope, indexText] = String(fieldKey).split(':');
-    if (scope !== 'option') {
-      return '';
-    }
-
-    const optionIndex = Number(indexText);
-    const optionLetter = questionForm.options?.[optionIndex]?.letter || String.fromCharCode(65 + optionIndex);
-    return `Opsi ${optionLetter}`;
-  }, [questionForm.options]);
-  const {
-    activeFieldLabel: activeMathFieldLabel,
-    getMathFieldProps,
-    insertMathToken,
-  } = useMathTextInput({
-    defaultFieldKey: 'question_text',
-    getFieldValue: getMathFieldValue,
-    getFieldLabel: getMathFieldLabel,
-    updateFieldValue: updateMathFieldValue,
-  });
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !sectionCode) {
@@ -680,7 +601,11 @@ export default function AdminMiniTestQuestionEditor() {
               <div className="admin-question-row-detail">
                 <div className="admin-question-row-detail-main">
                   <div>
-                    <h3>{selectedQuestion.question_text || 'Soal berbasis gambar'}</h3>
+                    <LatexContent
+                      content={selectedQuestion.question_text}
+                      placeholder="Soal berbasis gambar"
+                      className="admin-question-rich-title"
+                    />
                     <p className="text-muted">
                       {selectedQuestion.material_topic
                         ? `${selectedQuestion.material_topic} • ${selectedQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}`
@@ -707,7 +632,11 @@ export default function AdminMiniTestQuestionEditor() {
                           <span className="admin-correct-badge">Jawaban Benar</span>
                         )}
                       </div>
-                      <p>{option.text || 'Opsi berbasis gambar'}</p>
+                      <LatexContent
+                        content={option.text}
+                        placeholder="Opsi berbasis gambar"
+                        className="admin-option-preview-text"
+                      />
                       <AdminImagePreview
                         src={option.image_url}
                         alt={`Opsi ${option.letter}`}
@@ -747,9 +676,12 @@ export default function AdminMiniTestQuestionEditor() {
                     value={questionForm.question_text}
                     onChange={handleQuestionChange}
                     placeholder="Tulis soal mini test di sini"
-                    spellCheck={usesMathSymbolPalette ? false : undefined}
-                    {...getMathFieldProps('question_text')}
                   />
+                  <small className="text-muted">
+                    Gunakan <code>$...$</code> untuk rumus inline dan <code>$$...$$</code> untuk rumus blok.
+                    Contoh: <code>{'$\\frac{1}{2}$'}</code>, <code>{'$\\sqrt{x}$'}</code>, <code>{'$\\sum_{i=1}^{n}$'}</code>.
+                    Format ini juga berlaku untuk opsi jawaban dan catatan pembahasan.
+                  </small>
                 </div>
 
                 <div className="account-form-grid">
@@ -779,21 +711,12 @@ export default function AdminMiniTestQuestionEditor() {
                       value={questionForm.explanation_notes}
                       onChange={handleQuestionChange}
                       placeholder="Tulis pembahasan jawaban yang nanti akan dilihat user setelah mini test selesai"
-                      spellCheck={usesMathSymbolPalette ? false : undefined}
-                      {...getMathFieldProps('explanation_notes')}
                     />
                     <small className="text-muted">
                       Catatan ini akan tampil di halaman pembahasan mini test setelah user menyelesaikan soal.
                     </small>
                   </div>
                 </div>
-
-                {usesMathSymbolPalette && (
-                  <MathSymbolPalette
-                    activeFieldLabel={activeMathFieldLabel}
-                    onInsert={insertMathToken}
-                  />
-                )}
 
                 {questionImagePanelVisible && (
                   <div className="admin-question-image-tools">
@@ -825,7 +748,7 @@ export default function AdminMiniTestQuestionEditor() {
                         {questionForm.question_text && (
                           <div className="admin-question-media-copy-preview">
                             <span>Preview pertanyaan</span>
-                            <p>{questionForm.question_text}</p>
+                            <LatexContent content={questionForm.question_text} />
                           </div>
                         )}
                         <AdminImagePreview
@@ -888,8 +811,6 @@ export default function AdminMiniTestQuestionEditor() {
                               value={option.text}
                               onChange={(event) => handleOptionFieldChange(index, 'text', event.target.value)}
                               placeholder={`Isi opsi ${option.letter}`}
-                              spellCheck={usesMathSymbolPalette ? false : undefined}
-                              {...getMathFieldProps(`option:${index}:text`)}
                             />
                             {isOptionImageEditorVisible && (
                               <div className="admin-option-image-tools">

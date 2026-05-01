@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import LexicalMaterialEditor from '../components/LexicalMaterialEditor';
 import LexicalPaginatedPreview from '../components/LexicalPaginatedPreview';
-import apiClient from '../api';
+import apiClient, { pingApiHealth } from '../api';
 import { sanitizeMaterialHtml } from '../utils/materialHtml';
 import { isMaterialPdfVisualHtml, paginateMaterialHtml } from '../utils/materialPagination';
 
@@ -2735,20 +2735,40 @@ export default function AdminLearningMaterialEditor() {
       return null;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('context', 'learning-material');
-
     if (trackImageUpload) {
       setImageUploading(true);
     }
     setError('');
 
     try {
-      const response = await apiClient.post('/admin/media-upload', formData);
-      return response.data?.data?.url || '';
+      const maxAttempts = 3;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('context', 'learning-material');
+
+        try {
+          const response = await apiClient.post('/admin/media-upload', formData);
+          return response.data?.data?.url || '';
+        } catch (err) {
+          const statusCode = Number(err?.response?.status || 0);
+          const shouldRetry = attempt < maxAttempts && (!err.response || statusCode >= 500);
+
+          if (shouldRetry) {
+            await pingApiHealth({ force: true });
+            await new Promise((resolve) => window.setTimeout(resolve, attempt * 700));
+            continue;
+          }
+
+          setError(err.response?.data?.message || 'Gagal mengupload gambar materi');
+          return null;
+        }
+      }
+
+      return null;
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal mengupload gambar materi');
+      setError(err?.response?.data?.message || 'Gagal mengupload gambar materi');
       return null;
     } finally {
       if (trackImageUpload) {
@@ -2836,6 +2856,8 @@ export default function AdminLearningMaterialEditor() {
           dirty: true,
         },
       }));
+      setActivePageIndex(nextActivePage);
+      syncSelectionInUrl(activeTopicIndex, nextActivePage);
       setLexicalPreviewPageCount(nextPages.length);
       setLexicalEditorNonce((current) => current + 1);
       return;

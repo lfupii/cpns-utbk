@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../api';
 import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
+import LatexContent from '../components/LatexContent';
 import {
   clearActiveTryoutSession,
   persistActiveTryoutSession,
@@ -841,7 +842,10 @@ export default function Test() {
                   <div className={`test-question-media test-question-media-${currentQuestionImageLayout}`}>
                     {currentQuestion.question_text && (
                       <div className="test-question-text-block">
-                        <p className="test-question-text">{currentQuestion.question_text}</p>
+                        <LatexContent
+                          content={currentQuestion.question_text}
+                          className="test-question-text"
+                        />
                       </div>
                     )}
                     {currentQuestion.question_image_url && (
@@ -873,7 +877,12 @@ export default function Test() {
                     />
                     <div className="test-option-copy">
                       <p className="test-option-letter">{option.letter}.</p>
-                      {option.text && <p className="test-option-text">{option.text}</p>}
+                      {option.text && (
+                        <LatexContent
+                          content={option.text}
+                          className="test-option-text"
+                        />
+                      )}
                       {option.image_url && (
                         <img
                           src={option.image_url}

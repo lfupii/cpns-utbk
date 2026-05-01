@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import LatexContent from '../components/LatexContent';
 import apiClient from '../api';
 
 function ReviewOption({ option, isPointQuestion = false }) {
@@ -13,7 +14,14 @@ function ReviewOption({ option, isPointQuestion = false }) {
     <div className={`rounded-2xl border p-4 ${optionClasses}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1">
-          <p className="font-semibold text-gray-900">{option.letter}. {option.text || 'Opsi berbasis gambar'}</p>
+          <div className="flex items-start gap-2">
+            <p className="font-semibold text-gray-900">{option.letter}.</p>
+            <LatexContent
+              content={option.text}
+              placeholder="Opsi berbasis gambar"
+              className="flex-1 font-semibold text-gray-900"
+            />
+          </div>
           {option.image_url && (
             <img
               src={option.image_url}
@@ -94,6 +102,7 @@ export default function MiniTestReview() {
   const isPointReview = result.scoring_type === 'point' || activeItem?.scoring_type === 'point';
   const unansweredCount = reviewItems.filter((item) => !item.is_answered).length;
   const wrongAnswers = Math.max(0, totalQuestions - correctAnswers - unansweredCount);
+  const miniTestPath = `/learning/${packageId}/mini-test/${encodeURIComponent(String(sectionCode || ''))}`;
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Memuat pembahasan mini test...</div>;
@@ -104,7 +113,7 @@ export default function MiniTestReview() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
         <div className="text-center">
           <p className="mb-4 text-red-600">{error}</p>
-          <button type="button" onClick={() => navigate(`/learning/${packageId}`)} className="btn-primary">
+          <button type="button" onClick={() => navigate(miniTestPath)} className="btn-primary">
             Kembali ke Mini Test
           </button>
         </div>
@@ -117,7 +126,7 @@ export default function MiniTestReview() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
         <div className="text-center">
           <p className="mb-4 text-gray-700">Pembahasan mini test belum tersedia.</p>
-          <button type="button" onClick={() => navigate(`/learning/${packageId}`)} className="btn-primary">
+          <button type="button" onClick={() => navigate(miniTestPath)} className="btn-primary">
             Kembali ke Mini Test
           </button>
         </div>
@@ -155,7 +164,7 @@ export default function MiniTestReview() {
 
             <button
               type="button"
-              onClick={() => navigate(`/learning/${packageId}`)}
+              onClick={() => navigate(miniTestPath)}
               className="btn-outline"
             >
               Kembali ke Mini Test
@@ -175,9 +184,9 @@ export default function MiniTestReview() {
                     {Number(result.score || 0)} / {Number(result.max_score || 0)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm text-slate-700">Persentase Poin</p>
-                  <p className="mt-1 text-2xl font-bold text-slate-700">{Number(result.percentage || 0).toFixed(1)}%</p>
+                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                  <p className="text-sm text-cyan-700">Jawaban Skor Tertinggi</p>
+                  <p className="mt-1 text-2xl font-bold text-cyan-700">{correctAnswers}</p>
                 </div>
               </>
             ) : (
@@ -247,9 +256,10 @@ export default function MiniTestReview() {
                 {reviewData.section?.name ? ` • ${reviewData.section.name}` : ''}
               </p>
               {activeItem.question_text ? (
-                <p className="mt-3 whitespace-pre-line text-xl font-semibold text-gray-900">
-                  {activeItem.question_text}
-                </p>
+                <LatexContent
+                  content={activeItem.question_text}
+                  className="mt-3 text-xl font-semibold text-gray-900"
+                />
               ) : (
                 <p className="mt-3 text-sm text-gray-500">Soal ini menggunakan gambar tanpa teks.</p>
               )}
@@ -282,9 +292,11 @@ export default function MiniTestReview() {
 
           <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5">
             <p className="text-sm font-semibold text-blue-800">Catatan Pembahasan</p>
-            <p className="mt-2 whitespace-pre-line text-sm text-blue-900">
-              {activeItem.explanation_notes || 'Pembahasan untuk soal ini belum diisi admin.'}
-            </p>
+            <LatexContent
+              content={activeItem.explanation_notes}
+              placeholder="Pembahasan untuk soal ini belum diisi admin."
+              className="mt-2 text-sm text-blue-900"
+            />
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">

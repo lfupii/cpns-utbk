@@ -8194,6 +8194,27 @@ html[data-theme='dark'] .theme-toggle-thumb {
   font-weight: 500;
 }
 
+.latex-content {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.latex-content-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.15rem 0;
+}
+
+.latex-content-display .katex-display {
+  margin: 0;
+}
+
+.latex-content .katex-display > .katex {
+  max-width: 100%;
+}
+
 .test-question-media {
   display: grid;
   gap: 1rem;
@@ -10445,6 +10466,16 @@ html[data-theme='dark'] .theme-toggle-thumb {
   overflow-wrap: anywhere;
 }
 
+.admin-question-row-snippet {
+  display: block;
+  color: #192741;
+  line-height: 1.4;
+  font-size: 1.05rem;
+  letter-spacing: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .admin-question-row-main p {
   margin-top: 0.25rem;
   color: #607089;
@@ -10500,6 +10531,14 @@ html[data-theme='dark'] .theme-toggle-thumb {
   gap: 0.85rem;
 }
 
+.admin-question-rich-title {
+  font-size: 1.72rem;
+  color: #16243d;
+  line-height: 1.28;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+}
+
 .admin-question-row-detail-main h3 {
   font-size: 1.72rem;
   color: #16243d;
@@ -10542,6 +10581,22 @@ html[data-theme='dark'] .theme-toggle-thumb {
   flex-wrap: wrap;
 }
 
+.admin-option-preview-text {
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  color: #40516a;
+  font-size: 0.93rem;
+  line-height: 1.65;
+}
+
+.admin-rich-note-text {
+  margin-top: 0.4rem;
+  color: #1f3049;
+  line-height: 1.72;
+}
+
 .admin-options-editor-list {
   display: grid;
   gap: 0.8rem;
@@ -10559,86 +10614,6 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .admin-test-editor-question-card {
   gap: 1rem;
-}
-
-.admin-math-symbol-palette {
-  display: grid;
-  gap: 0.9rem;
-  padding: 1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(214, 226, 240, 0.95);
-  background:
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent 26%),
-    rgba(248, 250, 252, 0.96);
-}
-
-.admin-math-symbol-palette-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: start;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-}
-
-.admin-math-symbol-palette-head h3 {
-  margin: 0.2rem 0 0;
-  color: #17233a;
-  font-size: 1.05rem;
-}
-
-.admin-math-symbol-palette-status,
-.admin-math-symbol-palette-footer {
-  margin: 0;
-  line-height: 1.6;
-}
-
-.admin-math-symbol-palette-status {
-  max-width: 34rem;
-}
-
-.admin-math-symbol-group-list {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.admin-math-symbol-group {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.admin-math-symbol-group > span {
-  color: #51627f;
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.admin-math-symbol-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.admin-math-symbol-button {
-  min-width: 3.2rem;
-  min-height: 40px;
-  padding: 0.45rem 0.85rem;
-  border-radius: 0.85rem;
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: rgba(255, 255, 255, 0.98);
-  color: #17233a;
-  font-family: 'Cambria Math', 'Times New Roman', serif;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.admin-math-symbol-button:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.32);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .admin-options-editor-list-modern {
@@ -10780,6 +10755,13 @@ html[data-theme='dark'] .theme-toggle-thumb {
   overflow-wrap: anywhere;
 }
 
+.admin-question-media-copy-preview .latex-content {
+  margin: 0;
+  color: #17233a;
+  line-height: 1.7;
+  font-size: 1rem;
+}
+
 .admin-question-media-image-preview {
   width: 100%;
   max-width: 100%;
@@ -10807,10 +10789,6 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
   .admin-question-preview-head,
   .admin-question-editor-hero {
-    flex-direction: column;
-  }
-
-  .admin-math-symbol-palette-head {
     flex-direction: column;
   }
 
@@ -12954,6 +12932,7 @@ html[data-theme='dark'] .policy-card h2,
 html[data-theme='dark'] .policy-section h3,
 html[data-theme='dark'] .profile-dropdown-menu-header strong,
 html[data-theme='dark'] .admin-question-row-main strong,
+html[data-theme='dark'] .admin-question-row-snippet,
 html[data-theme='dark'] .admin-question-row-detail-main h3,
 html[data-theme='dark'] .admin-question-preview-head h3 {
   color: #f3f7fd;

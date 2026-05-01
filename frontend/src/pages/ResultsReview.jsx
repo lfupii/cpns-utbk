@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import LatexContent from '../components/LatexContent';
 import apiClient from '../api';
 
 function parseScoreDetails(rawValue) {
@@ -30,7 +31,14 @@ function ReviewOption({ option, isPointQuestion = false }) {
     <div className={`rounded-2xl border p-4 ${optionClasses}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1">
-          <p className="font-semibold text-gray-900">{option.letter}. {option.text || 'Opsi berbasis gambar'}</p>
+          <div className="flex items-start gap-2">
+            <p className="font-semibold text-gray-900">{option.letter}.</p>
+            <LatexContent
+              content={option.text}
+              placeholder="Opsi berbasis gambar"
+              className="flex-1 font-semibold text-gray-900"
+            />
+          </div>
           {option.image_url && (
             <img
               src={option.image_url}
@@ -260,9 +268,10 @@ export default function ResultsReview() {
                 {activeItem.section_name ? ` • ${activeItem.section_name}` : ''}
               </p>
               {activeItem.question_text && (
-                <p className="mt-3 whitespace-pre-line text-xl font-semibold text-gray-900">
-                  {activeItem.question_text}
-                </p>
+                <LatexContent
+                  content={activeItem.question_text}
+                  className="mt-3 text-xl font-semibold text-gray-900"
+                />
               )}
             </div>
             <span className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold ${activeStatusClasses}`}>
@@ -293,9 +302,11 @@ export default function ResultsReview() {
 
           <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5">
             <p className="text-sm font-semibold text-blue-800">Catatan Pembahasan</p>
-            <p className="mt-2 whitespace-pre-line text-sm text-blue-900">
-              {activeItem.explanation_notes || 'Pembahasan untuk soal ini belum diisi admin.'}
-            </p>
+            <LatexContent
+              content={activeItem.explanation_notes}
+              placeholder="Pembahasan untuk soal ini belum diisi admin."
+              className="mt-2 text-sm text-blue-900"
+            />
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">

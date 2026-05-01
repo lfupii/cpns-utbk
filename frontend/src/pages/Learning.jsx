@@ -1,8 +1,9 @@
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import React, { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
 import BrandLogo from '../components/BrandLogo';
 import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
+import LatexContent from '../components/LatexContent';
 import ProfileDropdown from '../components/ProfileDropdown';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
@@ -18,6 +19,9 @@ const EMPTY_ARRAY = [];
 const EMPTY_OBJECT = {};
 const CALENDAR_WEEKDAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 const DASHBOARD_TOPIC_ACCENTS = ['blue', 'green', 'pink', 'cyan'];
+const LEARNING_VIEW_DASHBOARD = 'dashboard';
+const LEARNING_VIEW_MATERIAL = 'material';
+const LEARNING_VIEW_TRYOUT = 'tryout';
 
 function LearningIcon({ name }) {
   switch (name) {
@@ -287,25 +291,84 @@ function findInitialMiniTestQuestionId(questions, answers) {
   return Number(firstUnansweredQuestion?.id || nextQuestions[0]?.id || 0) || null;
 }
 
+function normalizeLearningView(value) {
+  const normalizedValue = String(value || '').trim().toLowerCase();
+  if (normalizedValue === LEARNING_VIEW_MATERIAL) {
+    return LEARNING_VIEW_MATERIAL;
+  }
+  if (normalizedValue === LEARNING_VIEW_TRYOUT) {
+    return LEARNING_VIEW_TRYOUT;
+  }
+  return LEARNING_VIEW_DASHBOARD;
+}
+
+function parseLearningTopicIndex(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+}
+
+function toContentView(view) {
+  if (view === LEARNING_VIEW_MATERIAL) {
+    return 'materi';
+  }
+
+  if (view === LEARNING_VIEW_TRYOUT) {
+    return 'tryout';
+  }
+
+  return 'dashboard';
+}
+
+function buildMiniTestPath(packageId, sectionCode) {
+  return `/learning/${Number(packageId)}/mini-test/${encodeURIComponent(String(sectionCode || '').trim())}`;
+}
+
 export default function Learning() {
-  const { packageId } = useParams();
+  const { packageId, miniTestSectionCode } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { isAuthenticated, isAdmin, logout, user } = useAuth();
   const numericPackageId = Number(packageId);
+  const routeMiniTestSectionCode = String(miniTestSectionCode || '').trim();
+  const isDedicatedMiniTestRoute = routeMiniTestSectionCode !== '';
   const previewMode = String(searchParams.get('preview') || '').trim().toLowerCase();
   const previewSectionCode = String(searchParams.get('section') || '').trim();
-  const previewTopicParam = Number(searchParams.get('topic') || 0);
-  const previewTopicIndex = Number.isFinite(previewTopicParam) ? Math.max(0, Math.floor(previewTopicParam)) : 0;
+  const previewTopicIndex = parseLearningTopicIndex(searchParams.get('topic'));
   const isDraftPreview = previewMode === 'draft' && previewSectionCode !== '';
+  const requestedLearningView = normalizeLearningView(
+    searchParams.get('view') || (!isDraftPreview && searchParams.get('section') ? LEARNING_VIEW_MATERIAL : LEARNING_VIEW_DASHBOARD)
+  );
+  const requestedMaterialSectionCode = isDraftPreview || isDedicatedMiniTestRoute
+    ? ''
+    : String(searchParams.get('section') || '').trim();
+  const requestedMaterialTopicIndex = isDraftPreview || isDedicatedMiniTestRoute
+    ? 0
+    : parseLearningTopicIndex(searchParams.get('topic'));
+  const initialRequestedSectionCode = isDraftPreview
+    ? previewSectionCode
+    : isDedicatedMiniTestRoute
+    ? routeMiniTestSectionCode
+    : requestedMaterialSectionCode;
+  const initialContentView = isDraftPreview || isDedicatedMiniTestRoute
+    ? 'materi'
+    : toContentView(requestedLearningView);
+  const initialSectionView = isDedicatedMiniTestRoute ? 'mini-test' : 'material';
+  const initialTopicIndex = isDraftPreview
+    ? previewTopicIndex
+    : requestedLearningView === LEARNING_VIEW_MATERIAL
+    ? requestedMaterialTopicIndex
+    : 0;
   const [learning, setLearning] = useState(null);
-  const [activeSectionCode, setActiveSectionCode] = useState('');
+  const [activeSectionCode, setActiveSectionCode] = useState(initialRequestedSectionCode);
   const [sectionTests, setSectionTests] = useState({});
-  const [contentView, setContentView] = useState('dashboard');
-  const [activeTopicIndex, setActiveTopicIndex] = useState(0);
+  const [contentView, setContentView] = useState(initialContentView);
+  const [activeTopicIndex, setActiveTopicIndex] = useState(initialTopicIndex);
   const [materialsExpanded, setMaterialsExpanded] = useState(true);
-  const [expandedMaterialSections, setExpandedMaterialSections] = useState({});
-  const [activeSectionView, setActiveSectionView] = useState('material');
+  const [expandedMaterialSections, setExpandedMaterialSections] = useState(
+    initialRequestedSectionCode ? { [initialRequestedSectionCode]: true } : {}
+  );
+  const [activeSectionView, setActiveSectionView] = useState(initialSectionView);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
@@ -315,6 +378,8 @@ export default function Learning() {
   const sectionTestPendingSaveRef = useRef({});
   const materialViewRef = useRef(null);
   const autoResumeMiniTestRef = useRef(false);
+  const pendingMaterialScrollBehaviorRef = useRef('auto');
+  const lastMaterialViewportKeyRef = useRef('');
   const deferredLearningSearch = useDeferredValue(learningSearch.trim().toLowerCase());
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang UTBK';
   const greetingName = getFirstName(displayName);
@@ -343,17 +408,42 @@ export default function Learning() {
       const response = await apiClient.get(`/learning/package?${query.toString()}`);
       const payload = response.data.data;
       setLearning(payload);
-      const requestedSectionCode = isDraftPreview && payload.sections?.some((section) => section.code === previewSectionCode)
+      const availableSections = Array.isArray(payload.sections) ? payload.sections : [];
+      const requestedSectionCandidate = isDraftPreview
         ? previewSectionCode
-        : payload.sections?.[0]?.code || '';
-      setActiveSectionCode(requestedSectionCode);
-      setActiveTopicIndex(isDraftPreview ? previewTopicIndex : 0);
-      if (isDraftPreview && requestedSectionCode) {
+        : isDedicatedMiniTestRoute
+        ? routeMiniTestSectionCode
+        : requestedMaterialSectionCode;
+      const resolvedSectionCode = requestedSectionCandidate && availableSections.some((section) => section.code === requestedSectionCandidate)
+        ? requestedSectionCandidate
+        : availableSections[0]?.code || '';
+      const resolvedSection = availableSections.find((section) => section.code === resolvedSectionCode) || null;
+      const maxResolvedTopicIndex = Math.max(0, getSectionTopics(resolvedSection).length - 1);
+
+      setActiveSectionCode(resolvedSectionCode);
+
+      if (isDraftPreview) {
         setContentView('materi');
         setActiveSectionView('material');
+        setActiveTopicIndex(Math.min(previewTopicIndex, maxResolvedTopicIndex));
+      } else if (isDedicatedMiniTestRoute) {
+        setContentView('materi');
+        setActiveSectionView('mini-test');
+        setActiveTopicIndex(0);
+      } else {
+        setContentView(toContentView(requestedLearningView));
+        setActiveSectionView('material');
+        setActiveTopicIndex(
+          requestedLearningView === LEARNING_VIEW_MATERIAL
+            ? Math.min(requestedMaterialTopicIndex, maxResolvedTopicIndex)
+            : 0
+        );
+      }
+
+      if (resolvedSectionCode) {
         setMaterialsExpanded(true);
         setExpandedMaterialSections({
-          [requestedSectionCode]: true,
+          [resolvedSectionCode]: true,
         });
       }
     } catch (err) {
@@ -361,19 +451,39 @@ export default function Learning() {
     } finally {
       setLoading(false);
     }
-  }, [isDraftPreview, numericPackageId, previewSectionCode, previewTopicIndex]);
+  }, [
+    isDedicatedMiniTestRoute,
+    isDraftPreview,
+    numericPackageId,
+    previewSectionCode,
+    previewTopicIndex,
+    requestedLearningView,
+    requestedMaterialSectionCode,
+    requestedMaterialTopicIndex,
+    routeMiniTestSectionCode,
+  ]);
 
   useEffect(() => {
     fetchLearning();
   }, [fetchLearning]);
 
   useEffect(() => {
-    setContentView('dashboard');
+    setContentView(initialContentView);
+    setActiveSectionView(initialSectionView);
     setMaterialsExpanded(true);
-    setExpandedMaterialSections({});
-    setActiveTopicIndex(0);
+    setExpandedMaterialSections(initialRequestedSectionCode ? { [initialRequestedSectionCode]: true } : {});
+    setActiveTopicIndex(initialTopicIndex);
+    setActiveSectionCode(initialRequestedSectionCode);
+    pendingMaterialScrollBehaviorRef.current = 'auto';
+    lastMaterialViewportKeyRef.current = '';
     autoResumeMiniTestRef.current = false;
-  }, [numericPackageId]);
+  }, [
+    initialContentView,
+    initialRequestedSectionCode,
+    initialSectionView,
+    initialTopicIndex,
+    numericPackageId,
+  ]);
 
   const sections = useMemo(() => learning?.sections || [], [learning]);
   const activeSection = useMemo(
@@ -388,6 +498,92 @@ export default function Learning() {
     () => activeSectionTopics[activeTopicIndex] || activeSectionTopics[0] || null,
     [activeSectionTopics, activeTopicIndex]
   );
+
+  useEffect(() => {
+    if (loading || isDraftPreview) {
+      return;
+    }
+
+    const requestedMaterialSection = sections.find((section) => section.code === requestedMaterialSectionCode) || activeSection || null;
+    const maxRequestedTopicIndex = Math.max(0, getSectionTopics(requestedMaterialSection).length - 1);
+    const clampedRequestedMaterialTopicIndex = Math.min(requestedMaterialTopicIndex, maxRequestedTopicIndex);
+
+    if (isDedicatedMiniTestRoute) {
+      if (contentView !== 'materi') {
+        setContentView('materi');
+      }
+      if (activeSectionView !== 'mini-test') {
+        setActiveSectionView('mini-test');
+      }
+      if (
+        routeMiniTestSectionCode
+        && sections.some((section) => section.code === routeMiniTestSectionCode)
+        && routeMiniTestSectionCode !== activeSectionCode
+      ) {
+        setActiveSectionCode(routeMiniTestSectionCode);
+      }
+      if (routeMiniTestSectionCode) {
+        setMaterialsExpanded(true);
+        setExpandedMaterialSections((current) => ({
+          ...current,
+          [routeMiniTestSectionCode]: true,
+        }));
+      }
+      return;
+    }
+
+    if (requestedLearningView === LEARNING_VIEW_TRYOUT) {
+      if (contentView !== 'tryout') {
+        setContentView('tryout');
+      }
+      return;
+    }
+
+    if (requestedLearningView === LEARNING_VIEW_MATERIAL) {
+      if (contentView !== 'materi') {
+        setContentView('materi');
+      }
+      if (activeSectionView !== 'material') {
+        setActiveSectionView('material');
+      }
+      if (
+        requestedMaterialSectionCode
+        && sections.some((section) => section.code === requestedMaterialSectionCode)
+        && requestedMaterialSectionCode !== activeSectionCode
+      ) {
+        setActiveSectionCode(requestedMaterialSectionCode);
+      }
+      if (clampedRequestedMaterialTopicIndex !== activeTopicIndex) {
+        setActiveTopicIndex(clampedRequestedMaterialTopicIndex);
+      }
+      if (requestedMaterialSectionCode) {
+        setMaterialsExpanded(true);
+        setExpandedMaterialSections((current) => ({
+          ...current,
+          [requestedMaterialSectionCode]: true,
+        }));
+      }
+      return;
+    }
+
+    if (contentView !== 'dashboard') {
+      setContentView('dashboard');
+    }
+  }, [
+    activeSectionCode,
+    activeSectionView,
+    activeTopicIndex,
+    contentView,
+    isDedicatedMiniTestRoute,
+    isDraftPreview,
+    loading,
+    activeSection,
+    requestedLearningView,
+    requestedMaterialSectionCode,
+    requestedMaterialTopicIndex,
+    routeMiniTestSectionCode,
+    sections,
+  ]);
   useEffect(() => {
     if (activeSectionTopics.length === 0) {
       return;
@@ -658,7 +854,34 @@ export default function Learning() {
     ? 'Cari materi, mini test, atau topik...'
     : 'Pencarian cepat tersedia di dashboard';
 
-  const scrollToMaterialTop = useCallback(() => {
+  const syncLearningUrl = useCallback(({ view, sectionCode = '', topicIndex = 0 } = {}) => {
+    if (isDraftPreview || numericPackageId <= 0) {
+      return;
+    }
+
+    const nextView = normalizeLearningView(view);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('view', nextView);
+
+    if (sectionCode) {
+      nextParams.set('section', sectionCode);
+      nextParams.set('topic', String(Math.max(0, Math.floor(Number(topicIndex || 0)) || 0)));
+    } else {
+      nextParams.delete('section');
+      nextParams.delete('topic');
+    }
+
+    const nextSearch = nextParams.toString();
+    navigate(
+      {
+        pathname: `/learning/${numericPackageId}`,
+        search: nextSearch ? `?${nextSearch}` : '',
+      },
+      { replace: true }
+    );
+  }, [isDraftPreview, navigate, numericPackageId, searchParams]);
+
+  const scrollToMaterialTop = useCallback((behavior = 'auto') => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -666,7 +889,7 @@ export default function Learning() {
     const scrollTarget = materialViewRef.current;
     if (scrollTarget?.scrollIntoView) {
       scrollTarget.scrollIntoView({
-        behavior: 'smooth',
+        behavior,
         block: 'start',
       });
       return;
@@ -674,9 +897,82 @@ export default function Learning() {
 
     window.scrollTo({
       top: 0,
-      behavior: 'smooth',
+      behavior,
     });
   }, []);
+
+  useLayoutEffect(() => {
+    if (loading || contentView !== 'materi') {
+      return;
+    }
+
+    const nextViewportKey = activeSectionView === 'mini-test'
+      ? `mini-test:${activeSectionCode}`
+      : `material:${activeSectionCode}:${activeTopicIndex}`;
+
+    if (!nextViewportKey || nextViewportKey === lastMaterialViewportKeyRef.current) {
+      return;
+    }
+
+    lastMaterialViewportKeyRef.current = nextViewportKey;
+    scrollToMaterialTop(pendingMaterialScrollBehaviorRef.current);
+    pendingMaterialScrollBehaviorRef.current = 'auto';
+  }, [activeSectionCode, activeSectionView, activeTopicIndex, contentView, loading, scrollToMaterialTop]);
+
+  useEffect(() => {
+    if (contentView !== 'materi') {
+      lastMaterialViewportKeyRef.current = '';
+    }
+  }, [contentView]);
+
+  const jumpToSectionMaterial = useCallback((sectionCode, topicIndex = 0) => {
+    if (!sectionCode) {
+      return;
+    }
+
+    const safeTopicIndex = Math.max(0, Math.floor(Number(topicIndex || 0)) || 0);
+    pendingMaterialScrollBehaviorRef.current = 'auto';
+    setContentView('materi');
+    setActiveSectionView('material');
+    setActiveSectionCode(sectionCode);
+    setActiveTopicIndex(safeTopicIndex);
+    setMaterialsExpanded(true);
+    setExpandedMaterialSections((current) => ({
+      ...current,
+      [sectionCode]: true,
+    }));
+    syncLearningUrl({
+      view: LEARNING_VIEW_MATERIAL,
+      sectionCode,
+      topicIndex: safeTopicIndex,
+    });
+  }, [syncLearningUrl]);
+
+  const toggleMaterialSection = (sectionCode) => {
+    setExpandedMaterialSections((current) => ({
+      ...current,
+      [sectionCode]: !current[sectionCode],
+    }));
+  };
+
+  const openSectionTestView = useCallback((sectionCode) => {
+    if (!sectionCode) {
+      return;
+    }
+
+    pendingMaterialScrollBehaviorRef.current = 'auto';
+    setContentView('materi');
+    setActiveSectionView('mini-test');
+    setActiveSectionCode(sectionCode);
+    setMaterialsExpanded(true);
+    setExpandedMaterialSections((current) => ({
+      ...current,
+      [sectionCode]: true,
+    }));
+    if (!isDraftPreview && location.pathname !== buildMiniTestPath(numericPackageId, sectionCode)) {
+      navigate(buildMiniTestPath(numericPackageId, sectionCode));
+    }
+  }, [isDraftPreview, location.pathname, navigate, numericPackageId]);
 
   const handleMaterialTopicNavigation = useCallback((direction) => {
     if (activeSectionTopics.length <= 0) {
@@ -688,47 +984,8 @@ export default function Learning() {
       return;
     }
 
-    setActiveTopicIndex(nextTopicIndex);
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        scrollToMaterialTop();
-      });
-    });
-  }, [activeSectionTopics.length, activeTopicIndex, scrollToMaterialTop]);
-
-  const jumpToSectionMaterial = (sectionCode, topicIndex = 0) => {
-    setContentView('materi');
-    setActiveSectionView('material');
-    setActiveSectionCode(sectionCode);
-    setActiveTopicIndex(topicIndex);
-    setMaterialsExpanded(true);
-    setExpandedMaterialSections((current) => ({
-      ...current,
-      [sectionCode]: true,
-    }));
-  };
-
-  const toggleMaterialSection = (sectionCode) => {
-    setExpandedMaterialSections((current) => ({
-      ...current,
-      [sectionCode]: !current[sectionCode],
-    }));
-  };
-
-  const openSectionTestView = (sectionCode) => {
-    if (!sectionCode) {
-      return;
-    }
-
-    setContentView('materi');
-    setActiveSectionView('mini-test');
-    setActiveSectionCode(sectionCode);
-    setMaterialsExpanded(true);
-    setExpandedMaterialSections((current) => ({
-      ...current,
-      [sectionCode]: true,
-    }));
-  };
+    jumpToSectionMaterial(activeSection?.code || '', nextTopicIndex);
+  }, [activeSection?.code, activeSectionTopics.length, activeTopicIndex, jumpToSectionMaterial]);
 
   const updateSectionProgress = (sectionCode, progressPatch) => {
     setLearning((current) => {
@@ -1295,11 +1552,23 @@ export default function Learning() {
   }, [fetchLearning, sectionTests]);
 
   const openTryoutView = () => {
+    pendingMaterialScrollBehaviorRef.current = 'auto';
     setContentView('tryout');
+    syncLearningUrl({
+      view: LEARNING_VIEW_TRYOUT,
+      sectionCode: activeSection?.code || requestedMaterialSectionCode,
+      topicIndex: activeTopicIndex,
+    });
   };
 
   const openDashboardView = () => {
+    pendingMaterialScrollBehaviorRef.current = 'auto';
     setContentView('dashboard');
+    syncLearningUrl({
+      view: LEARNING_VIEW_DASHBOARD,
+      sectionCode: activeSection?.code || requestedMaterialSectionCode,
+      topicIndex: activeTopicIndex,
+    });
   };
 
   const desktopPageSubtitle = contentView === 'dashboard'
@@ -1521,9 +1790,26 @@ export default function Learning() {
     }
 
     autoResumeMiniTestRef.current = true;
+    if (
+      !isDedicatedMiniTestRoute
+      || routeMiniTestSectionCode !== activeMiniTestSession.sectionCode
+    ) {
+      navigate(buildMiniTestPath(numericPackageId, activeMiniTestSession.sectionCode), { replace: true });
+      return;
+    }
+
     openSectionTestView(activeMiniTestSession.sectionCode);
     loadSectionTest(activeMiniTestSession.sectionCode);
-  }, [loading, loadSectionTest, numericPackageId, sections]);
+  }, [
+    isDedicatedMiniTestRoute,
+    loading,
+    loadSectionTest,
+    navigate,
+    numericPackageId,
+    openSectionTestView,
+    routeMiniTestSectionCode,
+    sections,
+  ]);
 
   if (loading) {
     return (
@@ -2278,7 +2564,7 @@ export default function Learning() {
                       key={`${activeSection.code}-topic-tab-${topicIndex}`}
                       type="button"
                       className={topicIndex === activeTopicIndex ? 'learning-topic-button learning-topic-button-active' : 'learning-topic-button'}
-                      onClick={() => setActiveTopicIndex(topicIndex)}
+                      onClick={() => jumpToSectionMaterial(activeSection.code, topicIndex)}
                     >
                       <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
                       <small>{topic.visible_page_count || topic.pages?.length || 0} halaman terbuka</small>
@@ -2563,7 +2849,10 @@ export default function Learning() {
                                 <div className={`test-question-media test-question-media-${currentSectionQuestionImageLayout}`}>
                                   {currentSectionQuestion.question_text && (
                                     <div className="test-question-text-block">
-                                      <p className="test-question-text">{currentSectionQuestion.question_text}</p>
+                                      <LatexContent
+                                        content={currentSectionQuestion.question_text}
+                                        className="test-question-text"
+                                      />
                                     </div>
                                   )}
                                   {currentSectionQuestion.question_image_url && (
@@ -2595,7 +2884,12 @@ export default function Learning() {
                                     />
                                     <div className="test-option-copy">
                                       <p className="test-option-letter">{option.letter}.</p>
-                                      {option.text && <p className="test-option-text">{option.text}</p>}
+                                      {option.text && (
+                                        <LatexContent
+                                          content={option.text}
+                                          className="test-option-text"
+                                        />
+                                      )}
                                       {option.image_url && (
                                         <img
                                           src={option.image_url}

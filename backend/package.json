@@ -1,0 +1,10 @@
+{
+  "name": "cpns-utbk-backend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Build and local dev helpers for the PHP backend",
+  "scripts": {
+    "build": "php scripts/build.php",
+    "dev": "php -S 127.0.0.1:8000"
+  }
+}

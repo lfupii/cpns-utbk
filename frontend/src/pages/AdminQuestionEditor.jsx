@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AccountShell from '../components/AccountShell';
-import MathSymbolPalette from '../components/MathSymbolPalette';
+import LatexContent from '../components/LatexContent';
 import apiClient from '../api';
-import useMathTextInput from '../hooks/useMathTextInput';
 import { downloadQuestionExtractFile, hasQuestionExtractContent } from '../utils/questionExtract';
 
 const clampPointValue = (value, fallback = 1) => {
@@ -48,7 +47,6 @@ const QUESTION_IMAGE_LAYOUT_OPTIONS = [
 ];
 
 const TKP_PATTERN = /(^|[^a-z0-9])tkp([^a-z0-9]|$)|karakteristik pribadi/i;
-const TIU_PATTERN = /(^|[^a-z0-9])tiu([^a-z0-9]|$)|intelegensia umum/i;
 
 function isTkpSection(section) {
   if (!section) {
@@ -56,14 +54,6 @@ function isTkpSection(section) {
   }
 
   return TKP_PATTERN.test(`${section.code || ''} ${section.name || ''}`);
-}
-
-function isTiuSection(section) {
-  if (!section) {
-    return false;
-  }
-
-  return TIU_PATTERN.test(`${section.code || ''} ${section.name || ''}`);
 }
 
 function getOptionScoreWeight(option, fallback = 1) {
@@ -206,7 +196,6 @@ export default function AdminQuestionEditor() {
     [packageSections, questionForm.section_code]
   );
   const usesPointScoring = isTkpSection(activeSection);
-  const usesMathSymbolPalette = isTiuSection(activeSection);
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
   const backToBankSoalHref = `/admin?view=soal&package=${numericPackageId}&workspace=${workspace}${questionForm.question_id ? `&preview=${questionForm.question_id}` : ''}`;
   const activeSectionName = useMemo(
@@ -222,74 +211,6 @@ export default function AdminQuestionEditor() {
     () => hasQuestionExtractContent(extractQuestionSource),
     [extractQuestionSource]
   );
-  const getMathFieldValue = useCallback((fieldKey) => {
-    if (fieldKey === 'question_text' || fieldKey === 'explanation_notes') {
-      return questionForm[fieldKey] || '';
-    }
-
-    const [scope, indexText, fieldName] = String(fieldKey).split(':');
-    if (scope !== 'option') {
-      return '';
-    }
-
-    const optionIndex = Number(indexText);
-    return questionForm.options?.[optionIndex]?.[fieldName] || '';
-  }, [questionForm]);
-  const updateMathFieldValue = useCallback((fieldKey, nextValue) => {
-    setQuestionForm((current) => {
-      if (fieldKey === 'question_text' || fieldKey === 'explanation_notes') {
-        return {
-          ...current,
-          [fieldKey]: nextValue,
-        };
-      }
-
-      const [scope, indexText, fieldName] = String(fieldKey).split(':');
-      if (scope !== 'option') {
-        return current;
-      }
-
-      const optionIndex = Number(indexText);
-      if (!Number.isInteger(optionIndex) || !current.options?.[optionIndex]) {
-        return current;
-      }
-
-      return {
-        ...current,
-        options: current.options.map((option, currentOptionIndex) => (
-          currentOptionIndex === optionIndex ? { ...option, [fieldName]: nextValue } : option
-        )),
-      };
-    });
-  }, []);
-  const getMathFieldLabel = useCallback((fieldKey) => {
-    if (fieldKey === 'question_text') {
-      return 'Pertanyaan';
-    }
-
-    if (fieldKey === 'explanation_notes') {
-      return 'Catatan Pembahasan';
-    }
-
-    const [scope, indexText] = String(fieldKey).split(':');
-    if (scope !== 'option') {
-      return '';
-    }
-
-    const optionIndex = Number(indexText);
-    const optionLetter = questionForm.options?.[optionIndex]?.letter || String.fromCharCode(65 + optionIndex);
-    return `Opsi ${optionLetter}`;
-  }, [questionForm.options]);
-  const {
-    activeFieldLabel: activeMathFieldLabel,
-    getMathFieldProps,
-    insertMathToken,
-  } = useMathTextInput({
-    defaultFieldKey: 'question_text',
-    getFieldValue: getMathFieldValue,
-    getFieldLabel: getMathFieldLabel,
-    updateFieldValue: updateMathFieldValue,
-  });
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0) {
@@ -648,7 +569,11 @@ export default function AdminQuestionEditor() {
               <div className="admin-question-row-detail">
                 <div className="admin-question-row-detail-main">
                   <div>
-                    <h3>{selectedQuestion.question_text || 'Soal berbasis gambar'}</h3>
+                    <LatexContent
+                      content={selectedQuestion.question_text}
+                      placeholder="Soal berbasis gambar"
+                      className="admin-question-rich-title"
+                    />
                     <p className="text-muted">
                       {selectedQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
                     </p>
@@ -671,7 +596,11 @@ export default function AdminQuestionEditor() {
                           <span className="admin-correct-badge">Jawaban Benar</span>
                         )}
                       </div>
-                      <p>{option.text || 'Opsi berbasis gambar'}</p>
+                      <LatexContent
+                        content={option.text}
+                        placeholder="Opsi berbasis gambar"
+                        className="admin-option-preview-text"
+                      />
                       <AdminImagePreview
                         src={option.image_url}
                         alt={`Opsi ${option.letter}`}
@@ -683,7 +612,10 @@ export default function AdminQuestionEditor() {
                 {selectedQuestion.explanation_notes && (
                   <div className="admin-inline-note">
                     <strong>Pembahasan soal</strong>
-                    <p className="whitespace-pre-line">{selectedQuestion.explanation_notes}</p>
+                    <LatexContent
+                      content={selectedQuestion.explanation_notes}
+                      className="admin-rich-note-text"
+                    />
                   </div>
                 )}
               </div>
@@ -717,9 +649,12 @@ export default function AdminQuestionEditor() {
                     value={questionForm.question_text}
                     onChange={handleQuestionChange}
                     placeholder="Tulis soal di sini"
-                    spellCheck={usesMathSymbolPalette ? false : undefined}
-                    {...getMathFieldProps('question_text')}
                   />
+                  <small className="text-muted">
+                    Gunakan <code>$...$</code> untuk rumus inline dan <code>$$...$$</code> untuk rumus blok.
+                    Contoh: <code>{'$\\frac{1}{2}$'}</code>, <code>{'$\\sqrt{x}$'}</code>, <code>{'$\\sum_{i=1}^{n}$'}</code>.
+                    Format ini juga berlaku untuk opsi jawaban dan catatan pembahasan.
+                  </small>
                 </div>
 
                 <div className="account-form-grid">
@@ -731,8 +666,6 @@ export default function AdminQuestionEditor() {
                       value={questionForm.explanation_notes}
                       onChange={handleQuestionChange}
                       placeholder="Tulis pembahasan, catatan konsep, atau alasan jawaban benar di sini"
-                      spellCheck={usesMathSymbolPalette ? false : undefined}
-                      {...getMathFieldProps('explanation_notes')}
                     />
                   </div>
                 </div>
@@ -753,13 +686,6 @@ export default function AdminQuestionEditor() {
                     ))}
                   </select>
                 </div>
-
-                {usesMathSymbolPalette && (
-                  <MathSymbolPalette
-                    activeFieldLabel={activeMathFieldLabel}
-                    onInsert={insertMathToken}
-                  />
-                )}
 
                 {questionImagePanelVisible && (
                   <div className="admin-question-image-tools">
@@ -810,7 +736,7 @@ export default function AdminQuestionEditor() {
                         {questionForm.question_text && (
                           <div className="admin-question-media-copy-preview">
                             <span>Preview pertanyaan</span>
-                            <p>{questionForm.question_text}</p>
+                            <LatexContent content={questionForm.question_text} />
                           </div>
                         )}
                         <AdminImagePreview
@@ -873,8 +799,6 @@ export default function AdminQuestionEditor() {
                               value={option.text}
                               onChange={(event) => handleOptionFieldChange(index, 'text', event.target.value)}
                               placeholder={`Isi opsi ${option.letter}`}
-                              spellCheck={usesMathSymbolPalette ? false : undefined}
-                              {...getMathFieldProps(`option:${index}:text`)}
                             />
                             {isOptionImageEditorVisible && (
                               <div className="admin-option-image-tools">

@@ -166,7 +166,8 @@ jobs:
             set ftp:prefer-epsv false
             pwd
             cls -la
-            mirror -R --continue --verbose=2 --parallel=1 frontend/dist .
+            mirror -R --continue --verbose=2 --parallel=1 -X index.html frontend/dist .
+            put frontend/dist/index.html -o index.html
             bye
             " >"${lftp_log}" 2>&1
             status=$?

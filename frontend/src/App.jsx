@@ -288,8 +288,13 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const routerBasename = import.meta.env.BASE_URL === '/'
+    ? undefined
+    : import.meta.env.BASE_URL.replace(/\/$/, '');
+
   return (
     <BrowserRouter
+      basename={routerBasename}
       future={{
         v7_startTransition: true,
         v7_relativeSplatPath: true,

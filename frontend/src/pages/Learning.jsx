@@ -351,7 +351,9 @@ export default function Learning() {
     ? routeMiniTestSectionCode
     : requestedMaterialSectionCode;
   const initialContentView = isDraftPreview || isDedicatedMiniTestRoute
-    ? 'materi'
+    ? isDedicatedMiniTestRoute
+      ? 'tryout'
+      : 'materi'
     : toContentView(requestedLearningView);
   const initialSectionView = isDedicatedMiniTestRoute ? 'mini-test' : 'material';
   const initialTopicIndex = isDraftPreview
@@ -364,10 +366,6 @@ export default function Learning() {
   const [sectionTests, setSectionTests] = useState({});
   const [contentView, setContentView] = useState(initialContentView);
   const [activeTopicIndex, setActiveTopicIndex] = useState(initialTopicIndex);
-  const [materialsExpanded, setMaterialsExpanded] = useState(true);
-  const [expandedMaterialSections, setExpandedMaterialSections] = useState(
-    initialRequestedSectionCode ? { [initialRequestedSectionCode]: true } : {}
-  );
   const [activeSectionView, setActiveSectionView] = useState(initialSectionView);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
@@ -427,7 +425,7 @@ export default function Learning() {
         setActiveSectionView('material');
         setActiveTopicIndex(Math.min(previewTopicIndex, maxResolvedTopicIndex));
       } else if (isDedicatedMiniTestRoute) {
-        setContentView('materi');
+        setContentView('tryout');
         setActiveSectionView('mini-test');
         setActiveTopicIndex(0);
       } else {
@@ -440,12 +438,6 @@ export default function Learning() {
         );
       }
 
-      if (resolvedSectionCode) {
-        setMaterialsExpanded(true);
-        setExpandedMaterialSections({
-          [resolvedSectionCode]: true,
-        });
-      }
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal memuat ruang belajar');
     } finally {
@@ -470,8 +462,6 @@ export default function Learning() {
   useEffect(() => {
     setContentView(initialContentView);
     setActiveSectionView(initialSectionView);
-    setMaterialsExpanded(true);
-    setExpandedMaterialSections(initialRequestedSectionCode ? { [initialRequestedSectionCode]: true } : {});
     setActiveTopicIndex(initialTopicIndex);
     setActiveSectionCode(initialRequestedSectionCode);
     pendingMaterialScrollBehaviorRef.current = 'auto';
@@ -509,8 +499,8 @@ export default function Learning() {
     const clampedRequestedMaterialTopicIndex = Math.min(requestedMaterialTopicIndex, maxRequestedTopicIndex);
 
     if (isDedicatedMiniTestRoute) {
-      if (contentView !== 'materi') {
-        setContentView('materi');
+      if (contentView !== 'tryout') {
+        setContentView('tryout');
       }
       if (activeSectionView !== 'mini-test') {
         setActiveSectionView('mini-test');
@@ -522,19 +512,15 @@ export default function Learning() {
       ) {
         setActiveSectionCode(routeMiniTestSectionCode);
       }
-      if (routeMiniTestSectionCode) {
-        setMaterialsExpanded(true);
-        setExpandedMaterialSections((current) => ({
-          ...current,
-          [routeMiniTestSectionCode]: true,
-        }));
-      }
       return;
     }
 
     if (requestedLearningView === LEARNING_VIEW_TRYOUT) {
       if (contentView !== 'tryout') {
         setContentView('tryout');
+      }
+      if (activeSectionView !== 'material') {
+        setActiveSectionView('material');
       }
       return;
     }
@@ -556,18 +542,14 @@ export default function Learning() {
       if (clampedRequestedMaterialTopicIndex !== activeTopicIndex) {
         setActiveTopicIndex(clampedRequestedMaterialTopicIndex);
       }
-      if (requestedMaterialSectionCode) {
-        setMaterialsExpanded(true);
-        setExpandedMaterialSections((current) => ({
-          ...current,
-          [requestedMaterialSectionCode]: true,
-        }));
-      }
       return;
     }
 
     if (contentView !== 'dashboard') {
       setContentView('dashboard');
+    }
+    if (activeSectionView !== 'material') {
+      setActiveSectionView('material');
     }
   }, [
     activeSectionCode,
@@ -717,12 +699,14 @@ export default function Learning() {
   const hasNextTopic = activeSectionView === 'material' && activeTopicIndex < activeSectionTopics.length - 1;
   const isLastTopic = activeSectionView === 'material' && activeSectionTopics.length > 0 && activeTopicIndex === activeSectionTopics.length - 1;
   const shouldShowFocusLayout = isCompactViewport && contentView !== 'dashboard';
-  const mobileFocusTitle = contentView === 'tryout'
-    ? 'Menu Tryout'
-    : activeSectionView === 'mini-test'
+  const mobileFocusTitle = activeSectionView === 'mini-test'
     ? 'Mini Test Subtest'
+    : contentView === 'tryout'
+    ? 'Menu Tryout'
     : activeTopic?.title || activeSection?.name || 'Materi Subtest';
-  const mobileFocusSubtitle = contentView === 'tryout'
+  const mobileFocusSubtitle = activeSectionView === 'mini-test'
+    ? activeSection?.name || activeSection?.session_name || 'Subtest aktif'
+    : contentView === 'tryout'
     ? packageData?.name || 'Tryout keseluruhan'
     : activeSection?.name || activeSection?.session_name || 'Ruang belajar';
   const completedTryout = Number(summary.completed_attempts || 0) > 0;
@@ -916,7 +900,7 @@ export default function Learning() {
   }, []);
 
   useLayoutEffect(() => {
-    if (loading || contentView !== 'materi') {
+    if (loading || (contentView !== 'materi' && activeSectionView !== 'mini-test')) {
       return;
     }
 
@@ -934,10 +918,10 @@ export default function Learning() {
   }, [activeSectionCode, activeSectionView, activeTopicIndex, contentView, loading, scrollToMaterialTop]);
 
   useEffect(() => {
-    if (contentView !== 'materi') {
+    if (contentView !== 'materi' && activeSectionView !== 'mini-test') {
       lastMaterialViewportKeyRef.current = '';
     }
-  }, [contentView]);
+  }, [activeSectionView, contentView]);
 
   const jumpToSectionMaterial = useCallback((sectionCode, topicIndex = 0) => {
     if (!sectionCode) {
@@ -950,11 +934,6 @@ export default function Learning() {
     setActiveSectionView('material');
     setActiveSectionCode(sectionCode);
     setActiveTopicIndex(safeTopicIndex);
-    setMaterialsExpanded(true);
-    setExpandedMaterialSections((current) => ({
-      ...current,
-      [sectionCode]: true,
-    }));
     syncLearningUrl({
       view: LEARNING_VIEW_MATERIAL,
       sectionCode,
@@ -962,27 +941,15 @@ export default function Learning() {
     });
   }, [syncLearningUrl]);
 
-  const toggleMaterialSection = (sectionCode) => {
-    setExpandedMaterialSections((current) => ({
-      ...current,
-      [sectionCode]: !current[sectionCode],
-    }));
-  };
-
   const openSectionTestView = useCallback((sectionCode) => {
     if (!sectionCode) {
       return;
     }
 
     pendingMaterialScrollBehaviorRef.current = 'auto';
-    setContentView('materi');
+    setContentView('tryout');
     setActiveSectionView('mini-test');
     setActiveSectionCode(sectionCode);
-    setMaterialsExpanded(true);
-    setExpandedMaterialSections((current) => ({
-      ...current,
-      [sectionCode]: true,
-    }));
     if (!isDraftPreview && location.pathname !== buildMiniTestPath(numericPackageId, sectionCode)) {
       navigate(buildMiniTestPath(numericPackageId, sectionCode));
     }
@@ -1568,6 +1535,7 @@ export default function Learning() {
   const openTryoutView = () => {
     pendingMaterialScrollBehaviorRef.current = 'auto';
     setContentView('tryout');
+    setActiveSectionView('material');
     syncLearningUrl({
       view: LEARNING_VIEW_TRYOUT,
       sectionCode: activeSection?.code || requestedMaterialSectionCode,
@@ -1578,6 +1546,7 @@ export default function Learning() {
   const openDashboardView = () => {
     pendingMaterialScrollBehaviorRef.current = 'auto';
     setContentView('dashboard');
+    setActiveSectionView('material');
     syncLearningUrl({
       view: LEARNING_VIEW_DASHBOARD,
       sectionCode: activeSection?.code || requestedMaterialSectionCode,
@@ -1587,10 +1556,10 @@ export default function Learning() {
 
   const desktopPageSubtitle = contentView === 'dashboard'
     ? 'Lanjutkan persiapanmu hari ini.'
-    : contentView === 'tryout'
-    ? 'Kerjakan tryout keseluruhan setelah ritme belajarmu siap.'
     : activeSectionView === 'mini-test'
-    ? `Latihan singkat ${activeSection?.session_name || activeSection?.name || 'subtest aktif'} sebelum masuk tryout.`
+    ? `Latihan singkat ${activeSection?.session_name || activeSection?.name || 'subtest aktif'} sekarang dibuka dari menu tryout.`
+    : contentView === 'tryout'
+    ? 'Pilih mini test per subtest atau masuk ke tryout keseluruhan setelah ritme belajarmu siap.'
     : activeTopic?.title || activeSection?.session_name || 'Baca materi per topik dan lanjutkan progresmu.';
   const sidebarPrimaryItems = [
     {
@@ -1711,6 +1680,418 @@ export default function Learning() {
       label: 'Tryout selesai',
     },
   ];
+  const miniTestWorkspace = activeSectionView === 'mini-test' && activeSection ? (
+    <>
+      {!hasAccess && (
+        <div className="learning-locked-pages">
+          <strong>Mini test subtest terkunci.</strong>
+          <p>
+            {viewerIsAuthenticated
+              ? 'Aktifkan paket untuk membuka mini test subtest dan menyimpan milestone belajar.'
+              : 'Login untuk melihat akses penuh dan membuka mini test subtest.'}
+          </p>
+          <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
+            {viewerIsAuthenticated ? 'Beli Paket' : 'Login untuk Lanjut'}
+          </Link>
+        </div>
+      )}
+
+      {hasAccess && currentSectionTest.open && (
+        <div className="learning-subtest-box">
+          {currentSectionTest.loading ? (
+            <p>Memuat mini test...</p>
+          ) : currentSectionTest.error ? (
+            <div className="test-feedback test-feedback-error">{currentSectionTest.error}</div>
+          ) : currentSectionQuestions.length === 0 ? (
+            <p className="text-muted">Soal mini test untuk subtest ini belum tersedia.</p>
+          ) : !currentSectionQuestion ? (
+            <p className="text-muted">Soal mini test belum siap ditampilkan.</p>
+          ) : (
+            <>
+              {currentSectionTest.saveMessage && (
+                <div className="test-feedback test-feedback-success">{currentSectionTest.saveMessage}</div>
+              )}
+
+              <section className="test-hero">
+                <div className="test-hero-copy">
+                  <p className="test-hero-kicker">Mini Test Subtest</p>
+                  <h1 className="test-hero-title">{activeSection.name}</h1>
+                  <p className="test-hero-description">
+                    Flow mini test sekarang mengikuti tryout: jawaban tersimpan otomatis, soal bisa ditandai ragu-ragu, dan hasil diproses saat kamu selesaikan atau waktu habis.
+                  </p>
+                  <div className="test-hero-pills" aria-label="Ringkasan mini test subtest">
+                    <span>{packageData.name}</span>
+                    <span>{currentSectionQuestions.length} soal</span>
+                    <span>{activeSection.session_name || 'Subtest aktif'}</span>
+                  </div>
+                </div>
+
+                <div className="test-hero-stats">
+                  <div className="test-hero-stat-card">
+                    <span>Terjawab</span>
+                    <strong>{currentSectionAnsweredCount} / {currentSectionQuestions.length}</strong>
+                    <small>Progress mini test subtest aktif</small>
+                  </div>
+                  <div ref={floatingTimerRef} className="test-hero-stat-card">
+                    <span>Sisa waktu</span>
+                    <strong>{formatTime(currentSectionTest.remainingSeconds)}</strong>
+                    <small>{currentSectionTest.result ? 'Timer berhenti setelah hasil tersimpan' : 'Waktu akan berjalan selama mini test dibuka'}</small>
+                  </div>
+                  <div className="test-hero-stat-card">
+                    <span>Status</span>
+                    <strong>{currentSectionTest.result ? 'Selesai' : 'Sedang dikerjakan'}</strong>
+                    <small>
+                      {currentSectionAllAnswered
+                        ? 'Semua soal sudah terisi.'
+                        : `${currentSectionQuestions.length - currentSectionAnsweredCount} soal masih kosong.`}
+                    </small>
+                  </div>
+                </div>
+              </section>
+
+              {currentSectionTest.result && (
+                <div className="test-feedback test-feedback-success">
+                  Hasil mini test: <strong>{formatScore(currentSectionTest.result)}</strong>
+                </div>
+              )}
+
+              {currentSectionTest.result && (
+                <div className="learning-section-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => closeSectionTest(activeSection.code)}
+                  >
+                    Kembali ke Ringkasan Mini Test
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => loadSectionTest(activeSection.code, { restart: true })}
+                  >
+                    Ulangi Mini Test
+                  </button>
+                </div>
+              )}
+
+              <FloatingTestDock
+                ariaLabel="Timer mini test mengambang"
+                stat={floatingTimerStat}
+                visible={currentSectionTest.open && shouldShowFloatingDock}
+              />
+
+              <div className="test-layout-grid">
+                <div className="test-main-column">
+                  <div className="card test-question-card">
+                    <div className="test-question-stage">
+                      <div className="test-inline-navigation">
+                        <div className="test-inline-navigation-head">
+                          <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
+                          <p className="test-inline-navigation-note">
+                            Klik nomor soal. Kuning berarti ragu-ragu.
+                          </p>
+                        </div>
+                        <div className="test-question-strip test-question-strip-inline" role="tablist" aria-label="Navigasi mini test subtest">
+                          {currentSectionQuestions.map((question, index) => {
+                            const answeredValue = currentSectionDraftAnswers[question.id]
+                              || currentSectionDraftAnswers[String(question.id)]
+                              || currentSectionSavedAnswers[question.id]
+                              || currentSectionSavedAnswers[String(question.id)];
+                            const isMarkedForReview = Boolean(
+                              currentSectionReviewFlags[String(question.id)] || currentSectionReviewFlags[question.id]
+                            );
+
+                            return (
+                              <button
+                                key={question.id}
+                                type="button"
+                                onClick={() => goToSectionQuestion(activeSection.code, question.id)}
+                                className={[
+                                  'test-nav-chip',
+                                  'test-nav-chip-button',
+                                  Number(question.id) === Number(currentSectionQuestion.id)
+                                    ? 'test-nav-chip-current'
+                                    : answeredValue
+                                    ? 'test-nav-chip-done'
+                                    : 'test-nav-chip-empty',
+                                  isMarkedForReview ? 'test-nav-chip-review' : '',
+                                ].filter(Boolean).join(' ')}
+                                aria-label={`Soal ${index + 1}${isMarkedForReview ? ', ditandai ragu-ragu' : ''}`}
+                                title={isMarkedForReview ? `Soal ${index + 1} ditandai ragu-ragu` : `Soal ${index + 1}`}
+                              >
+                                {index + 1}
+                                {isMarkedForReview && <span className="test-nav-chip-flag" aria-hidden="true" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="test-nav-legend">
+                          <p><span className="test-nav-legend-dot test-nav-legend-dot-current" />Soal aktif</p>
+                          <p><span className="test-nav-legend-dot test-nav-legend-dot-done" />Sudah dijawab</p>
+                          <p><span className="test-nav-legend-dot test-nav-legend-dot-review" />Ragu-ragu</p>
+                          <p><span className="test-nav-legend-dot test-nav-legend-dot-empty" />Belum dijawab</p>
+                        </div>
+                      </div>
+
+                      <div className="test-question-head">
+                        <div className="test-question-heading">
+                          <span className="test-question-number">Soal {Math.max(1, currentSectionQuestionIndex + 1)}</span>
+                          <h2 className="test-question-title">Fokuskan jawabanmu di soal ini dulu</h2>
+                          <p className="test-question-section-label">{activeSection.name}</p>
+                        </div>
+                      </div>
+
+                      {(currentSectionQuestion.question_text || currentSectionQuestion.question_image_url) && (
+                        <div className={`test-question-media test-question-media-${currentSectionQuestionImageLayout}`}>
+                          {currentSectionQuestion.question_text && (
+                            <div className="test-question-text-block">
+                              <LatexContent
+                                content={currentSectionQuestion.question_text}
+                                className="test-question-text"
+                              />
+                            </div>
+                          )}
+                          {currentSectionQuestion.question_image_url && (
+                            <div className="test-question-image-frame">
+                              <img
+                                src={currentSectionQuestion.question_image_url}
+                                alt={`Mini test soal ${currentSectionQuestionIndex + 1}`}
+                                className="test-question-image"
+                                loading="lazy"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="space-y-3 mb-8">
+                        {currentSectionQuestion.options?.map((option) => (
+                          <label
+                            key={option.id}
+                            className={`test-option ${Number(currentSectionDraftAnswers[currentSectionQuestion.id] || currentSectionDraftAnswers[String(currentSectionQuestion.id)] || currentSectionSavedAnswers[currentSectionQuestion.id] || currentSectionSavedAnswers[String(currentSectionQuestion.id)] || 0) === Number(option.id) ? 'test-option-active' : ''}`}
+                          >
+                            <input
+                              type="radio"
+                              name={`section-${activeSection.code}-question-${currentSectionQuestion.id}`}
+                              checked={Number(currentSectionDraftAnswers[currentSectionQuestion.id] || currentSectionDraftAnswers[String(currentSectionQuestion.id)] || currentSectionSavedAnswers[currentSectionQuestion.id] || currentSectionSavedAnswers[String(currentSectionQuestion.id)] || 0) === Number(option.id)}
+                              onChange={() => setSectionAnswer(activeSection.code, currentSectionQuestion.id, option.id)}
+                              disabled={Boolean(currentSectionTest.result)}
+                              className="mt-1 w-5 h-5 accent-blue-600"
+                            />
+                            <div className="test-option-copy">
+                              <p className="test-option-letter">{option.letter}.</p>
+                              {option.text && (
+                                <LatexContent
+                                  content={option.text}
+                                  className="test-option-text"
+                                />
+                              )}
+                              {option.image_url && (
+                                <img
+                                  src={option.image_url}
+                                  alt={`Opsi ${option.letter}`}
+                                  className="test-option-image"
+                                  loading="lazy"
+                                />
+                              )}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+
+                      <div className="test-action-row">
+                        <div className="test-action-buttons">
+                          <button
+                            type="button"
+                            onClick={() => handleSectionRelativeNavigation(activeSection.code, -1)}
+                            disabled={!previousSectionQuestionId}
+                            className="btn btn-outline test-action-button disabled:opacity-50"
+                          >
+                            ← Sebelumnya
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSectionRelativeNavigation(activeSection.code, 1)}
+                            disabled={!nextSectionQuestionId}
+                            className="btn btn-outline test-action-button disabled:opacity-50"
+                          >
+                            Selanjutnya →
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleSectionReviewFlag(activeSection.code, currentSectionQuestion.id)}
+                            disabled={Boolean(currentSectionTest.result) || !hasCurrentSectionAnswerSelected}
+                            title={hasCurrentSectionAnswerSelected ? undefined : 'Pilih jawaban dulu untuk mengaktifkan ragu-ragu'}
+                            className={`btn btn-outline test-action-button ${
+                              isCurrentQuestionMarkedForReview ? 'test-action-button-review-active' : ''
+                            }`}
+                          >
+                            {isCurrentQuestionMarkedForReview ? 'Batalkan Ragu-ragu' : 'Tandai Ragu-ragu'}
+                          </button>
+                        </div>
+
+                        <div className="test-action-helper">
+                          {currentSectionTest.result
+                            ? 'Hasil terakhir sudah tersimpan. Kamu bisa kembali ke ringkasan mini test atau ulangi dari awal.'
+                            : currentSectionAllAnswered
+                            ? 'Semua jawaban sudah terisi dan terus tersimpan otomatis.'
+                            : 'Jawaban tersimpan otomatis saat dipilih. Tombol submit akan muncul setelah semua soal terjawab. Jika waktu habis, jawaban yang sudah masuk akan langsung diproses.'}
+                          {!currentSectionTest.result && !hasCurrentSectionAnswerSelected ? ' Pilih salah satu opsi dulu untuk membuka tombol ragu-ragu.' : ''}
+                        </div>
+
+                        <div className="test-action-buttons test-action-buttons-end">
+                          {(currentSectionAllAnswered || currentSectionTest.result) && (
+                            <button
+                              type="button"
+                              className="btn btn-primary test-action-button disabled:opacity-50"
+                              disabled={actionLoading === `test-${activeSection.code}` || currentSectionQuestions.length === 0}
+                              onClick={() => (
+                                currentSectionTest.result
+                                  ? loadSectionTest(activeSection.code, { restart: true })
+                                  : submitSectionTest(activeSection.code, { confirmManual: true })
+                              )}
+                            >
+                              {actionLoading === `test-${activeSection.code}`
+                                ? 'Memproses...'
+                                : currentSectionTest.result
+                                ? 'Ulangi Mini Test'
+                                : activeSection.progress.subtest_test_completed
+                                ? 'Submit Ulang Mini Test'
+                                : 'Submit Mini Test'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {!isCompactViewport && (
+                  <div className="test-sidebar-column">
+                    <div className="test-sidebar-metrics">
+                      <div className="test-header-stat">
+                        <p className="test-header-stat-label">Terjawab</p>
+                        <p className="test-header-stat-value">{currentSectionAnsweredCount} / {currentSectionQuestions.length}</p>
+                      </div>
+                      <div className="test-header-stat">
+                        <p className="test-header-stat-label">Sisa Waktu</p>
+                        <p className={`test-header-stat-value ${Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'test-header-stat-value-danger' : 'test-header-stat-value-success'}`}>
+                          {formatTime(currentSectionTest.remainingSeconds)}
+                        </p>
+                      </div>
+                      <div className="test-header-stat">
+                        <p className="test-header-stat-label">Soal Aktif</p>
+                        <p className="test-header-stat-value">{Math.max(1, currentSectionQuestionIndex + 1)} / {currentSectionQuestions.length}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {hasAccess && !currentSectionTest.open && (
+        <div className="learning-subtest-box">
+          <section className="test-hero">
+            <div className="test-hero-copy">
+              <p className="test-hero-kicker">Preview Mini Test</p>
+              <h1 className="test-hero-title">{activeSection.name}</h1>
+              <p className="test-hero-description">
+                {hasOngoingSectionAttempt
+                  ? 'Mini test ini masih berjalan. Buka lagi untuk melanjutkan dari jawaban dan waktu terakhir.'
+                  : 'Cek dulu ringkasannya. Timer baru berjalan setelah kamu menekan tombol mulai.'}
+              </p>
+              <div className="test-hero-pills" aria-label="Ringkasan preview mini test subtest">
+                <span>{packageData.name}</span>
+                <span>{activeSection.session_name || 'Subtest aktif'}</span>
+                <span>{activeSectionMiniTestQuestionCount} soal</span>
+                <span>{activeSectionMiniTestDurationLabel}</span>
+              </div>
+            </div>
+
+            <div className="test-hero-stats">
+              <div className="test-hero-stat-card">
+                <span>Judul mini test</span>
+                <strong>{activeSection.name}</strong>
+                <small>{activeSection.session_name || 'Subtest belajar aktif'}</small>
+              </div>
+              <div className="test-hero-stat-card">
+                <span>Durasi</span>
+                <strong>{activeSectionMiniTestDurationLabel}</strong>
+                <small>
+                  {activeSectionMiniTestQuestionCount > 0
+                    ? `${activeSectionMiniTestQuestionCount} soal akan dikerjakan dalam satu sesi.`
+                    : 'Durasi akan dipakai saat soal mini test tersedia.'}
+                </small>
+              </div>
+              <div className="test-hero-stat-card">
+                <span>Status</span>
+                <strong>{hasOngoingSectionAttempt ? 'Sedang berjalan' : activeSection.progress.subtest_test_completed ? 'Pernah selesai' : 'Belum dimulai'}</strong>
+                <small>
+                  {hasOngoingSectionAttempt
+                    ? 'Jawaban dan timer akan dilanjutkan dari attempt yang masih aktif.'
+                    : activeSection.progress.subtest_test_completed
+                    ? 'Kamu bisa mulai lagi untuk mengulang mini test ini.'
+                    : 'Belum ada timer yang berjalan sebelum tombol mulai ditekan.'}
+                </small>
+              </div>
+            </div>
+          </section>
+
+          <div className="learning-mini-test-preview-topics">
+            <p className="learning-sidebar-label">Topik mini test</p>
+            {activeSectionTopicTitles.length > 0 ? (
+              <div className="learning-mini-test-topic-chips">
+                {activeSectionTopicTitles.map((topicTitle) => (
+                  <span key={`${activeSection.code}-${topicTitle}`} className="learning-mini-test-topic-chip">
+                    {topicTitle}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted">Topik untuk mini test ini masih disiapkan.</p>
+            )}
+          </div>
+
+          {activeSectionMiniTestQuestionCount <= 0 && (
+            <div className="test-feedback test-feedback-error">
+              Soal mini test untuk subtest ini belum tersedia.
+            </div>
+          )}
+
+          {latestSectionMiniTestResult && (
+            <div className="test-feedback test-feedback-success">
+              Hasil terakhir mini test: <strong>{formatScore(latestSectionMiniTestResult)}</strong>
+            </div>
+          )}
+
+          <div className="learning-section-actions">
+            {latestSectionMiniTestResult && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => navigate(`/learning/${numericPackageId}/review/${encodeURIComponent(activeSection.code)}`)}
+              >
+                Lihat Pembahasan Soal
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={activeSectionMiniTestQuestionCount <= 0}
+              onClick={() => loadSectionTest(activeSection.code, { restart: Boolean(latestSectionMiniTestResult && !hasOngoingSectionAttempt) })}
+            >
+              {hasOngoingSectionAttempt ? 'Lanjutkan Mini Test' : latestSectionMiniTestResult ? 'Ulangi Mini Test' : 'Mulai Mini Test'}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  ) : null;
 
   useEffect(() => {
     if (activeSectionView !== 'mini-test' || !hasAccess || !activeSection?.code) {
@@ -1879,7 +2260,7 @@ export default function Learning() {
     <AccountShell
       shellClassName={`account-shell-learning${shouldShowFocusLayout ? ' account-shell-learning-focus' : ''}`}
       title={`Ruang Belajar ${packageData.name}`}
-      subtitle="Baca materi per subtest, kerjakan mini test, lalu lanjut ke tryout keseluruhan saat paket aktif."
+      subtitle="Baca materi per subtest, buka mini test dari menu tryout, lalu lanjut ke tryout keseluruhan saat paket aktif."
       hideNavbar={!isCompactViewport}
       hidePageHeader
     >
@@ -1954,74 +2335,6 @@ export default function Learning() {
               </div>
             </div>
 
-            <div className="learning-sidebar-card learning-sidebar-sections-card">
-              <button
-                type="button"
-                className="learning-sidebar-toggle learning-sidebar-toggle-secondary learning-sidebar-toggle-rich"
-                onClick={() => setMaterialsExpanded((current) => !current)}
-                aria-expanded={materialsExpanded}
-              >
-                <span>
-                  <strong>Subtest Paket</strong>
-                  <small>{sections.length} subtest tersedia</small>
-                </span>
-                <span>{materialsExpanded ? '▴' : '▾'}</span>
-              </button>
-
-              {materialsExpanded && (
-                <div className="learning-sidebar-list learning-sidebar-list-stacked">
-                  {sections.map((section) => {
-                    const topics = getSectionTopics(section);
-                    const isTopicActive = contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code;
-                    const isMiniTestActive = contentView === 'materi' && activeSectionView === 'mini-test' && section.code === activeSection?.code;
-                    const isSectionExpanded = Boolean(expandedMaterialSections[section.code]);
-
-                    return (
-                      <div key={section.code} className="admin-section-sidebar-entry">
-                        <button
-                          type="button"
-                          className={isTopicActive || isMiniTestActive || isSectionExpanded ? 'learning-sidebar-item learning-sidebar-item-active admin-section-sidebar-item' : 'learning-sidebar-item admin-section-sidebar-item'}
-                          onClick={() => toggleMaterialSection(section.code)}
-                        >
-                          <span className="admin-section-sidebar-item-copy">
-                            <strong>{section.name}</strong>
-                            <small>{formatActiveTopicLabel(section)}</small>
-                          </span>
-                          <span className="admin-section-sidebar-caret" aria-hidden="true">
-                            {expandedMaterialSections[section.code] ? '▾' : '▸'}
-                          </span>
-                        </button>
-
-                        {expandedMaterialSections[section.code] && (
-                          <div className="admin-section-sidebar-children">
-                            {topics.map((topic, topicIndex) => (
-                              <button
-                                key={`${section.code}-topic-${topicIndex}`}
-                                type="button"
-                                className={contentView === 'materi' && activeSectionView === 'material' && section.code === activeSection?.code && topicIndex === activeTopicIndex ? 'admin-section-sidebar-child admin-section-sidebar-child-active' : 'admin-section-sidebar-child'}
-                                onClick={() => jumpToSectionMaterial(section.code, topicIndex)}
-                              >
-                                <span>{topicIndex + 1}</span>
-                                <strong>{topic.title || `Topik ${topicIndex + 1}`}</strong>
-                              </button>
-                            ))}
-                            <button
-                              type="button"
-                              className={isMiniTestActive ? 'admin-section-sidebar-child admin-section-sidebar-child-mini-test admin-section-sidebar-child-active' : 'admin-section-sidebar-child admin-section-sidebar-child-mini-test'}
-                              onClick={() => openSectionTestView(section.code)}
-                            >
-                              <span>MT</span>
-                              <strong>Mini Test Subtest</strong>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
             <div className="learning-sidebar-card learning-sidebar-support-card">
               <span className="learning-sidebar-support-badge">{supportCardBadge}</span>
               <strong>{supportCardTitle}</strong>
@@ -2052,10 +2365,10 @@ export default function Learning() {
                   </h1>
                 ) : (
                   <h1>
-                    {contentView === 'tryout'
-                      ? 'Menu Tryout'
-                      : activeSectionView === 'mini-test'
+                    {activeSectionView === 'mini-test'
                       ? `Mini Test ${activeSection?.session_name || activeSection?.name || ''}`
+                      : contentView === 'tryout'
+                      ? 'Menu Tryout'
                       : activeSection?.name || 'Materi Subtest'}
                   </h1>
                 )}
@@ -2571,19 +2884,15 @@ export default function Learning() {
                     {activeSection.session_name || packageData.category_name}
                   </span>
                   <h2>{activeSection.name}</h2>
-                  {(activeSectionView === 'mini-test' || !hasAccess) && (
+                  {!hasAccess && (
                     <p>
-                      {activeSectionView === 'mini-test'
-                        ? 'Kerjakan mini test subtest ini setelah membaca topik-topik yang tersedia.'
-                        : `Preview ${activeSection.visible_page_count} dari ${activeSection.total_page_count} halaman materi.`}
+                      {`Preview ${activeSection.visible_page_count} dari ${activeSection.total_page_count} halaman materi.`}
                     </p>
                   )}
                 </div>
-                {(activeSectionView === 'mini-test'
-                  ? activeSection.progress.subtest_test_completed
-                  : activeSection.progress.material_read) && (
+                {activeSection.progress.material_read && (
                   <span className="account-status-pill account-status-fresh">
-                    {activeSectionView === 'mini-test' ? 'Mini test selesai' : 'Materi selesai'}
+                    Materi selesai
                   </span>
                 )}
               </div>
@@ -2681,7 +2990,7 @@ export default function Learning() {
                       className="learning-material-flow-button"
                       onClick={() => openSectionTestView(activeSection.code)}
                     >
-                      <span>Lanjut ke Mini Test {activeSection.name}</span>
+                      <span>Buka Mini Test {activeSection.name} di Menu Tryout</span>
                       <span className="learning-material-flow-icon" aria-hidden="true">→</span>
                     </button>
                   ) : (
@@ -2716,463 +3025,107 @@ export default function Learning() {
                   </button>
                 </div>
               )}
-
-              {activeSectionView === 'mini-test' && !hasAccess && (
-                <div className="learning-locked-pages">
-                  <strong>Mini test subtest terkunci.</strong>
-                  <p>
-                    {viewerIsAuthenticated
-                      ? 'Aktifkan paket untuk membuka mini test subtest dan menyimpan milestone belajar.'
-                      : 'Login untuk melihat akses penuh dan membuka mini test subtest.'}
-                  </p>
-                  <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
-                    {viewerIsAuthenticated ? 'Beli Paket' : 'Login untuk Lanjut'}
-                  </Link>
-                </div>
-              )}
-
-              {hasAccess && activeSectionView === 'mini-test' && currentSectionTest.open && (
-                <div className="learning-subtest-box">
-                  {currentSectionTest.loading ? (
-                    <p>Memuat mini test...</p>
-                  ) : currentSectionTest.error ? (
-                    <div className="test-feedback test-feedback-error">{currentSectionTest.error}</div>
-                  ) : currentSectionQuestions.length === 0 ? (
-                    <p className="text-muted">Soal mini test untuk subtest ini belum tersedia.</p>
-                  ) : !currentSectionQuestion ? (
-                    <p className="text-muted">Soal mini test belum siap ditampilkan.</p>
-                  ) : (
-                    <>
-                      {currentSectionTest.saveMessage && (
-                        <div className="test-feedback test-feedback-success">{currentSectionTest.saveMessage}</div>
-                      )}
-
-                      <section className="test-hero">
-                        <div className="test-hero-copy">
-                          <p className="test-hero-kicker">Mini Test Subtest</p>
-                          <h1 className="test-hero-title">{activeSection.name}</h1>
-                          <p className="test-hero-description">
-                            Flow mini test sekarang mengikuti tryout: jawaban tersimpan otomatis, soal bisa ditandai ragu-ragu, dan hasil diproses saat kamu selesaikan atau waktu habis.
-                          </p>
-                          <div className="test-hero-pills" aria-label="Ringkasan mini test subtest">
-                            <span>{packageData.name}</span>
-                            <span>{currentSectionQuestions.length} soal</span>
-                            <span>{activeSection.session_name || 'Subtest aktif'}</span>
-                          </div>
-                        </div>
-
-                        <div className="test-hero-stats">
-                          <div className="test-hero-stat-card">
-                            <span>Terjawab</span>
-                            <strong>{currentSectionAnsweredCount} / {currentSectionQuestions.length}</strong>
-                            <small>Progress mini test subtest aktif</small>
-                          </div>
-                          <div ref={floatingTimerRef} className="test-hero-stat-card">
-                            <span>Sisa waktu</span>
-                            <strong>{formatTime(currentSectionTest.remainingSeconds)}</strong>
-                            <small>{currentSectionTest.result ? 'Timer berhenti setelah hasil tersimpan' : 'Waktu akan berjalan selama mini test dibuka'}</small>
-                          </div>
-                          <div className="test-hero-stat-card">
-                            <span>Status</span>
-                            <strong>{currentSectionTest.result ? 'Selesai' : 'Sedang dikerjakan'}</strong>
-                            <small>
-                              {currentSectionAllAnswered
-                                ? 'Semua soal sudah terisi.'
-                                : `${currentSectionQuestions.length - currentSectionAnsweredCount} soal masih kosong.`}
-                            </small>
-                          </div>
-                        </div>
-                      </section>
-
-                      {currentSectionTest.result && (
-                        <div className="test-feedback test-feedback-success">
-                          Hasil mini test: <strong>{formatScore(currentSectionTest.result)}</strong>
-                        </div>
-                      )}
-
-                      {currentSectionTest.result && (
-                        <div className="learning-section-actions">
-                          <button
-                            type="button"
-                            className="btn btn-outline"
-                            onClick={() => closeSectionTest(activeSection.code)}
-                          >
-                            Kembali ke Menu Mini Test
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => loadSectionTest(activeSection.code, { restart: true })}
-                          >
-                            Ulangi Mini Test
-                          </button>
-                        </div>
-                      )}
-
-                      <FloatingTestDock
-                        ariaLabel="Timer mini test mengambang"
-                        stat={floatingTimerStat}
-                        visible={currentSectionTest.open && shouldShowFloatingDock}
-                      />
-
-                      <div className="test-layout-grid">
-                        <div className="test-main-column">
-                          <div className="card test-question-card">
-                            <div className="test-question-stage">
-                              <div className="test-inline-navigation">
-                                <div className="test-inline-navigation-head">
-                                  <h3 className="test-inline-navigation-title">Navigasi Soal</h3>
-                                  <p className="test-inline-navigation-note">
-                                    Klik nomor soal. Kuning berarti ragu-ragu.
-                                  </p>
-                                </div>
-                                <div className="test-question-strip test-question-strip-inline" role="tablist" aria-label="Navigasi mini test subtest">
-                                  {currentSectionQuestions.map((question, index) => {
-                                    const answeredValue = currentSectionDraftAnswers[question.id]
-                                      || currentSectionDraftAnswers[String(question.id)]
-                                      || currentSectionSavedAnswers[question.id]
-                                      || currentSectionSavedAnswers[String(question.id)];
-                                    const isMarkedForReview = Boolean(
-                                      currentSectionReviewFlags[String(question.id)] || currentSectionReviewFlags[question.id]
-                                    );
-
-                                    return (
-                                      <button
-                                        key={question.id}
-                                        type="button"
-                                        onClick={() => goToSectionQuestion(activeSection.code, question.id)}
-                                        className={[
-                                          'test-nav-chip',
-                                          'test-nav-chip-button',
-                                          Number(question.id) === Number(currentSectionQuestion.id)
-                                            ? 'test-nav-chip-current'
-                                            : answeredValue
-                                            ? 'test-nav-chip-done'
-                                            : 'test-nav-chip-empty',
-                                          isMarkedForReview ? 'test-nav-chip-review' : '',
-                                        ].filter(Boolean).join(' ')}
-                                        aria-label={`Soal ${index + 1}${isMarkedForReview ? ', ditandai ragu-ragu' : ''}`}
-                                        title={isMarkedForReview ? `Soal ${index + 1} ditandai ragu-ragu` : `Soal ${index + 1}`}
-                                      >
-                                        {index + 1}
-                                        {isMarkedForReview && <span className="test-nav-chip-flag" aria-hidden="true" />}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                <div className="test-nav-legend">
-                                  <p><span className="test-nav-legend-dot test-nav-legend-dot-current" />Soal aktif</p>
-                                  <p><span className="test-nav-legend-dot test-nav-legend-dot-done" />Sudah dijawab</p>
-                                  <p><span className="test-nav-legend-dot test-nav-legend-dot-review" />Ragu-ragu</p>
-                                  <p><span className="test-nav-legend-dot test-nav-legend-dot-empty" />Belum dijawab</p>
-                                </div>
-                              </div>
-
-                              <div className="test-question-head">
-                                <div className="test-question-heading">
-                                  <span className="test-question-number">Soal {Math.max(1, currentSectionQuestionIndex + 1)}</span>
-                                  <h2 className="test-question-title">Fokuskan jawabanmu di soal ini dulu</h2>
-                                  <p className="test-question-section-label">{activeSection.name}</p>
-                                </div>
-                              </div>
-
-                              {(currentSectionQuestion.question_text || currentSectionQuestion.question_image_url) && (
-                                <div className={`test-question-media test-question-media-${currentSectionQuestionImageLayout}`}>
-                                  {currentSectionQuestion.question_text && (
-                                    <div className="test-question-text-block">
-                                      <LatexContent
-                                        content={currentSectionQuestion.question_text}
-                                        className="test-question-text"
-                                      />
-                                    </div>
-                                  )}
-                                  {currentSectionQuestion.question_image_url && (
-                                    <div className="test-question-image-frame">
-                                      <img
-                                        src={currentSectionQuestion.question_image_url}
-                                        alt={`Mini test soal ${currentSectionQuestionIndex + 1}`}
-                                        className="test-question-image"
-                                        loading="lazy"
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                              <div className="space-y-3 mb-8">
-                                {currentSectionQuestion.options?.map((option) => (
-                                  <label
-                                    key={option.id}
-                                    className={`test-option ${Number(currentSectionDraftAnswers[currentSectionQuestion.id] || currentSectionDraftAnswers[String(currentSectionQuestion.id)] || currentSectionSavedAnswers[currentSectionQuestion.id] || currentSectionSavedAnswers[String(currentSectionQuestion.id)] || 0) === Number(option.id) ? 'test-option-active' : ''}`}
-                                  >
-                                    <input
-                                      type="radio"
-                                      name={`section-${activeSection.code}-question-${currentSectionQuestion.id}`}
-                                      checked={Number(currentSectionDraftAnswers[currentSectionQuestion.id] || currentSectionDraftAnswers[String(currentSectionQuestion.id)] || currentSectionSavedAnswers[currentSectionQuestion.id] || currentSectionSavedAnswers[String(currentSectionQuestion.id)] || 0) === Number(option.id)}
-                                      onChange={() => setSectionAnswer(activeSection.code, currentSectionQuestion.id, option.id)}
-                                      disabled={Boolean(currentSectionTest.result)}
-                                      className="mt-1 w-5 h-5 accent-blue-600"
-                                    />
-                                    <div className="test-option-copy">
-                                      <p className="test-option-letter">{option.letter}.</p>
-                                      {option.text && (
-                                        <LatexContent
-                                          content={option.text}
-                                          className="test-option-text"
-                                        />
-                                      )}
-                                      {option.image_url && (
-                                        <img
-                                          src={option.image_url}
-                                          alt={`Opsi ${option.letter}`}
-                                          className="test-option-image"
-                                          loading="lazy"
-                                        />
-                                      )}
-                                    </div>
-                                  </label>
-                                ))}
-                              </div>
-
-                              <div className="test-action-row">
-                                <div className="test-action-buttons">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSectionRelativeNavigation(activeSection.code, -1)}
-                                    disabled={!previousSectionQuestionId}
-                                    className="btn btn-outline test-action-button disabled:opacity-50"
-                                  >
-                                    ← Sebelumnya
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSectionRelativeNavigation(activeSection.code, 1)}
-                                    disabled={!nextSectionQuestionId}
-                                    className="btn btn-outline test-action-button disabled:opacity-50"
-                                  >
-                                    Selanjutnya →
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleSectionReviewFlag(activeSection.code, currentSectionQuestion.id)}
-                                    disabled={Boolean(currentSectionTest.result) || !hasCurrentSectionAnswerSelected}
-                                    title={hasCurrentSectionAnswerSelected ? undefined : 'Pilih jawaban dulu untuk mengaktifkan ragu-ragu'}
-                                    className={`btn btn-outline test-action-button ${
-                                      isCurrentQuestionMarkedForReview ? 'test-action-button-review-active' : ''
-                                    }`}
-                                  >
-                                    {isCurrentQuestionMarkedForReview ? 'Batalkan Ragu-ragu' : 'Tandai Ragu-ragu'}
-                                  </button>
-                                </div>
-
-                                <div className="test-action-helper">
-                                  {currentSectionTest.result
-                                    ? 'Hasil terakhir sudah tersimpan. Kamu bisa kembali ke menu mini test atau ulangi dari awal.'
-                                    : currentSectionAllAnswered
-                                    ? 'Semua jawaban sudah terisi dan terus tersimpan otomatis.'
-                                    : 'Jawaban tersimpan otomatis saat dipilih. Tombol submit akan muncul setelah semua soal terjawab. Jika waktu habis, jawaban yang sudah masuk akan langsung diproses.'}
-                                  {!currentSectionTest.result && !hasCurrentSectionAnswerSelected ? ' Pilih salah satu opsi dulu untuk membuka tombol ragu-ragu.' : ''}
-                                </div>
-
-                                <div className="test-action-buttons test-action-buttons-end">
-                                  {(currentSectionAllAnswered || currentSectionTest.result) && (
-                                    <button
-                                      type="button"
-                                      className="btn btn-primary test-action-button disabled:opacity-50"
-                                      disabled={actionLoading === `test-${activeSection.code}` || currentSectionQuestions.length === 0}
-                                      onClick={() => (
-                                        currentSectionTest.result
-                                          ? loadSectionTest(activeSection.code, { restart: true })
-                                          : submitSectionTest(activeSection.code, { confirmManual: true })
-                                      )}
-                                    >
-                                      {actionLoading === `test-${activeSection.code}`
-                                        ? 'Memproses...'
-                                        : currentSectionTest.result
-                                        ? 'Ulangi Mini Test'
-                                        : activeSection.progress.subtest_test_completed
-                                        ? 'Submit Ulang Mini Test'
-                                        : 'Submit Mini Test'}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {!isCompactViewport && (
-                          <div className="test-sidebar-column">
-                            <div className="test-sidebar-metrics">
-                              <div className="test-header-stat">
-                                <p className="test-header-stat-label">Terjawab</p>
-                                <p className="test-header-stat-value">{currentSectionAnsweredCount} / {currentSectionQuestions.length}</p>
-                              </div>
-                              <div className="test-header-stat">
-                                <p className="test-header-stat-label">Sisa Waktu</p>
-                                <p className={`test-header-stat-value ${Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'test-header-stat-value-danger' : 'test-header-stat-value-success'}`}>
-                                  {formatTime(currentSectionTest.remainingSeconds)}
-                                </p>
-                              </div>
-                              <div className="test-header-stat">
-                                <p className="test-header-stat-label">Soal Aktif</p>
-                                <p className="test-header-stat-value">{Math.max(1, currentSectionQuestionIndex + 1)} / {currentSectionQuestions.length}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {hasAccess && activeSectionView === 'mini-test' && !currentSectionTest.open && (
-                <div className="learning-subtest-box">
-                  <section className="test-hero">
-                    <div className="test-hero-copy">
-                      <p className="test-hero-kicker">Preview Mini Test</p>
-                      <h1 className="test-hero-title">{activeSection.name}</h1>
-                      <p className="test-hero-description">
-                        {hasOngoingSectionAttempt
-                          ? 'Mini test ini masih berjalan. Buka lagi untuk melanjutkan dari jawaban dan waktu terakhir.'
-                          : 'Cek dulu ringkasannya. Timer baru berjalan setelah kamu menekan tombol mulai.'}
-                      </p>
-                      <div className="test-hero-pills" aria-label="Ringkasan preview mini test subtest">
-                        <span>{packageData.name}</span>
-                        <span>{activeSection.session_name || 'Subtest aktif'}</span>
-                        <span>{activeSectionMiniTestQuestionCount} soal</span>
-                        <span>{activeSectionMiniTestDurationLabel}</span>
-                      </div>
-                    </div>
-
-                    <div className="test-hero-stats">
-                      <div className="test-hero-stat-card">
-                        <span>Judul mini test</span>
-                        <strong>{activeSection.name}</strong>
-                        <small>{activeSection.session_name || 'Subtest belajar aktif'}</small>
-                      </div>
-                      <div className="test-hero-stat-card">
-                        <span>Durasi</span>
-                        <strong>{activeSectionMiniTestDurationLabel}</strong>
-                        <small>
-                          {activeSectionMiniTestQuestionCount > 0
-                            ? `${activeSectionMiniTestQuestionCount} soal akan dikerjakan dalam satu sesi.`
-                            : 'Durasi akan dipakai saat soal mini test tersedia.'}
-                        </small>
-                      </div>
-                      <div className="test-hero-stat-card">
-                        <span>Status</span>
-                        <strong>{hasOngoingSectionAttempt ? 'Sedang berjalan' : activeSection.progress.subtest_test_completed ? 'Pernah selesai' : 'Belum dimulai'}</strong>
-                        <small>
-                          {hasOngoingSectionAttempt
-                            ? 'Jawaban dan timer akan dilanjutkan dari attempt yang masih aktif.'
-                            : activeSection.progress.subtest_test_completed
-                            ? 'Kamu bisa mulai lagi untuk mengulang mini test ini.'
-                            : 'Belum ada timer yang berjalan sebelum tombol mulai ditekan.'}
-                        </small>
-                      </div>
-                    </div>
-                  </section>
-
-                  <div className="learning-mini-test-preview-topics">
-                    <p className="learning-sidebar-label">Topik mini test</p>
-                    {activeSectionTopicTitles.length > 0 ? (
-                      <div className="learning-mini-test-topic-chips">
-                        {activeSectionTopicTitles.map((topicTitle) => (
-                          <span key={`${activeSection.code}-${topicTitle}`} className="learning-mini-test-topic-chip">
-                            {topicTitle}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-muted">Topik untuk mini test ini masih disiapkan.</p>
-                    )}
-                  </div>
-
-                  {activeSectionMiniTestQuestionCount <= 0 && (
-                    <div className="test-feedback test-feedback-error">
-                      Soal mini test untuk subtest ini belum tersedia.
-                    </div>
-                  )}
-
-                  {latestSectionMiniTestResult && (
-                    <div className="test-feedback test-feedback-success">
-                      Hasil terakhir mini test: <strong>{formatScore(latestSectionMiniTestResult)}</strong>
-                    </div>
-                  )}
-
-                  <div className="learning-section-actions">
-                    {latestSectionMiniTestResult && (
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        onClick={() => navigate(`/learning/${numericPackageId}/review/${encodeURIComponent(activeSection.code)}`)}
-                      >
-                        Lihat Pembahasan Soal
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={activeSectionMiniTestQuestionCount <= 0}
-                      onClick={() => loadSectionTest(activeSection.code, { restart: Boolean(latestSectionMiniTestResult && !hasOngoingSectionAttempt) })}
-                    >
-                      {hasOngoingSectionAttempt ? 'Lanjutkan Mini Test' : latestSectionMiniTestResult ? 'Ulangi Mini Test' : 'Mulai Mini Test'}
-                    </button>
-                  </div>
-                </div>
-              )}
             </article>
           )}
 
           {contentView === 'tryout' && (
             <section className="learning-tryout-panel">
-              <div>
-                <span className="account-package-tag">Tryout keseluruhan</span>
-                <h2>{packageData.name}</h2>
-                <p>
-                  Tryout ini memakai alur test yang sudah ada: seluruh materi paket dikerjakan sebagai simulasi penuh.
-                </p>
-              </div>
-
-              <div className="account-package-stats learning-tryout-stats">
-                <div>
-                  <span>Soal</span>
-                  <strong>{packageData.question_count}</strong>
-                </div>
-                <div>
-                  <span>Waktu</span>
-                  <strong>{packageData.time_limit} menit</strong>
-                </div>
-                <div>
-                  <span>Sisa percobaan</span>
-                  <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
-                </div>
-              </div>
-
-              <div className="learning-tryout-actions">
-                {hasAccess ? (
-                  summary.can_start_tryout ? (
-                    <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
-                      Mulai Tryout
-                    </Link>
-                  ) : (
-                    <button type="button" className="btn btn-outline" disabled>
-                      Percobaan Habis
+              {activeSectionView === 'mini-test' && activeSection ? (
+                <>
+                  <div className="learning-tryout-actions learning-tryout-actions-inline">
+                    <button type="button" className="btn btn-outline" onClick={openTryoutView}>
+                      Kembali ke Menu Tryout
                     </button>
-                  )
-                ) : (
-                  <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
-                    {viewerIsAuthenticated ? 'Aktifkan Paket untuk Tryout' : 'Login untuk Buka Tryout'}
-                  </Link>
-                )}
-                <button type="button" className="btn btn-outline" onClick={openDashboardView}>
-                  Kembali ke Dashboard
-                </button>
-              </div>
+                  </div>
+                  {miniTestWorkspace}
+                </>
+              ) : (
+                <>
+                  <div>
+                    <span className="account-package-tag">Tryout keseluruhan</span>
+                    <h2>{packageData.name}</h2>
+                    <p>
+                      Di menu ini kamu bisa pilih mini test per subtest dulu, lalu lanjut ke tryout penuh saat ritme belajarmu sudah siap.
+                    </p>
+                  </div>
+
+                  <div className="account-package-stats learning-tryout-stats">
+                    <div>
+                      <span>Soal</span>
+                      <strong>{packageData.question_count}</strong>
+                    </div>
+                    <div>
+                      <span>Waktu</span>
+                      <strong>{packageData.time_limit} menit</strong>
+                    </div>
+                    <div>
+                      <span>Sisa percobaan</span>
+                      <strong>{summary.remaining_attempts ?? 'Admin'}</strong>
+                    </div>
+                  </div>
+
+                  <div className="learning-tryout-subtests">
+                    <div className="learning-tryout-subtests-head">
+                      <span className="account-package-tag">Mini test per subtest</span>
+                      <h3>Pilih subtest untuk latihan singkat</h3>
+                      <p>Mini test sekarang dipindahkan ke menu tryout supaya materi tetap fokus untuk membaca topik.</p>
+                    </div>
+
+                    <div className="learning-topic-list learning-tryout-subtest-list">
+                      {sections.map((section) => {
+                        const sectionMiniTestDuration = formatDurationMinutesLabel(
+                          computeMiniTestDurationSeconds(section, Number(section.mini_test_question_count || 0))
+                        );
+                        const isSectionMiniTestDone = Boolean(section.progress?.subtest_test_completed);
+                        const isSectionMiniTestActive = section.code === activeSection?.code;
+
+                        return (
+                          <button
+                            key={`tryout-mini-test-${section.code}`}
+                            type="button"
+                            className={isSectionMiniTestActive ? 'learning-topic-button learning-topic-button-active' : 'learning-topic-button'}
+                            onClick={() => openSectionTestView(section.code)}
+                          >
+                            <strong>{section.name}</strong>
+                            <small>
+                              {Math.max(0, Number(section.mini_test_question_count || 0))} soal • {sectionMiniTestDuration}
+                            </small>
+                            <span className="learning-section-button-progress">
+                              <span className={`learning-section-chip ${isSectionMiniTestDone ? 'learning-section-chip-done' : ''}`}>
+                                {isSectionMiniTestDone ? 'Selesai' : 'Belum mulai'}
+                              </span>
+                              <span className="learning-section-chip">
+                                {section.session_name || 'Subtest'}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="learning-tryout-actions">
+                    {hasAccess ? (
+                      summary.can_start_tryout ? (
+                        <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
+                          Mulai Tryout
+                        </Link>
+                      ) : (
+                        <button type="button" className="btn btn-outline" disabled>
+                          Percobaan Habis
+                        </button>
+                      )
+                    ) : (
+                      <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
+                        {viewerIsAuthenticated ? 'Aktifkan Paket untuk Tryout' : 'Login untuk Buka Tryout'}
+                      </Link>
+                    )}
+                    <button type="button" className="btn btn-outline" onClick={openDashboardView}>
+                      Kembali ke Dashboard
+                    </button>
+                  </div>
+                </>
+              )}
             </section>
           )}
         </div>

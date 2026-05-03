@@ -1,3 +1,4 @@
+"use client";
 import React, { createContext, useState, useCallback, useEffect } from 'react';
 import apiClient from './api';
 import { clearAllActiveAssessmentSessions } from './utils/activeAssessmentSession';

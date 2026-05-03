@@ -1,5 +1,6 @@
+"use client";
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from '@/utils/router-shim';
 import ThemeToggle from './ThemeToggle';
 
 export default function ProfileDropdown({

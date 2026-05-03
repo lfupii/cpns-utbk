@@ -1,5 +1,6 @@
+"use client";
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/utils/router-shim';
 import { useAuth } from '../AuthContext';
 import ProfileDropdown from './ProfileDropdown';
 import BrandLogo from './BrandLogo';

@@ -1,3 +1,4 @@
+"use client";
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const THEME_STORAGE_KEY = 'cpns-utbk-theme';

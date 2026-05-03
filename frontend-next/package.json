@@ -1,0 +1,40 @@
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "npm run sync:ocr && next build",
+    "start": "next start",
+    "lint": "eslint",
+    "sync:ocr": "node scripts/sync-ocr-assets.mjs",
+    "postinstall": "npm run sync:ocr"
+  },
+  "dependencies": {
+    "@lexical/history": "^0.44.0",
+    "@lexical/html": "^0.44.0",
+    "@lexical/link": "^0.44.0",
+    "@lexical/list": "^0.44.0",
+    "@lexical/react": "^0.44.0",
+    "@lexical/rich-text": "^0.44.0",
+    "@lexical/selection": "^0.44.0",
+    "axios": "^1.16.0",
+    "framer-motion": "^12.38.0",
+    "katex": "^0.16.45",
+    "lexical": "^0.44.0",
+    "next": "16.2.4",
+    "pdfjs-dist": "^5.7.284",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.4",
+    "tailwindcss": "^4"
+  }
+}

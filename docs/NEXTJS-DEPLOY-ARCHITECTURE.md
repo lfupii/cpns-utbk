@@ -16,6 +16,7 @@ Rekomendasi utama:
 
 Masalah bila langsung pakai Next penuh di arsitektur lama:
 - workflow deploy masih target `frontend/dist`
+- source migrasi Next sekarang dipisah di `frontend-next/` agar `main` tetap aman
 - Next App Router dengan dynamic route tidak cocok diperlakukan seperti static SPA biasa
 - auth, payment, admin editor punya perilaku client-heavy dan route dinamis
 
@@ -143,4 +144,4 @@ Paling aman:
 - domain utama pindah ke Next kapan
 - API tetap di subdomain sendiri atau path `/api`
 - kapan workflow deploy live lama dinonaktifkan
-- kapan `frontend-old/` resmi dihapus
+- kapan `frontend-next/` resmi menggantikan `frontend/`

@@ -1,55 +1,76 @@
+"use client";
 import React, { createContext, useState, useCallback, useEffect } from 'react';
 import apiClient from './api';
 import { clearAllActiveAssessmentSessions } from './utils/activeAssessmentSession';
 
 export const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-  const storedToken = localStorage.getItem('token');
-  const storedUserId = localStorage.getItem('userId');
-  const storedEmail = localStorage.getItem('userEmail');
-  const storedFullName = localStorage.getItem('fullName');
-  const storedRole = localStorage.getItem('userRole');
+function readStoredSession() {
+  if (typeof window === 'undefined') {
+    return {
+      token: null,
+      user: null,
+    };
+  }
 
-  const [user, setUser] = useState(
-    storedToken && storedUserId
+  const storedToken = window.localStorage.getItem('token');
+  const storedUserId = window.localStorage.getItem('userId');
+  const storedEmail = window.localStorage.getItem('userEmail');
+  const storedFullName = window.localStorage.getItem('fullName');
+  const storedRole = window.localStorage.getItem('userRole');
+
+  return {
+    token: storedToken || null,
+    user: storedToken && storedUserId
       ? {
           userId: storedUserId,
           email: storedEmail,
           full_name: storedFullName,
           role: storedRole || 'user',
         }
-      : null
-  );
-  const [token, setToken] = useState(storedToken || null);
+      : null,
+  };
+}
+
+export const AuthProvider = ({ children }) => {
+  const initialSession = readStoredSession();
+
+  const [user, setUser] = useState(initialSession.user);
+  const [token, setToken] = useState(initialSession.token);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [authReady, setAuthReady] = useState(!storedToken);
+  const [authReady, setAuthReady] = useState(!initialSession.token);
 
   const persistSession = useCallback(({ token: nextToken, userId, email, full_name, role }) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     if (nextToken) {
-      localStorage.setItem('token', nextToken);
+      window.localStorage.setItem('token', nextToken);
       setToken(nextToken);
     }
 
-    localStorage.setItem('userId', userId);
+    window.localStorage.setItem('userId', userId);
     if (email) {
-      localStorage.setItem('userEmail', email);
+      window.localStorage.setItem('userEmail', email);
     }
     if (full_name) {
-      localStorage.setItem('fullName', full_name);
+      window.localStorage.setItem('fullName', full_name);
     }
-    localStorage.setItem('userRole', role || 'user');
+    window.localStorage.setItem('userRole', role || 'user');
 
     setUser({ userId, email: email || null, full_name: full_name || null, role: role || 'user' });
   }, []);
 
   const clearSession = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('fullName');
-    localStorage.removeItem('userRole');
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('token');
+      window.localStorage.removeItem('userId');
+      window.localStorage.removeItem('userEmail');
+      window.localStorage.removeItem('fullName');
+      window.localStorage.removeItem('userRole');
+    }
     clearAllActiveAssessmentSessions();
     setToken(null);
     setUser(null);
@@ -252,7 +273,8 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (!localStorage.getItem('token')) {
+    const activeToken = typeof window === 'undefined' ? null : window.localStorage.getItem('token');
+    if (!activeToken) {
       return null;
     }
 
@@ -260,7 +282,7 @@ export const AuthProvider = ({ children }) => {
       const response = await apiClient.get('/auth/profile');
       const profile = response.data.data;
       persistSession({
-        token: localStorage.getItem('token'),
+        token: activeToken,
         userId: profile.id,
         email: profile.email,
         full_name: profile.full_name,
@@ -294,8 +316,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let ignore = false;
 
-    if (!storedToken) {
-      setAuthReady(true);
+    if (!token) {
       return undefined;
     }
 
@@ -316,7 +337,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       ignore = true;
     };
-  }, [refreshProfile, storedToken]);
+  }, [refreshProfile, token]);
 
   return (
     <AuthContext.Provider

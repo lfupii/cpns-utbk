@@ -1,5 +1,6 @@
+"use client";
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@/utils/router-shim';
 import { useAuth } from '../AuthContext';
 import ProfileDropdown from './ProfileDropdown';
 import BrandLogo from './BrandLogo';
@@ -17,7 +18,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
+  const displayName = user?.full_name || 'Pejuang ASN';
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);

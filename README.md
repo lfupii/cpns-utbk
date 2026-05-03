@@ -93,6 +93,13 @@ cpns-utbk/
 │   ├── tailwind.config.js
 │   └── .env.example
 │
+├── frontend-next/
+│   ├── src/app/
+│   ├── src/legacy-pages/
+│   ├── next.config.mjs
+│   ├── package.json
+│   └── .env.example
+│
 ├── database/
 │   └── schema.sql
 │

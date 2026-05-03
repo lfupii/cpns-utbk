@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect, useRef, useState } from 'react';
 
 const TABLET_BREAKPOINT_QUERY = '(max-width: 1024px)';

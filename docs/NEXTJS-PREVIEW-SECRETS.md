@@ -2,6 +2,7 @@
 
 Workflow preview:
 - `.github/workflows/deploy-nextjs-preview.yml`
+- source preview build: `frontend-next/`
 
 Secret yang perlu diisi di GitHub Actions:
 

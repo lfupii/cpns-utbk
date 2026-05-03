@@ -8,25 +8,25 @@ Tujuan Tahap A:
 - backend PHP tetap jadi source of truth untuk auth, payment, question, test, admin
 
 Status global saat dokumen dibuat:
-- `frontend-old/` = frontend Vite live lama
-- `frontend/` = frontend Next.js migrasi
+- `frontend/` = frontend Vite live lama
+- `frontend-next/` = frontend Next.js migrasi
 - deploy live production masih asumsi Vite dan belum boleh dipakai untuk branch migrasi
 
 ## 1. Repo / Branch Safety
 
 - [ ] Semua kerja migrasi lanjut di branch `next.js-v1`
 - [ ] Jangan merge ke `main` sebelum checklist smoke test selesai
-- [ ] Jangan hapus `frontend-old/` sebelum parity + deploy final lolos audit
+- [ ] Jangan hapus frontend live sebelum parity + deploy final lolos audit
 - [ ] Pastikan workflow baru hanya audit branch migrasi, bukan deploy live
 
 ## 2. Frontend App Router Shell
 
 Files:
-- `frontend/src/app/layout.js`
-- `frontend/src/app/**/page.jsx`
-- `frontend/src/legacy-pages/**`
-- `frontend/src/components/**`
-- `frontend/src/utils/router-shim.jsx`
+- `frontend-next/src/app/layout.js`
+- `frontend-next/src/app/**/page.jsx`
+- `frontend-next/src/legacy-pages/**`
+- `frontend-next/src/components/**`
+- `frontend-next/src/utils/router-shim.jsx`
 
 Checklist:
 - [ ] Semua route user-facing lama punya route App Router padanan
@@ -39,10 +39,10 @@ Checklist:
 ## 3. Session / Auth Layer
 
 Files:
-- `frontend/src/AuthContext.jsx`
-- `frontend/src/api.js`
-- `frontend/src/components/GoogleAuthButton.jsx`
-- `frontend/src/utils/googleAuth.js`
+- `frontend-next/src/AuthContext.jsx`
+- `frontend-next/src/api.js`
+- `frontend-next/src/components/GoogleAuthButton.jsx`
+- `frontend-next/src/utils/googleAuth.js`
 - `backend/controllers/AuthController.php`
 
 Checklist:
@@ -57,12 +57,12 @@ Checklist:
 ## 4. Public Pages
 
 Files:
-- `frontend/src/app/page.jsx`
-- `frontend/src/app/contact/page.jsx`
-- `frontend/src/app/terms/page.jsx`
-- `frontend/src/legacy-pages/Home.jsx`
-- `frontend/src/legacy-pages/Contact.jsx`
-- `frontend/src/legacy-pages/TermsConditions.jsx`
+- `frontend-next/src/app/page.jsx`
+- `frontend-next/src/app/contact/page.jsx`
+- `frontend-next/src/app/terms/page.jsx`
+- `frontend-next/src/legacy-pages/Home.jsx`
+- `frontend-next/src/legacy-pages/Contact.jsx`
+- `frontend-next/src/legacy-pages/TermsConditions.jsx`
 
 Checklist:
 - [ ] Landing page render stabil di desktop/mobile
@@ -73,8 +73,8 @@ Checklist:
 ## 5. Payment / Midtrans
 
 Files:
-- `frontend/src/app/payment/[packageId]/page.jsx`
-- `frontend/src/legacy-pages/Payment.jsx`
+- `frontend-next/src/app/payment/[packageId]/page.jsx`
+- `frontend-next/src/legacy-pages/Payment.jsx`
 - `backend/controllers/PaymentController.php`
 - `backend/utils/MidtransHandler.php`
 - `backend/config/Database.php`
@@ -92,14 +92,14 @@ Checklist:
 ## 6. Learning / Test / Result
 
 Files:
-- `frontend/src/app/learning/**`
-- `frontend/src/app/test/**`
-- `frontend/src/app/results/**`
-- `frontend/src/legacy-pages/Learning.jsx`
-- `frontend/src/legacy-pages/Test.jsx`
-- `frontend/src/legacy-pages/Results.jsx`
-- `frontend/src/legacy-pages/ResultsReview.jsx`
-- `frontend/src/legacy-pages/MiniTestReview.jsx`
+- `frontend-next/src/app/learning/**`
+- `frontend-next/src/app/test/**`
+- `frontend-next/src/app/results/**`
+- `frontend-next/src/legacy-pages/Learning.jsx`
+- `frontend-next/src/legacy-pages/Test.jsx`
+- `frontend-next/src/legacy-pages/Results.jsx`
+- `frontend-next/src/legacy-pages/ResultsReview.jsx`
+- `frontend-next/src/legacy-pages/MiniTestReview.jsx`
 - `backend/controllers/TestController.php`
 - `backend/controllers/QuestionController.php`
 
@@ -115,11 +115,11 @@ Checklist:
 ## 7. Admin
 
 Files:
-- `frontend/src/app/admin/**`
-- `frontend/src/legacy-pages/AdminPanel.jsx`
-- `frontend/src/legacy-pages/AdminQuestionEditor.jsx`
-- `frontend/src/legacy-pages/AdminMiniTestQuestionEditor.jsx`
-- `frontend/src/legacy-pages/AdminLearningMaterialEditor.jsx`
+- `frontend-next/src/app/admin/**`
+- `frontend-next/src/legacy-pages/AdminPanel.jsx`
+- `frontend-next/src/legacy-pages/AdminQuestionEditor.jsx`
+- `frontend-next/src/legacy-pages/AdminMiniTestQuestionEditor.jsx`
+- `frontend-next/src/legacy-pages/AdminLearningMaterialEditor.jsx`
 - `backend/controllers/AdminController.php`
 
 Checklist:
@@ -132,20 +132,20 @@ Checklist:
 ## 8. Assets / OCR / PDF
 
 Files:
-- `frontend/public/pdfjs/**`
-- `frontend/public/tesseract/**`
-- `frontend/scripts/sync-ocr-assets.mjs`
+- `frontend-next/public/pdfjs/**`
+- `frontend-next/public/tesseract/**`
+- `frontend-next/scripts/sync-ocr-assets.mjs`
 
 Checklist:
 - [ ] `eng.traineddata.gz` tersedia saat build
 - [ ] PDF worker termuat di browser
 - [ ] OCR fallback jelas bila asset lokal hilang
-- [ ] Tidak ada asset build yang cuma ada di `frontend-old/`
+- [ ] Tidak ada asset build yang cuma ada di `frontend/` live
 
 ## 9. Env / Config
 
 Files:
-- `frontend/.env.example`
+- `frontend-next/.env.example`
 - `backend/.env.example`
 - `.github/workflows/*.yml`
 
@@ -186,7 +186,7 @@ Checklist:
 - [ ] Admin mini test editor
 - [ ] Admin learning editor
 
-## 12. Exit Criteria Sebelum Hapus `frontend-old/`
+## 12. Exit Criteria Sebelum Hapus Frontend Live Lama
 
 - [ ] Semua route parity selesai
 - [ ] Workflow deploy final Next sudah dipilih dan diuji
@@ -196,4 +196,4 @@ Checklist:
 - [ ] Rollback plan tertulis
 - [ ] Branch `next.js-v1` di-review dan lolos audit
 - [ ] Baru merge ke `main`
-- [ ] Baru hapus `frontend-old/`
+- [ ] Baru hapus frontend Vite lama atau ganti `frontend-next/` menjadi `frontend/`

@@ -20,6 +20,7 @@ Sumber resmi:
 
 File:
 - `.github/workflows/deploy-nextjs-production.yml`
+- source frontend Next: `frontend-next/`
 
 Sifat:
 - manual only (`workflow_dispatch`)

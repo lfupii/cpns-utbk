@@ -134,7 +134,7 @@ MIDTRANS_CLIENT_KEY=your_copied_client_key_here
 MIDTRANS_IS_PRODUCTION=false
 ```
 
-**Frontend (`cpns-utbk/frontend/.env`)**
+**Frontend live (`cpns-utbk/frontend/.env`)**
 ```
 VITE_MIDTRANS_CLIENT_KEY=your_copied_client_key_here
 ```
@@ -238,6 +238,12 @@ cpns-utbk/
 │   ├── index.html                ← Entry HTML
 │   ├── package.json              ← Dependencies
 │   └── vite.config.js            ← Vite config
+│
+├── frontend-next/
+│   ├── src/app/                  ← Next App Router migration
+│   ├── src/legacy-pages/         ← Wrapper ke page lama saat transisi
+│   ├── package.json              ← Next.js dependencies
+│   └── next.config.mjs           ← Next config
 │
 └── database/
     └── schema.sql                ← Setup database tunggal (structure + data awal)

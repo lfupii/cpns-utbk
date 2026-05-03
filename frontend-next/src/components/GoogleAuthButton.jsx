@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect, useRef } from 'react';
 
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
@@ -44,7 +45,7 @@ export default function GoogleAuthButton({
   locale = 'id',
 }) {
   const containerRef = useRef(null);
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
 
   useEffect(() => {
     let cancelled = false;

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const configuredBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+const configuredBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
 const API_BASE_URL = configuredBaseUrl ? `${configuredBaseUrl}/api` : '/api';
 
 const apiClient = axios.create({
@@ -23,7 +23,7 @@ apiClient.interceptors.request.use(
       delete config.headers['Content-Type'];
     }
 
-    const token = localStorage.getItem('token');
+    const token = typeof window === 'undefined' ? null : window.localStorage.getItem('token');
     const isPublicRequest = publicPaths.some((path) => requestUrl.startsWith(path));
     if (token && !isPublicRequest) {
       config.headers.Authorization = `Bearer ${token}`;

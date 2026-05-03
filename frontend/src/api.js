@@ -23,7 +23,7 @@ apiClient.interceptors.request.use(
       delete config.headers['Content-Type'];
     }
 
-    const token = localStorage.getItem('token');
+    const token = typeof window === 'undefined' ? null : window.localStorage.getItem('token');
     const isPublicRequest = publicPaths.some((path) => requestUrl.startsWith(path));
     if (token && !isPublicRequest) {
       config.headers.Authorization = `Bearer ${token}`;

@@ -1,0 +1,136 @@
+name: Deploy Next.js Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref yang akan dibuild/deploy
+        required: true
+        default: next.js-v1
+        type: string
+      dry_run:
+        description: Hanya build + package artifact, tanpa kirim ke host preview
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: deploy-nextjs-preview
+  cancel-in-progress: true
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20.11.1
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build preview standalone frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.PREVIEW_NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_IS_PRODUCTION: ${{ secrets.PREVIEW_NEXT_PUBLIC_IS_PRODUCTION }}
+          NEXT_PUBLIC_MIDTRANS_CLIENT_KEY: ${{ secrets.PREVIEW_NEXT_PUBLIC_MIDTRANS_CLIENT_KEY }}
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.PREVIEW_NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          NEXT_PUBLIC_APP_BASE_PATH: /
+        run: npm run build
+
+      - name: Prepare preview standalone bundle
+        run: |
+          rm -rf .deploy
+          mkdir -p .deploy/standalone/.next
+          cp -R .next/standalone/. .deploy/standalone/
+          cp -R .next/static .deploy/standalone/.next/static
+          cp -R public .deploy/standalone/public
+          tar -czf .deploy/nextjs-preview-${GITHUB_SHA}.tar.gz -C .deploy/standalone .
+
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-preview-standalone
+          path: |
+            frontend/.deploy/standalone
+            frontend/.deploy/nextjs-preview-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+
+      - name: Dry-run summary
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "Dry run selesai."
+          echo "Artifact preview berhasil dibuat."
+          du -sh .deploy/standalone
+          ls -lh .deploy/nextjs-preview-${GITHUB_SHA}.tar.gz
+
+  deploy-preview:
+    if: ${{ !inputs.dry_run }}
+    needs: build-preview
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download preview artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-preview-standalone
+          path: nextjs-preview
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PREVIEW_FRONTEND_SSH_PRIVATE_KEY }}
+
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Upload preview release
+        env:
+          PREVIEW_FRONTEND_SSH_HOST: ${{ secrets.PREVIEW_FRONTEND_SSH_HOST }}
+          PREVIEW_FRONTEND_SSH_PORT: ${{ secrets.PREVIEW_FRONTEND_SSH_PORT }}
+          PREVIEW_FRONTEND_SSH_USER: ${{ secrets.PREVIEW_FRONTEND_SSH_USER }}
+          PREVIEW_FRONTEND_DEPLOY_PATH: ${{ secrets.PREVIEW_FRONTEND_DEPLOY_PATH }}
+          RELEASE_ID: ${{ github.sha }}
+        run: |
+          set -eu
+
+          ssh -p "${PREVIEW_FRONTEND_SSH_PORT}" -o StrictHostKeyChecking=no "${PREVIEW_FRONTEND_SSH_USER}@${PREVIEW_FRONTEND_SSH_HOST}" \
+            "mkdir -p '${PREVIEW_FRONTEND_DEPLOY_PATH}/releases/${RELEASE_ID}' '${PREVIEW_FRONTEND_DEPLOY_PATH}/shared'"
+
+          rsync -az --delete \
+            -e "ssh -p ${PREVIEW_FRONTEND_SSH_PORT} -o StrictHostKeyChecking=no" \
+            nextjs-preview/standalone/ \
+            "${PREVIEW_FRONTEND_SSH_USER}@${PREVIEW_FRONTEND_SSH_HOST}:${PREVIEW_FRONTEND_DEPLOY_PATH}/releases/${RELEASE_ID}/"
+
+      - name: Activate preview release
+        env:
+          PREVIEW_FRONTEND_SSH_HOST: ${{ secrets.PREVIEW_FRONTEND_SSH_HOST }}
+          PREVIEW_FRONTEND_SSH_PORT: ${{ secrets.PREVIEW_FRONTEND_SSH_PORT }}
+          PREVIEW_FRONTEND_SSH_USER: ${{ secrets.PREVIEW_FRONTEND_SSH_USER }}
+          PREVIEW_FRONTEND_DEPLOY_PATH: ${{ secrets.PREVIEW_FRONTEND_DEPLOY_PATH }}
+          PREVIEW_FRONTEND_RESTART_COMMAND: ${{ secrets.PREVIEW_FRONTEND_RESTART_COMMAND }}
+          RELEASE_ID: ${{ github.sha }}
+        run: |
+          set -eu
+
+          ssh -p "${PREVIEW_FRONTEND_SSH_PORT}" -o StrictHostKeyChecking=no "${PREVIEW_FRONTEND_SSH_USER}@${PREVIEW_FRONTEND_SSH_HOST}" <<EOF
+          set -eu
+          ln -sfn "${PREVIEW_FRONTEND_DEPLOY_PATH}/releases/${RELEASE_ID}" "${PREVIEW_FRONTEND_DEPLOY_PATH}/current"
+          cd "${PREVIEW_FRONTEND_DEPLOY_PATH}/current"
+          if [ -n "${PREVIEW_FRONTEND_RESTART_COMMAND}" ]; then
+            eval "${PREVIEW_FRONTEND_RESTART_COMMAND}"
+          fi
+          EOF

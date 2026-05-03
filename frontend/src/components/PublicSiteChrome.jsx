@@ -18,7 +18,7 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
+  const displayName = user?.full_name || 'Pejuang ASN';
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);

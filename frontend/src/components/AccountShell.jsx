@@ -17,7 +17,7 @@ export default function AccountShell({
   hideNavbar = false,
 }) {
   const { user, logout, isAdmin } = useAuth();
-  const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
+  const displayName = user?.full_name || 'Pejuang ASN';
 
   return (
     <div className={`account-shell ${shellClassName}`.trim()}>

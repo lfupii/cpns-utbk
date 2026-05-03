@@ -30,6 +30,18 @@ const ALLOWED_STYLE_NAMES = new Set([
   'max-width',
 ]);
 
+function hasDomEnvironment() {
+  return typeof DOMParser !== 'undefined' && typeof document !== 'undefined';
+}
+
+function stripDangerousHtml(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<(iframe|object|embed|link|meta|style)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<(iframe|object|embed|link|meta)\b[^>]*\/?>/gi, '')
+    .trim();
+}
+
 function sanitizeStyleValue(value) {
   const normalizedValue = String(value || '').trim();
   if (!normalizedValue) {
@@ -57,6 +69,10 @@ function sanitizeClassNames(className) {
 }
 
 function sanitizeInlineStyles(styleValue) {
+  if (typeof document === 'undefined') {
+    return '';
+  }
+
   const styleNode = document.createElement('div');
   styleNode.setAttribute('style', String(styleValue || ''));
 
@@ -94,6 +110,10 @@ function sanitizeUrlAttribute(value) {
 }
 
 export function sanitizeMaterialHtml(html) {
+  if (!hasDomEnvironment()) {
+    return stripDangerousHtml(html);
+  }
+
   const parser = new DOMParser();
   const doc = parser.parseFromString(String(html || ''), 'text/html');
 

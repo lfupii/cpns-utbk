@@ -3,6 +3,12 @@
 class MidtransHandler {
     private const ENABLED_PAYMENTS = ['credit_card', 'bank_transfer', 'echannel', 'gopay', 'qris', 'permata'];
 
+    private static function closeCurlHandle($curl): void {
+        if (is_resource($curl) || $curl instanceof CurlHandle) {
+            curl_close($curl);
+        }
+    }
+
     public static function getEnabledPayments(): array {
         return self::ENABLED_PAYMENTS;
     }
@@ -65,7 +71,7 @@ class MidtransHandler {
         $response = curl_exec($curl);
         if ($response === false) {
             $errorMessage = curl_error($curl) ?: 'Curl request gagal';
-            curl_close($curl);
+            self::closeCurlHandle($curl);
 
             return [
                 'status' => 'error',
@@ -73,7 +79,7 @@ class MidtransHandler {
                 'error_messages' => [$errorMessage],
             ];
         }
-        curl_close($curl);
+        self::closeCurlHandle($curl);
 
         $decoded = json_decode($response, true);
         if (!is_array($decoded)) {
@@ -106,7 +112,7 @@ class MidtransHandler {
         $response = curl_exec($curl);
         if ($response === false) {
             $errorMessage = curl_error($curl) ?: 'Curl request gagal';
-            curl_close($curl);
+            self::closeCurlHandle($curl);
 
             return [
                 'status' => 'error',
@@ -114,7 +120,7 @@ class MidtransHandler {
                 'error_messages' => [$errorMessage],
             ];
         }
-        curl_close($curl);
+        self::closeCurlHandle($curl);
 
         $decoded = json_decode($response, true);
         if (!is_array($decoded)) {
@@ -167,7 +173,7 @@ class MidtransHandler {
         $response = curl_exec($curl);
         if ($response === false) {
             $errorMessage = curl_error($curl) ?: 'Curl request gagal';
-            curl_close($curl);
+            self::closeCurlHandle($curl);
 
             return [
                 'status' => 'error',
@@ -175,7 +181,7 @@ class MidtransHandler {
                 'error_messages' => [$errorMessage],
             ];
         }
-        curl_close($curl);
+        self::closeCurlHandle($curl);
 
         $decoded = json_decode($response, true);
         if (!is_array($decoded)) {

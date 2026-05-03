@@ -380,7 +380,7 @@ export default function Learning() {
   const pendingMaterialScrollBehaviorRef = useRef('auto');
   const lastMaterialViewportKeyRef = useRef('');
   const deferredLearningSearch = useDeferredValue(learningSearch.trim().toLowerCase());
-  const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang UTBK';
+  const displayName = user?.full_name || 'Pejuang UTBK';
   const greetingName = getFirstName(displayName);
   const viewerRoleLabel = isAdmin ? 'Admin' : 'Siswa';
   const {

@@ -1,11 +1,11 @@
 "use client";
 import NextLink from 'next/link';
+import { useRouter as useNextRouter, usePathname, useParams as useNextParams, useSearchParams as useNextSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
 
 export function Link({ to, href, ...props }) {
   return <NextLink href={to || href || "#"} {...props} />;
 }
-import { useRouter as useNextRouter, usePathname, useParams as useNextParams, useSearchParams as useNextSearchParams } from 'next/navigation';
-import { useEffect, Suspense } from 'react';
 
 export function useNavigate() {
   const router = useNextRouter();
@@ -30,17 +30,25 @@ export function useParams() {
 }
 
 export function useSearchParams() {
+  const router = useNextRouter();
+  const pathname = usePathname();
   const searchParams = useNextSearchParams();
-  const get = (key) => searchParams.get(key);
-  const entries = () => searchParams.entries();
-  
-  // Return a mock similar to URLSearchParams that react-router-dom provides
-  // Note: Next.js useSearchParams is read-only.
+
   return [
     searchParams,
-    (newParams) => {
-      // In a full implementation, you'd push the new params to the router
-      console.warn('setSearchParams is not fully implemented in shim');
+    (newParams, options = {}) => {
+      const normalizedParams = newParams instanceof URLSearchParams
+        ? new URLSearchParams(newParams)
+        : new URLSearchParams(newParams);
+      const nextQuery = normalizedParams.toString();
+      const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+
+      if (options?.replace) {
+        router.replace(nextUrl, { scroll: options.scroll ?? false });
+        return;
+      }
+
+      router.push(nextUrl, { scroll: options.scroll ?? false });
     }
   ];
 }

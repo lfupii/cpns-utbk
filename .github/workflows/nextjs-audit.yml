@@ -1,0 +1,56 @@
+name: Next.js Audit
+
+on:
+  push:
+    branches:
+      - next.js-v1
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/nextjs-audit.yml'
+      - 'docs/NEXTJS-*.md'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/nextjs-audit.yml'
+      - 'docs/NEXTJS-*.md'
+  workflow_dispatch:
+
+concurrency:
+  group: nextjs-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-audit:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20.11.1
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Build frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+          NEXT_PUBLIC_IS_PRODUCTION: false
+          NEXT_PUBLIC_MIDTRANS_CLIENT_KEY: MIGRATION_AUDIT_CLIENT_KEY
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: MIGRATION_AUDIT_GOOGLE_CLIENT_ID
+          NEXT_PUBLIC_APP_BASE_PATH: /
+        run: npm run build

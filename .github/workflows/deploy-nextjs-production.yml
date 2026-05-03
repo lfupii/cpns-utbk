@@ -1,0 +1,247 @@
+name: Deploy Next.js Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref yang akan dideploy
+        required: true
+        default: next.js-v1
+        type: string
+      deploy_frontend:
+        description: Deploy frontend Next.js ke host Node terpisah
+        required: true
+        default: true
+        type: boolean
+      deploy_backend:
+        description: Deploy backend PHP ke hosting cPanel API
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-nextjs-production
+  cancel-in-progress: false
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20.11.1
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build standalone frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.PROD_NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_IS_PRODUCTION: ${{ secrets.PROD_NEXT_PUBLIC_IS_PRODUCTION }}
+          NEXT_PUBLIC_MIDTRANS_CLIENT_KEY: ${{ secrets.PROD_NEXT_PUBLIC_MIDTRANS_CLIENT_KEY }}
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.PROD_NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          NEXT_PUBLIC_APP_BASE_PATH: /
+        run: npm run build
+
+      - name: Prepare standalone bundle
+        run: |
+          rm -rf .deploy
+          mkdir -p .deploy/standalone/.next
+          cp -R .next/standalone/. .deploy/standalone/
+          cp -R .next/static .deploy/standalone/.next/static
+          cp -R public .deploy/standalone/public
+
+      - name: Upload standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-standalone
+          path: frontend/.deploy/standalone
+          if-no-files-found: error
+
+  deploy-frontend:
+    if: ${{ inputs.deploy_frontend }}
+    needs: build-frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download standalone artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-standalone
+          path: nextjs-standalone
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.FRONTEND_SSH_PRIVATE_KEY }}
+
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Upload release bundle
+        env:
+          FRONTEND_SSH_HOST: ${{ secrets.FRONTEND_SSH_HOST }}
+          FRONTEND_SSH_PORT: ${{ secrets.FRONTEND_SSH_PORT }}
+          FRONTEND_SSH_USER: ${{ secrets.FRONTEND_SSH_USER }}
+          FRONTEND_DEPLOY_PATH: ${{ secrets.FRONTEND_DEPLOY_PATH }}
+          RELEASE_ID: ${{ github.sha }}
+        run: |
+          set -eu
+
+          ssh -p "${FRONTEND_SSH_PORT}" -o StrictHostKeyChecking=no "${FRONTEND_SSH_USER}@${FRONTEND_SSH_HOST}" \
+            "mkdir -p '${FRONTEND_DEPLOY_PATH}/releases/${RELEASE_ID}' '${FRONTEND_DEPLOY_PATH}/shared'"
+
+          rsync -az --delete \
+            -e "ssh -p ${FRONTEND_SSH_PORT} -o StrictHostKeyChecking=no" \
+            nextjs-standalone/ \
+            "${FRONTEND_SSH_USER}@${FRONTEND_SSH_HOST}:${FRONTEND_DEPLOY_PATH}/releases/${RELEASE_ID}/"
+
+      - name: Activate release
+        env:
+          FRONTEND_SSH_HOST: ${{ secrets.FRONTEND_SSH_HOST }}
+          FRONTEND_SSH_PORT: ${{ secrets.FRONTEND_SSH_PORT }}
+          FRONTEND_SSH_USER: ${{ secrets.FRONTEND_SSH_USER }}
+          FRONTEND_DEPLOY_PATH: ${{ secrets.FRONTEND_DEPLOY_PATH }}
+          FRONTEND_RESTART_COMMAND: ${{ secrets.FRONTEND_RESTART_COMMAND }}
+          RELEASE_ID: ${{ github.sha }}
+        run: |
+          set -eu
+
+          ssh -p "${FRONTEND_SSH_PORT}" -o StrictHostKeyChecking=no "${FRONTEND_SSH_USER}@${FRONTEND_SSH_HOST}" <<EOF
+          set -eu
+          ln -sfn "${FRONTEND_DEPLOY_PATH}/releases/${RELEASE_ID}" "${FRONTEND_DEPLOY_PATH}/current"
+          cd "${FRONTEND_DEPLOY_PATH}/current"
+          if [ -n "${FRONTEND_RESTART_COMMAND}" ]; then
+            eval "${FRONTEND_RESTART_COMMAND}"
+          fi
+          EOF
+
+  deploy-backend:
+    if: ${{ inputs.deploy_backend }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+
+      - name: Prepare backend package
+        env:
+          DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          DB_USER: ${{ secrets.PROD_DB_USER }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          DB_NAME: ${{ secrets.PROD_DB_NAME }}
+          DB_PORT: ${{ secrets.PROD_DB_PORT }}
+          API_URL: ${{ secrets.PROD_API_URL }}
+          FRONTEND_URL: ${{ secrets.PROD_FRONTEND_URL }}
+          CORS_ALLOWED_ORIGINS: ${{ secrets.PROD_CORS_ALLOWED_ORIGINS }}
+          JWT_SECRET_KEY: ${{ secrets.PROD_JWT_SECRET_KEY }}
+          TOKEN_EXPIRY: ${{ secrets.PROD_TOKEN_EXPIRY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.PROD_GOOGLE_CLIENT_ID }}
+          MIDTRANS_IS_PRODUCTION: ${{ secrets.PROD_MIDTRANS_IS_PRODUCTION }}
+          MIDTRANS_SERVER_KEY: ${{ secrets.PROD_MIDTRANS_SERVER_KEY }}
+          MIDTRANS_CLIENT_KEY: ${{ secrets.PROD_MIDTRANS_CLIENT_KEY }}
+          MERCHANT_ID: ${{ secrets.PROD_MERCHANT_ID }}
+          SMTP_HOST: ${{ secrets.PROD_SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.PROD_SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.PROD_SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.PROD_SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.PROD_SMTP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.PROD_FROM_EMAIL }}
+          FROM_NAME: ${{ secrets.PROD_FROM_NAME }}
+          EMAIL_VERIFICATION_EXPIRY_HOURS: ${{ secrets.PROD_EMAIL_VERIFICATION_EXPIRY_HOURS }}
+          DEFAULT_ADMIN_EMAIL: ${{ secrets.PROD_DEFAULT_ADMIN_EMAIL }}
+          DEFAULT_ADMIN_FULL_NAME: ${{ secrets.PROD_DEFAULT_ADMIN_FULL_NAME }}
+          DEFAULT_ADMIN_PASSWORD_HASH: ${{ secrets.PROD_DEFAULT_ADMIN_PASSWORD_HASH }}
+          DEFAULT_ADMIN_FORCE_BOOTSTRAP: ${{ secrets.PROD_DEFAULT_ADMIN_FORCE_BOOTSTRAP }}
+        run: |
+          dotenv_escape() {
+            printf '%s' "$1" | sed 's/[\\"]/\\&/g'
+          }
+
+          rm -rf .deploy
+          mkdir -p .deploy/backend
+          rsync -av --delete \
+            --exclude='.env' \
+            --exclude='backend-production.zip' \
+            backend/ .deploy/backend/
+
+          cat > .deploy/backend/.env <<EOF
+          DB_HOST="$(dotenv_escape "${DB_HOST}")"
+          DB_USER="$(dotenv_escape "${DB_USER}")"
+          DB_PASSWORD="$(dotenv_escape "${DB_PASSWORD}")"
+          DB_NAME="$(dotenv_escape "${DB_NAME}")"
+          DB_PORT="$(dotenv_escape "${DB_PORT}")"
+
+          API_URL="$(dotenv_escape "${API_URL}")"
+          FRONTEND_URL="$(dotenv_escape "${FRONTEND_URL}")"
+          CORS_ALLOWED_ORIGINS="$(dotenv_escape "${CORS_ALLOWED_ORIGINS}")"
+
+          JWT_SECRET_KEY="$(dotenv_escape "${JWT_SECRET_KEY}")"
+          TOKEN_EXPIRY="$(dotenv_escape "${TOKEN_EXPIRY}")"
+          GOOGLE_CLIENT_ID="$(dotenv_escape "${GOOGLE_CLIENT_ID}")"
+
+          MIDTRANS_IS_PRODUCTION="$(dotenv_escape "${MIDTRANS_IS_PRODUCTION}")"
+          MIDTRANS_SERVER_KEY="$(dotenv_escape "${MIDTRANS_SERVER_KEY}")"
+          MIDTRANS_CLIENT_KEY="$(dotenv_escape "${MIDTRANS_CLIENT_KEY}")"
+          MERCHANT_ID="$(dotenv_escape "${MERCHANT_ID}")"
+
+          SMTP_HOST="$(dotenv_escape "${SMTP_HOST}")"
+          SMTP_PORT="$(dotenv_escape "${SMTP_PORT}")"
+          SMTP_SECURE="$(dotenv_escape "${SMTP_SECURE}")"
+          SMTP_USER="$(dotenv_escape "${SMTP_USER}")"
+          SMTP_PASSWORD="$(dotenv_escape "${SMTP_PASSWORD}")"
+          FROM_EMAIL="$(dotenv_escape "${FROM_EMAIL}")"
+          FROM_NAME="$(dotenv_escape "${FROM_NAME}")"
+
+          EMAIL_VERIFICATION_EXPIRY_HOURS="$(dotenv_escape "${EMAIL_VERIFICATION_EXPIRY_HOURS}")"
+
+          DEFAULT_ADMIN_EMAIL="$(dotenv_escape "${DEFAULT_ADMIN_EMAIL}")"
+          DEFAULT_ADMIN_FULL_NAME="$(dotenv_escape "${DEFAULT_ADMIN_FULL_NAME}")"
+          DEFAULT_ADMIN_PASSWORD_HASH="$(dotenv_escape "${DEFAULT_ADMIN_PASSWORD_HASH}")"
+          DEFAULT_ADMIN_FORCE_BOOTSTRAP="$(dotenv_escape "${DEFAULT_ADMIN_FORCE_BOOTSTRAP}")"
+          EOF
+
+      - name: Install FTP client
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Deploy backend to public_html/api
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -u
+
+          lftp -u "${FTP_USERNAME}","${FTP_PASSWORD}" -p "${FTP_PORT}" "${FTP_HOST}" -e "
+          set cmd:fail-exit true
+          set ftp:passive-mode true
+          set ftp:prefer-epsv false
+          mirror -R --continue --verbose=2 --parallel=1 .deploy/backend api
+          bye
+          "

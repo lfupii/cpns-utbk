@@ -226,7 +226,31 @@ function sanitizeEditorHtml(html) {
   return sanitizeMaterialHtml(html);
 }
 
+function extractPlainTextFromHtml(html) {
+  const normalizedHtml = String(html || '');
+
+  if (typeof DOMParser === 'undefined') {
+    return normalizedHtml
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|ul|ol|blockquote|section|article|h[1-6])>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .trim();
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(normalizedHtml, 'text/html');
+  return String(doc.body.textContent || '').trim();
+}
+
 function extractPointsFromHtml(html) {
+  if (typeof DOMParser === 'undefined') {
+    return extractPlainTextFromHtml(html)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
   const parser = new DOMParser();
   const doc = parser.parseFromString(String(html || ''), 'text/html');
   const items = [...doc.querySelectorAll('li')]
@@ -1687,6 +1711,10 @@ export default function AdminLearningMaterialEditor() {
   }, [getMovableEditorNodes, normalizeEditorContent]);
 
   const hasMeaningfulPageContent = useCallback((contentHtml = '') => {
+    if (typeof DOMParser === 'undefined') {
+      return extractPlainTextFromHtml(contentHtml).length > 0;
+    }
+
     const parser = new DOMParser();
     const doc = parser.parseFromString(String(contentHtml || ''), 'text/html');
     return [...doc.body.childNodes].some((childNode) => isMeaningfulEditorNode(childNode));
@@ -4281,9 +4309,7 @@ export default function AdminLearningMaterialEditor() {
       return 0;
     }
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(String(sourceHtml), 'text/html');
-    const plainText = String(doc.body.textContent || '')
+    const plainText = extractPlainTextFromHtml(sourceHtml)
       .replace(/\s+/g, ' ')
       .trim();
 

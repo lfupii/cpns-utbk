@@ -2733,7 +2733,7 @@ export default function AdminPanel() {
                       <div>
                         <h3>Daftar Paket Aktif</h3>
                         <p className="text-muted">
-                          Paket seperti "CPNS Intensif Copy" ditampilkan di dalam halaman ini, bukan lagi di luar.
+                          Paket seperti &quot;CPNS Intensif Copy&quot; ditampilkan di dalam halaman ini, bukan lagi di luar.
                         </p>
                       </div>
                     </div>

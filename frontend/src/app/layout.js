@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import "../index.css";
 import { ThemeProvider } from "../ThemeContext";
 import { AuthProvider } from "../AuthContext";
@@ -13,7 +14,9 @@ export default function RootLayout({ children }) {
       <body>
         <ThemeProvider>
           <AuthProvider>
-            {children}
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Memuat...</div>}>
+              {children}
+            </Suspense>
           </AuthProvider>
         </ThemeProvider>
       </body>

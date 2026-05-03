@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
@@ -128,322 +128,14 @@ function FeatureIcon({ name }) {
   }
 }
 
-const landingEase = [0.16, 1, 0.3, 1];
-const landingViewport = {
-  once: true,
-  amount: 0.22,
-  margin: '0px 0px -12% 0px',
-};
-
-const staggerRevealVariants = {
-  hidden: {},
-  visible: {
-    transition: {
-      delayChildren: 0.04,
-      staggerChildren: 0.08,
-    },
-  },
-};
-
-const fadeUpItemVariants = {
-  hidden: {
-    opacity: 0,
-    y: 28,
-    filter: 'blur(8px)',
-  },
-  visible: {
-    opacity: 1,
-    y: 0,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.76,
-      ease: landingEase,
-    },
-  },
-};
-
-const fadeScaleVariants = {
-  hidden: {
-    opacity: 0,
-    y: 32,
-    scale: 0.972,
-    filter: 'blur(10px)',
-  },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.82,
-      ease: landingEase,
-    },
-  },
-};
-
-const aboutMediaVariants = {
-  hidden: {
-    scale: 1.08,
-    filter: 'saturate(0.92)',
-  },
-  visible: {
-    scale: 1.02,
-    filter: 'saturate(1)',
-    transition: {
-      duration: 1.1,
-      ease: landingEase,
-      delay: 0.18,
-    },
-  },
-};
-
-const aboutStatTopVariants = {
-  hidden: {
-    opacity: 0,
-    x: -24,
-    y: 18,
-  },
-  visible: {
-    opacity: 1,
-    x: 0,
-    y: [0, -8, 0],
-    transition: {
-      opacity: {
-        duration: 0.82,
-        ease: landingEase,
-        delay: 0.28,
-      },
-      x: {
-        duration: 0.82,
-        ease: landingEase,
-        delay: 0.28,
-      },
-      y: {
-        duration: 5.8,
-        ease: 'easeInOut',
-        delay: 1.12,
-        repeat: Infinity,
-      },
-    },
-  },
-};
-
-const aboutStatBottomVariants = {
-  hidden: {
-    opacity: 0,
-    x: 24,
-    y: 18,
-  },
-  visible: {
-    opacity: 1,
-    x: 0,
-    y: [0, 8, 0],
-    transition: {
-      opacity: {
-        duration: 0.82,
-        ease: landingEase,
-        delay: 0.42,
-      },
-      x: {
-        duration: 0.82,
-        ease: landingEase,
-        delay: 0.42,
-      },
-      y: {
-        duration: 6.1,
-        ease: 'easeInOut',
-        delay: 1.26,
-        repeat: Infinity,
-      },
-    },
-  },
-};
-
-const mindmapShellVariants = {
-  hidden: {
-    opacity: 0,
-    y: 34,
-    filter: 'blur(10px)',
-  },
-  visible: {
-    opacity: 1,
-    y: 0,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.82,
-      ease: landingEase,
-      delayChildren: 0.18,
-      staggerChildren: 0.08,
-    },
-  },
-};
-
-const mindmapPathVariants = {
-  hidden: {
-    pathLength: 0,
-    opacity: 0.26,
-  },
-  visible: {
-    pathLength: 1,
-    opacity: 1,
-    transition: {
-      duration: 1.35,
-      ease: landingEase,
-      delay: 0.16,
-    },
-  },
-};
-
-const mindmapNodeVariants = {
-  hidden: {
-    opacity: 0,
-    y: 34,
-    scale: 0.965,
-    filter: 'blur(10px)',
-  },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.72,
-      ease: landingEase,
-    },
-  },
-};
-
-const packageCardVariants = {
-  hidden: {
-    opacity: 0,
-    y: 32,
-    scale: 0.985,
-    filter: 'blur(10px)',
-  },
-  visible: (index = 0) => ({
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.82,
-      ease: landingEase,
-      delay: 0.08 + (index * 0.14),
-      when: 'beforeChildren',
-      delayChildren: 0.08,
-      staggerChildren: 0.06,
-    },
-  }),
-};
-
-const packageItemVariants = {
-  hidden: {
-    opacity: 0,
-    y: 24,
-    filter: 'blur(8px)',
-  },
-  visible: {
-    opacity: 1,
-    y: 0,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.72,
-      ease: landingEase,
-    },
-  },
-};
-
-const packageMediaVariants = {
-  hidden: {
-    scale: 1.06,
-    filter: 'saturate(0.94)',
-  },
-  visible: {
-    scale: 1,
-    filter: 'saturate(1)',
-    transition: {
-      duration: 1.1,
-      ease: landingEase,
-    },
-  },
-};
-
-const packageOrbVariants = {
-  hidden: {
-    opacity: 0,
-    scale: 0.72,
-  },
-  visible: {
-    opacity: 0.92,
-    scale: 1,
-    y: [0, -10, 0],
-    transition: {
-      opacity: {
-        duration: 0.78,
-        ease: 'easeOut',
-        delay: 0.42,
-      },
-      scale: {
-        duration: 0.9,
-        ease: landingEase,
-        delay: 0.42,
-      },
-      y: {
-        duration: 6.5,
-        ease: 'easeInOut',
-        delay: 1.12,
-        repeat: Infinity,
-      },
-    },
-  },
-};
-
-const packageMiniCardVariants = {
-  hidden: {
-    opacity: 0,
-    x: 18,
-    scale: 0.94,
-  },
-  visible: {
-    opacity: 1,
-    x: 0,
-    scale: 1,
-    transition: {
-      duration: 0.72,
-      ease: landingEase,
-      delay: 0.12,
-    },
-  },
-};
-
-const quoteCardVariants = {
-  hidden: {
-    opacity: 0,
-    y: 28,
-    filter: 'blur(8px)',
-  },
-  visible: (index = 0) => ({
-    opacity: 1,
-    y: 0,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.72,
-      ease: landingEase,
-      delay: 0.08 + (index * 0.1),
-    },
-  }),
-};
-
 export default function Home() {
   const { user, logout, isAdmin } = useAuth();
-  const shellRef = useRef(null);
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [motionEnabled, setMotionEnabled] = useState(false);
 
   const displayName = user?.full_name || 'Pejuang ASN';
 
@@ -482,99 +174,6 @@ export default function Home() {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
-
-  useLayoutEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined;
-    }
-
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const syncMotionPreference = () => {
-      setMotionEnabled(!mediaQuery.matches);
-    };
-
-    syncMotionPreference();
-
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', syncMotionPreference);
-
-      return () => {
-        mediaQuery.removeEventListener('change', syncMotionPreference);
-      };
-    }
-
-    mediaQuery.addListener(syncMotionPreference);
-
-    return () => {
-      mediaQuery.removeListener(syncMotionPreference);
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    if (loading) {
-      return undefined;
-    }
-
-    const shell = shellRef.current;
-    if (!shell) {
-      return undefined;
-    }
-
-    const revealElements = Array.from(shell.querySelectorAll('[data-reveal]'));
-    if (!revealElements.length) {
-      return undefined;
-    }
-
-    if (!motionEnabled || typeof window === 'undefined' || !('IntersectionObserver' in window)) {
-      revealElements.forEach((element) => {
-        element.classList.add('is-visible');
-      });
-
-      return undefined;
-    }
-
-    const revealThreshold = window.innerHeight * 0.88;
-    const pendingReveal = [];
-
-    revealElements.forEach((element) => {
-      if (element.getBoundingClientRect().top <= revealThreshold) {
-        element.classList.add('is-visible');
-        return;
-      }
-
-      element.classList.remove('is-visible');
-      pendingReveal.push(element);
-    });
-
-    if (!pendingReveal.length) {
-      return undefined;
-    }
-
-    const observer = new window.IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) {
-            return;
-          }
-
-          entry.target.classList.add('is-visible');
-          observer.unobserve(entry.target);
-        });
-      },
-      {
-        threshold: 0.22,
-        rootMargin: '0px 0px -12% 0px',
-      }
-    );
-
-    pendingReveal.forEach((element) => {
-      observer.observe(element);
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [loading, motionEnabled]);
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -671,19 +270,6 @@ export default function Home() {
       title: 'Lihat hasil, skor, dan riwayat',
     },
   ];
-  const getRevealProps = (variants, options = {}) => {
-    if (prefersReducedMotion) {
-      return {};
-    }
-
-    return {
-      initial: 'hidden',
-      whileInView: 'visible',
-      viewport: landingViewport,
-      variants,
-      ...options,
-    };
-  };
 
   if (loading) {
     return (
@@ -694,10 +280,7 @@ export default function Home() {
   }
 
   return (
-    <div
-      ref={shellRef}
-      className={`landing-shell ${motionEnabled ? 'motion-enabled' : ''}`}
-    >
+    <div className="landing-shell">
       <nav className={`landing-navbar ${isScrolled ? 'landing-navbar-scrolled' : ''}`}>
         <div className={`container landing-navbar-inner ${user ? 'landing-navbar-inner-authenticated' : ''}`}>
           <div className="landing-navbar-brand">
@@ -776,11 +359,7 @@ export default function Home() {
         <section className="landing-section landing-section-about" id="tentang">
           <div className="container">
             <div className="landing-about-band">
-              <div
-                className="landing-about-copy landing-reveal-group"
-                data-reveal
-                style={{ '--reveal-delay': '0.04s' }}
-              >
+              <div className="landing-about-copy">
                 <h2>
                   <span className="landing-about-title-prefix">Tentang</span>
                   <img
@@ -794,56 +373,40 @@ export default function Home() {
                     alt="Ujiin"
                   />
                 </h2>
-                <p variants={fadeUpItemVariants}>
+                <p>
                   Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
                   latihan bertahap, simulasi tryout, dan hasil evaluasi yang langsung bisa dibaca
                   dari satu akun.
                 </p>
 
-                <div
-                  className="landing-about-tags"
-                  aria-label="Fokus utama Ujiin"
-                  variants={fadeUpItemVariants}
-                >
+                <div className="landing-about-tags" aria-label="Fokus utama Ujiin">
                   <span className="landing-about-tag">Materi belajar</span>
                   <span className="landing-about-tag">Latihan bertahap</span>
                   <span className="landing-about-tag">Tryout online</span>
                 </div>
 
-                <div className="landing-about-actions" variants={fadeUpItemVariants}>
+                <div className="landing-about-actions">
                   <a href="#paket" className="btn btn-primary">
                     Lihat Program
                   </a>
                 </div>
               </div>
 
-              <div
-                className="landing-about-visual landing-reveal-scale"
-                data-reveal
-                style={{ '--reveal-delay': '0.18s' }}
-                aria-label="Ilustrasi belajar bersama Ujiin"
-              >
+              <div className="landing-about-visual" aria-label="Ilustrasi belajar bersama Ujiin">
                 <div
                   className="landing-about-media"
-                  variants={aboutMediaVariants}
                   style={{
                     backgroundImage:
                       "linear-gradient(180deg, rgba(15, 23, 47, 0.1), rgba(15, 23, 47, 0.38)), url('https://images.pexels.com/photos/5905709/pexels-photo-5905709.jpeg?auto=compress&cs=tinysrgb&w=1200')",
                   }}
                 />
 
-                <div
-                  className="landing-about-stat landing-about-stat-top"
-                  variants={aboutStatTopVariants}
-                >
+                <div className="landing-about-stat landing-about-stat-top">
                   <span>Belajar aktif</span>
                   <strong>Preview, materi, tryout</strong>
                 </div>
 
-                <div
-                  className="landing-about-stat landing-about-stat-bottom"
-                  variants={aboutStatBottomVariants}
-                >
+                <div className="landing-about-stat landing-about-stat-bottom">
                   <span>Fokus utama</span>
                   <strong>CPNS dan UTBK dalam satu flow</strong>
                 </div>
@@ -854,19 +417,11 @@ export default function Home() {
 
         <section className="landing-section landing-section-featured" id="keunggulan">
           <div className="container">
-            <div
-              className="landing-section-heading landing-reveal-group"
-              data-reveal
-              style={{ '--reveal-delay': '0.02s' }}
-            >
+            <div className="landing-section-heading">
               <h2>Fitur yang saling nyambung dalam satu flow belajar</h2>
             </div>
 
-            <div
-              className="landing-mindmap-shell"
-              data-reveal
-              style={{ '--reveal-delay': '0.08s' }}
-            >
+            <div className="landing-mindmap-shell">
               <div className="landing-mindmap-track" aria-label="Flow fitur Ujiin">
                 <svg className="landing-mindmap-line" viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">
                   <defs>
@@ -876,19 +431,14 @@ export default function Home() {
                       <stop offset="100%" stopColor="#43c7bb" />
                     </linearGradient>
                   </defs>
-                  <path
-                    pathLength="1"
-                    d="M36 188 C88 188 96 188 100 188 S228 262 300 262 S428 188 500 188 S628 262 700 262 S828 188 900 188 S964 188 980 188"
-                  />
+                  <path d="M36 188 C88 188 96 188 100 188 S228 262 300 262 S428 188 500 188 S628 262 700 262 S828 188 900 188 S964 188 980 188" />
                 </svg>
-                {featureMindmap.map((item, index) => (
+                {featureMindmap.map((item) => (
                   <article
                     key={item.step}
                     className={`landing-mindmap-node landing-mindmap-node-${item.align}`}
-                    variants={mindmapNodeVariants}
                     style={{
                       '--mindmap-accent': item.accent,
-                      '--node-delay': `${0.18 + (index * 0.08)}s`,
                     }}
                   >
                     <div className="landing-mindmap-copy">
@@ -908,11 +458,7 @@ export default function Home() {
 
         <section className="landing-section" id="paket">
           <div className="container">
-            <div
-              className="landing-section-heading landing-reveal-group"
-              data-reveal
-              style={{ '--reveal-delay': '0.02s' }}
-            >
+            <div className="landing-section-heading">
               <h2>Dua paket, langsung jelas pilihannya</h2>
               <p>
                 Kami sederhanakan jadi dua opsi paling gampang dipahami: satu untuk UTBK dan satu
@@ -921,72 +467,67 @@ export default function Home() {
             </div>
 
             <div className="landing-package-grid landing-package-grid-curated">
-              {curatedPackages.map((pkg, index) => (
-                <article
-                  key={pkg.slug}
-                  className={`landing-package-card landing-package-featured landing-package-featured-motion ${pkg.accent}`}
-                  data-reveal
-                  style={{ '--reveal-delay': `${0.08 + (index * 0.14)}s` }}
-                >
-                  <div className="landing-package-top">
-                    <span className="landing-package-category">
-                      Paket {pkg.title}
-                    </span>
-                    <span className="landing-package-badge">{pkg.badge}</span>
+          {curatedPackages.map((pkg) => (
+              <article key={pkg.slug} className={`landing-package-card landing-package-featured ${pkg.accent}`}>
+                <div className="landing-package-top">
+                  <span className="landing-package-category">
+                  Paket {pkg.title}
+                  </span>
+                  <span className="landing-package-badge">{pkg.badge}</span>
+                </div>
+
+                <h3>{pkg.title} Intensif</h3>
+                <p className="landing-package-description">{pkg.subtitle}</p>
+
+                <div className="landing-package-visual">
+                  <div
+                    className="landing-package-visual-media"
+                    style={{ backgroundImage: `linear-gradient(90deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url('${pkg.visualImage}')` }}
+                    aria-hidden="true"
+                  />
+                  <div className="landing-package-orb"></div>
+                  <div className="landing-package-mini-card">
+                    <span>Smart Focus</span>
+                    <strong>{pkg.title === 'UTBK' ? 'TPS + drill cepat' : 'TWK • TIU • TKP'}</strong>
                   </div>
+                </div>
 
-                  <h3>{pkg.title} Intensif</h3>
-                  <p className="landing-package-description">{pkg.subtitle}</p>
+                <div className="landing-package-meta landing-package-meta-curated">
+                  {pkg.features.map((feature) => (
+                    <p key={feature}>{feature}</p>
+                  ))}
+                </div>
 
-                  <div className="landing-package-visual">
-                    <div
-                      className="landing-package-visual-media"
-                      style={{ backgroundImage: `linear-gradient(90deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url('${pkg.visualImage}')` }}
-                      aria-hidden="true"
-                    />
-                    <div className="landing-package-orb"></div>
-                    <div className="landing-package-mini-card">
-                      <span>Smart Focus</span>
-                      <strong>{pkg.title === 'UTBK' ? 'TPS + drill cepat' : 'TWK • TIU • TKP'}</strong>
-                    </div>
-                  </div>
-
-                  <div className="landing-package-meta landing-package-meta-curated">
-                    {pkg.features.map((feature) => (
-                      <p key={feature}>{feature}</p>
-                    ))}
-                  </div>
-
-                  <div className="landing-package-footer landing-package-footer-curated">
-                    <div className="landing-package-price-block">
-                      <span className="landing-package-price-label">Mulai dari</span>
-                      <div className="landing-package-price-meta">
-                        <span className="landing-package-discount-pill">
-                          Diskon {packageDiscountPercent}%
-                        </span>
-                        <span className="landing-package-price-original">
-                          Rp{(pkg.price * 2).toLocaleString('id-ID')}
-                        </span>
-                      </div>
-                      <span className="landing-package-price">
-                        Rp{pkg.price.toLocaleString('id-ID')}
+                <div className="landing-package-footer landing-package-footer-curated">
+                  <div>
+                    <span className="landing-package-price-label">Mulai dari</span>
+                    <div className="landing-package-price-meta">
+                      <span className="landing-package-discount-pill">
+                        Diskon {packageDiscountPercent}%
+                      </span>
+                      <span className="landing-package-price-original">
+                        Rp{(pkg.price * 2).toLocaleString('id-ID')}
                       </span>
                     </div>
-                    {pkg.source ? (
-                      <Link
-                        to={`/learning/${pkg.source.id}`}
-                        className="btn btn-primary landing-package-action"
-                      >
-                        {user ? (isAdmin ? `Buka ${pkg.title}` : 'Lihat Paket') : `Preview ${pkg.title}`}
-                      </Link>
-                    ) : (
-                      <button type="button" className="btn btn-outline landing-package-action" disabled>
-                        Sedang disiapkan
-                      </button>
-                    )}
+                    <span className="landing-package-price">
+                      Rp{pkg.price.toLocaleString('id-ID')}
+                    </span>
                   </div>
-                </article>
-              ))}
+                  {pkg.source ? (
+                    <Link
+                      to={`/learning/${pkg.source.id}`}
+                      className="btn btn-primary landing-package-action"
+                    >
+                      {user ? (isAdmin ? `Buka ${pkg.title}` : 'Lihat Paket') : `Preview ${pkg.title}`}
+                    </Link>
+                  ) : (
+                    <button type="button" className="btn btn-outline landing-package-action" disabled>
+                      Sedang disiapkan
+                    </button>
+                  )}
+                </div>
+              </article>
+          ))}
             </div>
 
             {!cpnsSource && !utbkSource && (
@@ -999,19 +540,14 @@ export default function Home() {
 
         <section className="landing-section landing-section-muted" id="testimoni">
           <div className="container landing-bottom-grid">
-            <article className="landing-quote-card" data-reveal style={{ '--reveal-delay': '0.08s' }}>
+            <article className="landing-quote-card">
               <p>
                 &ldquo;Yang paling ngebantu itu dashboard progresnya. Saya jadi tahu materi mana yang
                 masih bikin skor turun.&rdquo;
               </p>
               <strong>Dina, peserta batch Januari</strong>
             </article>
-            <article
-              className="landing-quote-card"
-              id="blog"
-              data-reveal
-              style={{ '--reveal-delay': '0.18s' }}
-            >
+            <article className="landing-quote-card" id="blog">
               <p>
                 &ldquo;Belajar terasa lebih ringan karena targetnya dibagi per sesi, bukan dilempar
                 semua sekaligus.&rdquo;

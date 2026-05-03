@@ -1,6 +1,12 @@
 name: Deploy Next.js Preview
 
 on:
+  push:
+    branches:
+      - next.js-v1
+    paths:
+      - frontend/**
+      - .github/workflows/deploy-nextjs-preview.yml
   workflow_dispatch:
     inputs:
       git_ref:
@@ -30,7 +36,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.ref_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -70,7 +76,7 @@ jobs:
           if-no-files-found: error
 
       - name: Dry-run summary
-        if: ${{ inputs.dry_run }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
         run: |
           echo "Dry run selesai."
           echo "Artifact preview berhasil dibuat."
@@ -78,7 +84,7 @@ jobs:
           ls -lh .deploy/nextjs-preview-${GITHUB_SHA}.tar.gz
 
   deploy-preview:
-    if: ${{ !inputs.dry_run }}
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dry_run }}
     needs: build-preview
     runs-on: ubuntu-latest
 

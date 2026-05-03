@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
@@ -130,12 +130,14 @@ function FeatureIcon({ name }) {
 
 export default function Home() {
   const { user, logout, isAdmin } = useAuth();
+  const shellRef = useRef(null);
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [motionEnabled, setMotionEnabled] = useState(false);
 
   const displayName = user?.full_name || 'Pejuang ASN';
 
@@ -174,6 +176,99 @@ export default function Home() {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncMotionPreference = () => {
+      setMotionEnabled(!mediaQuery.matches);
+    };
+
+    syncMotionPreference();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', syncMotionPreference);
+
+      return () => {
+        mediaQuery.removeEventListener('change', syncMotionPreference);
+      };
+    }
+
+    mediaQuery.addListener(syncMotionPreference);
+
+    return () => {
+      mediaQuery.removeListener(syncMotionPreference);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (loading) {
+      return undefined;
+    }
+
+    const shell = shellRef.current;
+    if (!shell) {
+      return undefined;
+    }
+
+    const revealElements = Array.from(shell.querySelectorAll('[data-reveal]'));
+    if (!revealElements.length) {
+      return undefined;
+    }
+
+    if (!motionEnabled || typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+      revealElements.forEach((element) => {
+        element.classList.add('is-visible');
+      });
+
+      return undefined;
+    }
+
+    const revealThreshold = window.innerHeight * 0.88;
+    const pendingReveal = [];
+
+    revealElements.forEach((element) => {
+      if (element.getBoundingClientRect().top <= revealThreshold) {
+        element.classList.add('is-visible');
+        return;
+      }
+
+      element.classList.remove('is-visible');
+      pendingReveal.push(element);
+    });
+
+    if (!pendingReveal.length) {
+      return undefined;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            return;
+          }
+
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        });
+      },
+      {
+        threshold: 0.22,
+        rootMargin: '0px 0px -12% 0px',
+      }
+    );
+
+    pendingReveal.forEach((element) => {
+      observer.observe(element);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [loading, motionEnabled]);
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -280,7 +375,10 @@ export default function Home() {
   }
 
   return (
-    <div className="landing-shell">
+    <div
+      ref={shellRef}
+      className={`landing-shell ${motionEnabled ? 'motion-enabled' : ''}`}
+    >
       <nav className={`landing-navbar ${isScrolled ? 'landing-navbar-scrolled' : ''}`}>
         <div className={`container landing-navbar-inner ${user ? 'landing-navbar-inner-authenticated' : ''}`}>
           <div className="landing-navbar-brand">
@@ -359,7 +457,11 @@ export default function Home() {
         <section className="landing-section landing-section-about" id="tentang">
           <div className="container">
             <div className="landing-about-band">
-              <div className="landing-about-copy">
+              <div
+                className="landing-about-copy landing-reveal-group"
+                data-reveal
+                style={{ '--reveal-delay': '0.04s' }}
+              >
                 <h2>
                   <span className="landing-about-title-prefix">Tentang</span>
                   <img
@@ -392,7 +494,12 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="landing-about-visual" aria-label="Ilustrasi belajar bersama Ujiin">
+              <div
+                className="landing-about-visual landing-reveal-scale"
+                data-reveal
+                style={{ '--reveal-delay': '0.18s' }}
+                aria-label="Ilustrasi belajar bersama Ujiin"
+              >
                 <div
                   className="landing-about-media"
                   style={{
@@ -417,11 +524,19 @@ export default function Home() {
 
         <section className="landing-section landing-section-featured" id="keunggulan">
           <div className="container">
-            <div className="landing-section-heading">
+            <div
+              className="landing-section-heading landing-reveal-group"
+              data-reveal
+              style={{ '--reveal-delay': '0.02s' }}
+            >
               <h2>Fitur yang saling nyambung dalam satu flow belajar</h2>
             </div>
 
-            <div className="landing-mindmap-shell">
+            <div
+              className="landing-mindmap-shell"
+              data-reveal
+              style={{ '--reveal-delay': '0.08s' }}
+            >
               <div className="landing-mindmap-track" aria-label="Flow fitur Ujiin">
                 <svg className="landing-mindmap-line" viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">
                   <defs>
@@ -431,14 +546,18 @@ export default function Home() {
                       <stop offset="100%" stopColor="#43c7bb" />
                     </linearGradient>
                   </defs>
-                  <path d="M36 188 C88 188 96 188 100 188 S228 262 300 262 S428 188 500 188 S628 262 700 262 S828 188 900 188 S964 188 980 188" />
+                  <path
+                    pathLength="1"
+                    d="M36 188 C88 188 96 188 100 188 S228 262 300 262 S428 188 500 188 S628 262 700 262 S828 188 900 188 S964 188 980 188"
+                  />
                 </svg>
-                {featureMindmap.map((item) => (
+                {featureMindmap.map((item, index) => (
                   <article
                     key={item.step}
                     className={`landing-mindmap-node landing-mindmap-node-${item.align}`}
                     style={{
                       '--mindmap-accent': item.accent,
+                      '--node-delay': `${0.18 + (index * 0.08)}s`,
                     }}
                   >
                     <div className="landing-mindmap-copy">
@@ -458,7 +577,11 @@ export default function Home() {
 
         <section className="landing-section" id="paket">
           <div className="container">
-            <div className="landing-section-heading">
+            <div
+              className="landing-section-heading landing-reveal-group"
+              data-reveal
+              style={{ '--reveal-delay': '0.02s' }}
+            >
               <h2>Dua paket, langsung jelas pilihannya</h2>
               <p>
                 Kami sederhanakan jadi dua opsi paling gampang dipahami: satu untuk UTBK dan satu
@@ -467,67 +590,72 @@ export default function Home() {
             </div>
 
             <div className="landing-package-grid landing-package-grid-curated">
-          {curatedPackages.map((pkg) => (
-              <article key={pkg.slug} className={`landing-package-card landing-package-featured ${pkg.accent}`}>
-                <div className="landing-package-top">
-                  <span className="landing-package-category">
-                  Paket {pkg.title}
-                  </span>
-                  <span className="landing-package-badge">{pkg.badge}</span>
-                </div>
-
-                <h3>{pkg.title} Intensif</h3>
-                <p className="landing-package-description">{pkg.subtitle}</p>
-
-                <div className="landing-package-visual">
-                  <div
-                    className="landing-package-visual-media"
-                    style={{ backgroundImage: `linear-gradient(90deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url('${pkg.visualImage}')` }}
-                    aria-hidden="true"
-                  />
-                  <div className="landing-package-orb"></div>
-                  <div className="landing-package-mini-card">
-                    <span>Smart Focus</span>
-                    <strong>{pkg.title === 'UTBK' ? 'TPS + drill cepat' : 'TWK • TIU • TKP'}</strong>
+              {curatedPackages.map((pkg, index) => (
+                <article
+                  key={pkg.slug}
+                  className={`landing-package-card landing-package-featured landing-package-featured-motion ${pkg.accent}`}
+                  data-reveal
+                  style={{ '--reveal-delay': `${0.08 + (index * 0.14)}s` }}
+                >
+                  <div className="landing-package-top">
+                    <span className="landing-package-category">
+                      Paket {pkg.title}
+                    </span>
+                    <span className="landing-package-badge">{pkg.badge}</span>
                   </div>
-                </div>
 
-                <div className="landing-package-meta landing-package-meta-curated">
-                  {pkg.features.map((feature) => (
-                    <p key={feature}>{feature}</p>
-                  ))}
-                </div>
+                  <h3>{pkg.title} Intensif</h3>
+                  <p className="landing-package-description">{pkg.subtitle}</p>
 
-                <div className="landing-package-footer landing-package-footer-curated">
-                  <div>
-                    <span className="landing-package-price-label">Mulai dari</span>
-                    <div className="landing-package-price-meta">
-                      <span className="landing-package-discount-pill">
-                        Diskon {packageDiscountPercent}%
-                      </span>
-                      <span className="landing-package-price-original">
-                        Rp{(pkg.price * 2).toLocaleString('id-ID')}
+                  <div className="landing-package-visual">
+                    <div
+                      className="landing-package-visual-media"
+                      style={{ backgroundImage: `linear-gradient(90deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url('${pkg.visualImage}')` }}
+                      aria-hidden="true"
+                    />
+                    <div className="landing-package-orb"></div>
+                    <div className="landing-package-mini-card">
+                      <span>Smart Focus</span>
+                      <strong>{pkg.title === 'UTBK' ? 'TPS + drill cepat' : 'TWK • TIU • TKP'}</strong>
+                    </div>
+                  </div>
+
+                  <div className="landing-package-meta landing-package-meta-curated">
+                    {pkg.features.map((feature) => (
+                      <p key={feature}>{feature}</p>
+                    ))}
+                  </div>
+
+                  <div className="landing-package-footer landing-package-footer-curated">
+                    <div className="landing-package-price-block">
+                      <span className="landing-package-price-label">Mulai dari</span>
+                      <div className="landing-package-price-meta">
+                        <span className="landing-package-discount-pill">
+                          Diskon {packageDiscountPercent}%
+                        </span>
+                        <span className="landing-package-price-original">
+                          Rp{(pkg.price * 2).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                      <span className="landing-package-price">
+                        Rp{pkg.price.toLocaleString('id-ID')}
                       </span>
                     </div>
-                    <span className="landing-package-price">
-                      Rp{pkg.price.toLocaleString('id-ID')}
-                    </span>
+                    {pkg.source ? (
+                      <Link
+                        to={`/learning/${pkg.source.id}`}
+                        className="btn btn-primary landing-package-action"
+                      >
+                        {user ? (isAdmin ? `Buka ${pkg.title}` : 'Lihat Paket') : `Preview ${pkg.title}`}
+                      </Link>
+                    ) : (
+                      <button type="button" className="btn btn-outline landing-package-action" disabled>
+                        Sedang disiapkan
+                      </button>
+                    )}
                   </div>
-                  {pkg.source ? (
-                    <Link
-                      to={`/learning/${pkg.source.id}`}
-                      className="btn btn-primary landing-package-action"
-                    >
-                      {user ? (isAdmin ? `Buka ${pkg.title}` : 'Lihat Paket') : `Preview ${pkg.title}`}
-                    </Link>
-                  ) : (
-                    <button type="button" className="btn btn-outline landing-package-action" disabled>
-                      Sedang disiapkan
-                    </button>
-                  )}
-                </div>
-              </article>
-          ))}
+                </article>
+              ))}
             </div>
 
             {!cpnsSource && !utbkSource && (
@@ -540,14 +668,19 @@ export default function Home() {
 
         <section className="landing-section landing-section-muted" id="testimoni">
           <div className="container landing-bottom-grid">
-            <article className="landing-quote-card">
+            <article className="landing-quote-card" data-reveal style={{ '--reveal-delay': '0.08s' }}>
               <p>
                 &ldquo;Yang paling ngebantu itu dashboard progresnya. Saya jadi tahu materi mana yang
                 masih bikin skor turun.&rdquo;
               </p>
               <strong>Dina, peserta batch Januari</strong>
             </article>
-            <article className="landing-quote-card" id="blog">
+            <article
+              className="landing-quote-card"
+              id="blog"
+              data-reveal
+              style={{ '--reveal-delay': '0.18s' }}
+            >
               <p>
                 &ldquo;Belajar terasa lebih ringan karena targetnya dibagi per sesi, bukan dilempar
                 semua sekaligus.&rdquo;

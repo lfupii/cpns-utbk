@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
@@ -437,13 +436,14 @@ const quoteCardVariants = {
 
 export default function Home() {
   const { user, logout, isAdmin } = useAuth();
-  const prefersReducedMotion = useReducedMotion();
+  const shellRef = useRef(null);
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [motionEnabled, setMotionEnabled] = useState(false);
 
   const displayName = user?.full_name || 'Pejuang ASN';
 
@@ -482,6 +482,99 @@ export default function Home() {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncMotionPreference = () => {
+      setMotionEnabled(!mediaQuery.matches);
+    };
+
+    syncMotionPreference();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', syncMotionPreference);
+
+      return () => {
+        mediaQuery.removeEventListener('change', syncMotionPreference);
+      };
+    }
+
+    mediaQuery.addListener(syncMotionPreference);
+
+    return () => {
+      mediaQuery.removeListener(syncMotionPreference);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (loading) {
+      return undefined;
+    }
+
+    const shell = shellRef.current;
+    if (!shell) {
+      return undefined;
+    }
+
+    const revealElements = Array.from(shell.querySelectorAll('[data-reveal]'));
+    if (!revealElements.length) {
+      return undefined;
+    }
+
+    if (!motionEnabled || typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+      revealElements.forEach((element) => {
+        element.classList.add('is-visible');
+      });
+
+      return undefined;
+    }
+
+    const revealThreshold = window.innerHeight * 0.88;
+    const pendingReveal = [];
+
+    revealElements.forEach((element) => {
+      if (element.getBoundingClientRect().top <= revealThreshold) {
+        element.classList.add('is-visible');
+        return;
+      }
+
+      element.classList.remove('is-visible');
+      pendingReveal.push(element);
+    });
+
+    if (!pendingReveal.length) {
+      return undefined;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            return;
+          }
+
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        });
+      },
+      {
+        threshold: 0.22,
+        rootMargin: '0px 0px -12% 0px',
+      }
+    );
+
+    pendingReveal.forEach((element) => {
+      observer.observe(element);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [loading, motionEnabled]);
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -601,7 +694,10 @@ export default function Home() {
   }
 
   return (
-    <div className="landing-shell">
+    <div
+      ref={shellRef}
+      className={`landing-shell ${motionEnabled ? 'motion-enabled' : ''}`}
+    >
       <nav className={`landing-navbar ${isScrolled ? 'landing-navbar-scrolled' : ''}`}>
         <div className={`container landing-navbar-inner ${user ? 'landing-navbar-inner-authenticated' : ''}`}>
           <div className="landing-navbar-brand">
@@ -680,11 +776,12 @@ export default function Home() {
         <section className="landing-section landing-section-about" id="tentang">
           <div className="container">
             <div className="landing-about-band">
-              <motion.div
-                className="landing-about-copy"
-                {...getRevealProps(staggerRevealVariants)}
+              <div
+                className="landing-about-copy landing-reveal-group"
+                data-reveal
+                style={{ '--reveal-delay': '0.04s' }}
               >
-                <motion.h2 variants={fadeUpItemVariants}>
+                <h2>
                   <span className="landing-about-title-prefix">Tentang</span>
                   <img
                     className="landing-about-title-logo landing-about-title-logo-default"
@@ -696,14 +793,14 @@ export default function Home() {
                     src="/ujiin-logo-dark.png"
                     alt="Ujiin"
                   />
-                </motion.h2>
-                <motion.p variants={fadeUpItemVariants}>
+                </h2>
+                <p variants={fadeUpItemVariants}>
                   Ujiin adalah platform yang membantu persiapan CPNS dan UTBK lewat materi belajar,
                   latihan bertahap, simulasi tryout, dan hasil evaluasi yang langsung bisa dibaca
                   dari satu akun.
-                </motion.p>
+                </p>
 
-                <motion.div
+                <div
                   className="landing-about-tags"
                   aria-label="Fokus utama Ujiin"
                   variants={fadeUpItemVariants}
@@ -711,21 +808,22 @@ export default function Home() {
                   <span className="landing-about-tag">Materi belajar</span>
                   <span className="landing-about-tag">Latihan bertahap</span>
                   <span className="landing-about-tag">Tryout online</span>
-                </motion.div>
+                </div>
 
-                <motion.div className="landing-about-actions" variants={fadeUpItemVariants}>
+                <div className="landing-about-actions" variants={fadeUpItemVariants}>
                   <a href="#paket" className="btn btn-primary">
                     Lihat Program
                   </a>
-                </motion.div>
-              </motion.div>
+                </div>
+              </div>
 
-              <motion.div
-                className="landing-about-visual"
+              <div
+                className="landing-about-visual landing-reveal-scale"
+                data-reveal
+                style={{ '--reveal-delay': '0.18s' }}
                 aria-label="Ilustrasi belajar bersama Ujiin"
-                {...getRevealProps(fadeScaleVariants)}
               >
-                <motion.div
+                <div
                   className="landing-about-media"
                   variants={aboutMediaVariants}
                   style={{
@@ -734,40 +832,40 @@ export default function Home() {
                   }}
                 />
 
-                <motion.div
+                <div
                   className="landing-about-stat landing-about-stat-top"
                   variants={aboutStatTopVariants}
                 >
                   <span>Belajar aktif</span>
                   <strong>Preview, materi, tryout</strong>
-                </motion.div>
+                </div>
 
-                <motion.div
+                <div
                   className="landing-about-stat landing-about-stat-bottom"
                   variants={aboutStatBottomVariants}
                 >
                   <span>Fokus utama</span>
                   <strong>CPNS dan UTBK dalam satu flow</strong>
-                </motion.div>
-              </motion.div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
         <section className="landing-section landing-section-featured" id="keunggulan">
           <div className="container">
-            <motion.div
-              className="landing-section-heading"
-              {...getRevealProps(staggerRevealVariants)}
+            <div
+              className="landing-section-heading landing-reveal-group"
+              data-reveal
+              style={{ '--reveal-delay': '0.02s' }}
             >
-              <motion.h2 variants={fadeUpItemVariants}>
-                Fitur yang saling nyambung dalam satu flow belajar
-              </motion.h2>
-            </motion.div>
+              <h2>Fitur yang saling nyambung dalam satu flow belajar</h2>
+            </div>
 
-            <motion.div
+            <div
               className="landing-mindmap-shell"
-              {...getRevealProps(mindmapShellVariants)}
+              data-reveal
+              style={{ '--reveal-delay': '0.08s' }}
             >
               <div className="landing-mindmap-track" aria-label="Flow fitur Ujiin">
                 <svg className="landing-mindmap-line" viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">
@@ -778,19 +876,19 @@ export default function Home() {
                       <stop offset="100%" stopColor="#43c7bb" />
                     </linearGradient>
                   </defs>
-                  <motion.path
-                    variants={mindmapPathVariants}
+                  <path
                     pathLength="1"
                     d="M36 188 C88 188 96 188 100 188 S228 262 300 262 S428 188 500 188 S628 262 700 262 S828 188 900 188 S964 188 980 188"
                   />
                 </svg>
                 {featureMindmap.map((item, index) => (
-                  <motion.article
+                  <article
                     key={item.step}
                     className={`landing-mindmap-node landing-mindmap-node-${item.align}`}
                     variants={mindmapNodeVariants}
                     style={{
                       '--mindmap-accent': item.accent,
+                      '--node-delay': `${0.18 + (index * 0.08)}s`,
                     }}
                   >
                     <div className="landing-mindmap-copy">
@@ -801,69 +899,66 @@ export default function Home() {
                     <div className="landing-mindmap-icon" aria-hidden="true">
                       <FeatureIcon name={item.icon} />
                     </div>
-                  </motion.article>
+                  </article>
                 ))}
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
 
         <section className="landing-section" id="paket">
           <div className="container">
-            <motion.div
-              className="landing-section-heading"
-              {...getRevealProps(staggerRevealVariants)}
+            <div
+              className="landing-section-heading landing-reveal-group"
+              data-reveal
+              style={{ '--reveal-delay': '0.02s' }}
             >
-              <motion.h2 variants={fadeUpItemVariants}>Dua paket, langsung jelas pilihannya</motion.h2>
-              <motion.p variants={fadeUpItemVariants}>
+              <h2>Dua paket, langsung jelas pilihannya</h2>
+              <p>
                 Kami sederhanakan jadi dua opsi paling gampang dipahami: satu untuk UTBK dan satu
                 untuk CPNS.
-              </motion.p>
-            </motion.div>
+              </p>
+            </div>
 
             <div className="landing-package-grid landing-package-grid-curated">
               {curatedPackages.map((pkg, index) => (
-                <motion.article
+                <article
                   key={pkg.slug}
-                  className={`landing-package-card landing-package-featured ${pkg.accent}`}
-                  {...getRevealProps(packageCardVariants, { custom: index })}
+                  className={`landing-package-card landing-package-featured landing-package-featured-motion ${pkg.accent}`}
+                  data-reveal
+                  style={{ '--reveal-delay': `${0.08 + (index * 0.14)}s` }}
                 >
-                  <motion.div className="landing-package-top" variants={packageItemVariants}>
+                  <div className="landing-package-top">
                     <span className="landing-package-category">
                       Paket {pkg.title}
                     </span>
                     <span className="landing-package-badge">{pkg.badge}</span>
-                  </motion.div>
+                  </div>
 
-                  <motion.h3 variants={packageItemVariants}>{pkg.title} Intensif</motion.h3>
-                  <motion.p className="landing-package-description" variants={packageItemVariants}>
-                    {pkg.subtitle}
-                  </motion.p>
+                  <h3>{pkg.title} Intensif</h3>
+                  <p className="landing-package-description">{pkg.subtitle}</p>
 
-                  <motion.div className="landing-package-visual" variants={packageItemVariants}>
-                    <motion.div
+                  <div className="landing-package-visual">
+                    <div
                       className="landing-package-visual-media"
-                      variants={packageMediaVariants}
                       style={{ backgroundImage: `linear-gradient(90deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.02)), url('${pkg.visualImage}')` }}
                       aria-hidden="true"
                     />
-                    <motion.div className="landing-package-orb" variants={packageOrbVariants} />
+                    <div className="landing-package-orb"></div>
                     <div className="landing-package-mini-card">
-                      <motion.div variants={packageMiniCardVariants}>
-                        <span>Smart Focus</span>
-                        <strong>{pkg.title === 'UTBK' ? 'TPS + drill cepat' : 'TWK • TIU • TKP'}</strong>
-                      </motion.div>
+                      <span>Smart Focus</span>
+                      <strong>{pkg.title === 'UTBK' ? 'TPS + drill cepat' : 'TWK • TIU • TKP'}</strong>
                     </div>
-                  </motion.div>
+                  </div>
 
-                  <motion.div className="landing-package-meta landing-package-meta-curated" variants={packageItemVariants}>
+                  <div className="landing-package-meta landing-package-meta-curated">
                     {pkg.features.map((feature) => (
                       <p key={feature}>{feature}</p>
                     ))}
-                  </motion.div>
+                  </div>
 
                   <div className="landing-package-footer landing-package-footer-curated">
-                    <motion.div className="landing-package-price-block" variants={packageItemVariants}>
+                    <div className="landing-package-price-block">
                       <span className="landing-package-price-label">Mulai dari</span>
                       <div className="landing-package-price-meta">
                         <span className="landing-package-discount-pill">
@@ -876,25 +971,21 @@ export default function Home() {
                       <span className="landing-package-price">
                         Rp{pkg.price.toLocaleString('id-ID')}
                       </span>
-                    </motion.div>
+                    </div>
                     {pkg.source ? (
-                      <motion.div variants={packageItemVariants}>
-                        <Link
-                          to={`/learning/${pkg.source.id}`}
-                          className="btn btn-primary landing-package-action"
-                        >
-                          {user ? (isAdmin ? `Buka ${pkg.title}` : 'Lihat Paket') : `Preview ${pkg.title}`}
-                        </Link>
-                      </motion.div>
+                      <Link
+                        to={`/learning/${pkg.source.id}`}
+                        className="btn btn-primary landing-package-action"
+                      >
+                        {user ? (isAdmin ? `Buka ${pkg.title}` : 'Lihat Paket') : `Preview ${pkg.title}`}
+                      </Link>
                     ) : (
-                      <motion.div variants={packageItemVariants}>
-                        <button type="button" className="btn btn-outline landing-package-action" disabled>
-                          Sedang disiapkan
-                        </button>
-                      </motion.div>
+                      <button type="button" className="btn btn-outline landing-package-action" disabled>
+                        Sedang disiapkan
+                      </button>
                     )}
                   </div>
-                </motion.article>
+                </article>
               ))}
             </div>
 
@@ -908,27 +999,25 @@ export default function Home() {
 
         <section className="landing-section landing-section-muted" id="testimoni">
           <div className="container landing-bottom-grid">
-            <motion.article
-              className="landing-quote-card"
-              {...getRevealProps(quoteCardVariants, { custom: 0 })}
-            >
+            <article className="landing-quote-card" data-reveal style={{ '--reveal-delay': '0.08s' }}>
               <p>
                 &ldquo;Yang paling ngebantu itu dashboard progresnya. Saya jadi tahu materi mana yang
                 masih bikin skor turun.&rdquo;
               </p>
               <strong>Dina, peserta batch Januari</strong>
-            </motion.article>
-            <motion.article
+            </article>
+            <article
               className="landing-quote-card"
               id="blog"
-              {...getRevealProps(quoteCardVariants, { custom: 1 })}
+              data-reveal
+              style={{ '--reveal-delay': '0.18s' }}
             >
               <p>
                 &ldquo;Belajar terasa lebih ringan karena targetnya dibagi per sesi, bukan dilempar
                 semua sekaligus.&rdquo;
               </p>
               <strong>Arga, pengguna simulasi harian</strong>
-            </motion.article>
+            </article>
           </div>
         </section>
       </main>

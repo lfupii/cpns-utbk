@@ -13,7 +13,7 @@ let lastHealthPingAt = 0;
 apiClient.interceptors.request.use(
   (config) => {
     const method = (config.method || 'get').toLowerCase();
-    const publicPaths = ['/questions/packages', '/payment/methods', '/news/feed'];
+    const publicPaths = ['/questions/packages', '/payment/methods', '/news/feed', '/news/article'];
     const requestUrl = config.url || '';
     const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData;
 

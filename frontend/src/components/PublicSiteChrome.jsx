@@ -26,7 +26,7 @@ export default function PublicSiteChrome({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
-  const isNewsPage = location.pathname === '/news';
+  const isNewsPage = location.pathname.startsWith('/news');
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -90,21 +90,21 @@ export default function PublicSiteChrome({
 
             <div
               id="public-nav-panel"
-              className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
-            >
+            className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
+          >
               <div className="landing-nav-links">
                 <Link to="/#tentang" onClick={closeMobileMenu}>Tentang</Link>
                 <Link to="/#keunggulan" onClick={closeMobileMenu}>Fitur</Link>
                 <Link to="/#paket" onClick={closeMobileMenu}>Program</Link>
+                <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
+                <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
                 <Link
                   to="/news"
-                  className={`landing-nav-link-mobile-only ${isNewsPage ? 'landing-nav-link-active' : ''}`}
+                  className={isNewsPage ? 'landing-nav-link-active' : ''}
                   onClick={closeMobileMenu}
                 >
                   Berita
                 </Link>
-                <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
-                <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
               {!user && <ThemeToggle mobile onToggle={closeMobileMenu} />}
               {!user && (
@@ -121,12 +121,6 @@ export default function PublicSiteChrome({
           </div>
 
           <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
-            <Link
-              to="/news"
-              className={`landing-header-link-button ${isNewsPage ? 'landing-header-link-button-active' : ''}`}
-            >
-              Berita
-            </Link>
             {user ? (
               <ProfileDropdown
                 displayName={displayName}

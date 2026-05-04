@@ -34,7 +34,7 @@ const moduleCards = [
   {
     title: 'Berita',
     description: 'Kelola artikel berita, status publish, urutan headline, populer, dan pilihan redaksi.',
-    to: '/admin/news',
+    to: '/admin/news?workspace=draft',
     action: 'Kelola Berita',
     variant: 'news',
   },

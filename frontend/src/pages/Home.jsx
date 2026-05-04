@@ -139,7 +139,7 @@ export default function Home() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const displayName = user?.full_name || 'Pejuang ASN';
-  const isNewsPage = location.pathname === '/news';
+  const isNewsPage = location.pathname.startsWith('/news');
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -311,15 +311,15 @@ export default function Home() {
                 <a href="#tentang" onClick={closeMobileMenu}>Tentang</a>
                 <a href="#keunggulan" onClick={closeMobileMenu}>Fitur</a>
                 <a href="#paket" onClick={closeMobileMenu}>Program</a>
+                <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
+                <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
                 <Link
                   to="/news"
-                  className={`landing-nav-link-mobile-only ${isNewsPage ? 'landing-nav-link-active' : ''}`}
+                  className={isNewsPage ? 'landing-nav-link-active' : ''}
                   onClick={closeMobileMenu}
                 >
                   Berita
                 </Link>
-                <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
-                <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
               {!user && <ThemeToggle mobile onToggle={closeMobileMenu} />}
               {!user && (
@@ -336,12 +336,6 @@ export default function Home() {
           </div>
 
           <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
-            <Link
-              to="/news"
-              className={`landing-header-link-button ${isNewsPage ? 'landing-header-link-button-active' : ''}`}
-            >
-              Berita
-            </Link>
             {user ? (
               <ProfileDropdown
                 displayName={displayName}

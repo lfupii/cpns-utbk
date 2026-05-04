@@ -2413,14 +2413,87 @@ class AdminController {
         return strtolower(trim((string) $value)) === 'published' ? 'published' : 'draft';
     }
 
+    private function normalizeNewsVisibility($value): string {
+        return strtolower(trim((string) $value)) === 'private' ? 'private' : 'public';
+    }
+
     private function normalizeNewsFlag($value): int {
         $normalized = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
         return $normalized ? 1 : 0;
     }
 
     private function normalizeNewsOrder($value): int {
-        $numericValue = (int) $value;
-        return max(0, $numericValue);
+        return max(0, (int) $value);
+    }
+
+    private function normalizeNewsTags($value): array {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return [];
+            }
+
+            $decoded = json_decode($trimmed, true);
+            if (is_array($decoded)) {
+                $value = $decoded;
+            } else {
+                $value = preg_split('/[,\\n]+/', $trimmed) ?: [];
+            }
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($value as $tag) {
+            $cleanTag = trim((string) $tag);
+            if ($cleanTag === '') {
+                continue;
+            }
+
+            $alreadyExists = false;
+            foreach ($normalized as $existingTag) {
+                if (strtolower($existingTag) === strtolower($cleanTag)) {
+                    $alreadyExists = true;
+                    break;
+                }
+            }
+
+            if (!$alreadyExists) {
+                $normalized[] = $cleanTag;
+            }
+        }
+
+        return array_values($normalized);
+    }
+
+    private function encodeNewsTags(array $tags): string {
+        return json_encode($this->normalizeNewsTags($tags), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+    }
+
+    private function decodeNewsTags($value): array {
+        return $this->normalizeNewsTags($value);
+    }
+
+    private function normalizeNewsDateTime($value): ?string {
+        $normalized = trim((string) $value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($normalized);
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return date('Y-m-d H:i:s', $timestamp);
+    }
+
+    private function getNewsWorkspaceTable(string $workspace): string {
+        return $workspace === self::WORKSPACE_DRAFT
+            ? 'news_article_drafts'
+            : 'news_articles';
     }
 
     private function slugifyNews(string $value): string {
@@ -2431,13 +2504,14 @@ class AdminController {
         return $slug !== '' ? $slug : 'berita';
     }
 
-    private function generateUniqueNewsSlug(string $candidate, int $excludeId = 0): string {
+    private function generateUniqueNewsSlug(string $candidate, string $workspace = self::WORKSPACE_PUBLISHED, int $excludeId = 0): string {
+        $tableName = $this->getNewsWorkspaceTable($workspace);
         $baseSlug = $this->slugifyNews($candidate);
         $slug = $baseSlug;
         $suffix = 2;
 
         while (true) {
-            $query = 'SELECT id FROM news_articles WHERE slug = ?' . ($excludeId > 0 ? ' AND id != ?' : '') . ' LIMIT 1';
+            $query = "SELECT id FROM {$tableName} WHERE slug = ?" . ($excludeId > 0 ? ' AND id != ?' : '') . ' LIMIT 1';
             $stmt = $this->mysqli->prepare($query);
             if ($excludeId > 0) {
                 $stmt->bind_param('si', $slug, $excludeId);
@@ -2455,9 +2529,11 @@ class AdminController {
         }
     }
 
-    private function normalizeNewsArticle(array $row): array {
+    private function normalizeNewsArticle(array $row, string $workspace = self::WORKSPACE_PUBLISHED): array {
         return [
             'id' => (int) ($row['id'] ?? 0),
+            'article_id' => (int) ($row['article_id'] ?? 0),
+            'workspace' => $workspace,
             'slug' => (string) ($row['slug'] ?? ''),
             'title' => (string) ($row['title'] ?? ''),
             'excerpt' => (string) ($row['excerpt'] ?? ''),
@@ -2467,6 +2543,11 @@ class AdminController {
             'author_name' => (string) ($row['author_name'] ?? 'Tim Redaksi'),
             'read_time_minutes' => max(1, (int) ($row['read_time_minutes'] ?? 4)),
             'status' => $this->normalizeNewsStatus($row['status'] ?? 'draft'),
+            'visibility' => $this->normalizeNewsVisibility($row['visibility'] ?? 'public'),
+            'tags' => $this->decodeNewsTags($row['tags_json'] ?? ''),
+            'tags_json' => (string) ($row['tags_json'] ?? '[]'),
+            'focus_keyword' => (string) ($row['focus_keyword'] ?? ''),
+            'allow_comments' => (int) ($row['allow_comments'] ?? 1),
             'is_featured' => (int) ($row['is_featured'] ?? 0),
             'featured_order' => (int) ($row['featured_order'] ?? 0),
             'is_popular' => (int) ($row['is_popular'] ?? 0),
@@ -2476,19 +2557,98 @@ class AdminController {
             'published_at' => $row['published_at'] ?? null,
             'created_at' => $row['created_at'] ?? null,
             'updated_at' => $row['updated_at'] ?? null,
+            'last_saved_at' => $row['last_saved_at'] ?? ($row['updated_at'] ?? null),
+            'last_published_at' => $row['last_published_at'] ?? null,
         ];
     }
 
-    private function getNewsArticleById(int $articleId): ?array {
-        $stmt = $this->mysqli->prepare('SELECT * FROM news_articles WHERE id = ? LIMIT 1');
+    private function getNewsArticleById(int $articleId, string $workspace = self::WORKSPACE_PUBLISHED): ?array {
+        $tableName = $this->getNewsWorkspaceTable($workspace);
+        $stmt = $this->mysqli->prepare("SELECT * FROM {$tableName} WHERE id = ? LIMIT 1");
         $stmt->bind_param('i', $articleId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
 
-        return $row ? $this->normalizeNewsArticle($row) : null;
+        return $row ? $this->normalizeNewsArticle($row, $workspace) : null;
     }
 
-    private function normalizeNewsPayload(array $data, int $articleId = 0): array {
+    private function getNewsDraftByArticleId(int $articleId): ?array {
+        $stmt = $this->mysqli->prepare('SELECT * FROM news_article_drafts WHERE article_id = ? LIMIT 1');
+        $stmt->bind_param('i', $articleId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        return $row ? $this->normalizeNewsArticle($row, self::WORKSPACE_DRAFT) : null;
+    }
+
+    private function ensureNewsDraftExists(int $articleId): ?array {
+        if ($articleId <= 0) {
+            return null;
+        }
+
+        $existingDraft = $this->getNewsDraftByArticleId($articleId);
+        if ($existingDraft) {
+            return $existingDraft;
+        }
+
+        $publishedArticle = $this->getNewsArticleById($articleId, self::WORKSPACE_PUBLISHED);
+        if (!$publishedArticle) {
+            return null;
+        }
+
+        $tagsJson = $this->encodeNewsTags($publishedArticle['tags'] ?? []);
+        $stmt = $this->mysqli->prepare(
+            'INSERT INTO news_article_drafts (
+                article_id, slug, title, excerpt, content, cover_image_url, category, author_name,
+                read_time_minutes, status, visibility, tags_json, focus_keyword, allow_comments,
+                is_featured, featured_order, is_popular, popular_order, is_editor_pick,
+                editor_pick_order, published_at, last_published_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+        );
+        $stmt->bind_param(
+            'isssssssissssiiiiiiis',
+            $articleId,
+            $publishedArticle['slug'],
+            $publishedArticle['title'],
+            $publishedArticle['excerpt'],
+            $publishedArticle['content'],
+            $publishedArticle['cover_image_url'],
+            $publishedArticle['category'],
+            $publishedArticle['author_name'],
+            $publishedArticle['read_time_minutes'],
+            $publishedArticle['status'],
+            $publishedArticle['visibility'],
+            $tagsJson,
+            $publishedArticle['focus_keyword'],
+            $publishedArticle['allow_comments'],
+            $publishedArticle['is_featured'],
+            $publishedArticle['featured_order'],
+            $publishedArticle['is_popular'],
+            $publishedArticle['popular_order'],
+            $publishedArticle['is_editor_pick'],
+            $publishedArticle['editor_pick_order'],
+            $publishedArticle['published_at']
+        );
+        $stmt->execute();
+
+        return $this->getNewsArticleById((int) $stmt->insert_id, self::WORKSPACE_DRAFT);
+    }
+
+    private function ensureAllNewsDraftsExist(): void {
+        $result = $this->mysqli->query('SELECT id FROM news_articles ORDER BY id ASC');
+        if (!$result) {
+            return;
+        }
+
+        while ($row = $result->fetch_assoc()) {
+            $articleId = (int) ($row['id'] ?? 0);
+            if ($articleId > 0) {
+                $this->ensureNewsDraftExists($articleId);
+            }
+        }
+    }
+
+    private function normalizeNewsPayload(array $data, string $workspace, int $recordId = 0): array {
         $title = trim((string) ($data['title'] ?? ''));
         if ($title === '') {
             sendResponse('error', 'Judul berita wajib diisi', null, 422);
@@ -2496,7 +2656,13 @@ class AdminController {
 
         $status = $this->normalizeNewsStatus($data['status'] ?? 'draft');
         $slugSource = trim((string) ($data['slug'] ?? ''));
-        $slug = $this->generateUniqueNewsSlug($slugSource !== '' ? $slugSource : $title, $articleId);
+        $slug = $this->generateUniqueNewsSlug($slugSource !== '' ? $slugSource : $title, $workspace, $recordId);
+        $publishedAt = $this->normalizeNewsDateTime($data['published_at'] ?? null);
+        if ($status === 'published' && !$publishedAt) {
+            $publishedAt = date('Y-m-d H:i:s');
+        }
+
+        $tags = $this->normalizeNewsTags($data['tags'] ?? []);
 
         return [
             'slug' => $slug,
@@ -2508,24 +2674,40 @@ class AdminController {
             'author_name' => trim((string) ($data['author_name'] ?? '')) ?: 'Tim Redaksi',
             'read_time_minutes' => max(1, (int) ($data['read_time_minutes'] ?? 4)),
             'status' => $status,
+            'visibility' => $this->normalizeNewsVisibility($data['visibility'] ?? 'public'),
+            'tags' => $tags,
+            'tags_json' => $this->encodeNewsTags($tags),
+            'focus_keyword' => trim((string) ($data['focus_keyword'] ?? '')),
+            'allow_comments' => $this->normalizeNewsFlag($data['allow_comments'] ?? 1),
             'is_featured' => $this->normalizeNewsFlag($data['is_featured'] ?? 0),
             'featured_order' => $this->normalizeNewsOrder($data['featured_order'] ?? 0),
             'is_popular' => $this->normalizeNewsFlag($data['is_popular'] ?? 0),
             'popular_order' => $this->normalizeNewsOrder($data['popular_order'] ?? 0),
             'is_editor_pick' => $this->normalizeNewsFlag($data['is_editor_pick'] ?? 0),
             'editor_pick_order' => $this->normalizeNewsOrder($data['editor_pick_order'] ?? 0),
+            'published_at' => $publishedAt,
         ];
     }
 
     public function getNewsArticles() {
         verifyAdmin();
 
+        $workspace = $this->getRequestWorkspace();
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->ensureAllNewsDraftsExist();
+        }
+
+        $tableName = $this->getNewsWorkspaceTable($workspace);
         $statusFilter = strtolower(trim((string) ($_GET['status'] ?? '')));
-        $query = 'SELECT * FROM news_articles';
+        $orderBy = $workspace === self::WORKSPACE_DRAFT
+            ? 'COALESCE(last_saved_at, updated_at, created_at)'
+            : 'COALESCE(published_at, updated_at, created_at)';
+
+        $query = "SELECT * FROM {$tableName}";
         if (in_array($statusFilter, ['published', 'draft'], true)) {
             $query .= ' WHERE status = ?';
         }
-        $query .= ' ORDER BY status ASC, COALESCE(published_at, created_at) DESC, id DESC';
+        $query .= " ORDER BY status ASC, {$orderBy} DESC, id DESC";
 
         if (in_array($statusFilter, ['published', 'draft'], true)) {
             $stmt = $this->mysqli->prepare($query);
@@ -2542,7 +2724,7 @@ class AdminController {
 
         $articles = [];
         while ($row = $result->fetch_assoc()) {
-            $articles[] = $this->normalizeNewsArticle($row);
+            $articles[] = $this->normalizeNewsArticle($row, $workspace);
         }
 
         sendResponse('success', 'Daftar berita berhasil diambil', $articles);
@@ -2555,17 +2737,22 @@ class AdminController {
             sendResponse('error', 'Body JSON tidak valid', null, 400);
         }
 
-        $payload = $this->normalizeNewsPayload($data);
-        $publishedAt = $payload['status'] === 'published' ? date('Y-m-d H:i:s') : null;
+        $workspace = $this->getRequestWorkspace($data);
+        if ($workspace !== self::WORKSPACE_DRAFT) {
+            sendResponse('error', 'Tambah berita baru dilakukan di Draft workspace', null, 422);
+        }
+
+        $payload = $this->normalizeNewsPayload($data, $workspace);
         $stmt = $this->mysqli->prepare(
-            'INSERT INTO news_articles (
+            'INSERT INTO news_article_drafts (
                 slug, title, excerpt, content, cover_image_url, category, author_name,
-                read_time_minutes, status, is_featured, featured_order, is_popular,
-                popular_order, is_editor_pick, editor_pick_order, published_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                read_time_minutes, status, visibility, tags_json, focus_keyword, allow_comments,
+                is_featured, featured_order, is_popular, popular_order, is_editor_pick,
+                editor_pick_order, published_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->bind_param(
-            'sssssssisiiiiiis',
+            'sssssssissssiiiiiiis',
             $payload['slug'],
             $payload['title'],
             $payload['excerpt'],
@@ -2575,21 +2762,25 @@ class AdminController {
             $payload['author_name'],
             $payload['read_time_minutes'],
             $payload['status'],
+            $payload['visibility'],
+            $payload['tags_json'],
+            $payload['focus_keyword'],
+            $payload['allow_comments'],
             $payload['is_featured'],
             $payload['featured_order'],
             $payload['is_popular'],
             $payload['popular_order'],
             $payload['is_editor_pick'],
             $payload['editor_pick_order'],
-            $publishedAt
+            $payload['published_at']
         );
 
         if (!$stmt->execute()) {
-            sendResponse('error', 'Gagal membuat berita', ['details' => $stmt->error], 500);
+            sendResponse('error', 'Gagal membuat draft berita', ['details' => $stmt->error], 500);
         }
 
-        $article = $this->getNewsArticleById((int) $stmt->insert_id);
-        sendResponse('success', 'Berita berhasil dibuat', $article, 201);
+        $article = $this->getNewsArticleById((int) $stmt->insert_id, self::WORKSPACE_DRAFT);
+        sendResponse('success', 'Draft berita berhasil dibuat', $article, 201);
     }
 
     public function updateNewsArticle() {
@@ -2599,34 +2790,32 @@ class AdminController {
             sendResponse('error', 'Body JSON tidak valid', null, 400);
         }
 
+        $workspace = $this->getRequestWorkspace($data);
+        if ($workspace !== self::WORKSPACE_DRAFT) {
+            sendResponse('error', 'Published workspace bersifat baca-saja. Gunakan Draft untuk mengedit berita.', null, 422);
+        }
+
         $articleId = (int) ($data['id'] ?? 0);
         if ($articleId <= 0) {
             sendResponse('error', 'ID berita harus diisi', null, 422);
         }
 
-        $existingArticle = $this->getNewsArticleById($articleId);
+        $existingArticle = $this->getNewsArticleById($articleId, self::WORKSPACE_DRAFT);
         if (!$existingArticle) {
-            sendResponse('error', 'Berita tidak ditemukan', null, 404);
+            sendResponse('error', 'Draft berita tidak ditemukan', null, 404);
         }
 
-        $payload = $this->normalizeNewsPayload($data, $articleId);
-        $publishedAt = $existingArticle['published_at'];
-        if ($payload['status'] === 'published' && !$publishedAt) {
-            $publishedAt = date('Y-m-d H:i:s');
-        }
-        if ($payload['status'] === 'draft') {
-            $publishedAt = null;
-        }
-
+        $payload = $this->normalizeNewsPayload($data, $workspace, $articleId);
         $stmt = $this->mysqli->prepare(
-            'UPDATE news_articles
+            'UPDATE news_article_drafts
              SET slug = ?, title = ?, excerpt = ?, content = ?, cover_image_url = ?, category = ?, author_name = ?,
-                 read_time_minutes = ?, status = ?, is_featured = ?, featured_order = ?, is_popular = ?,
-                 popular_order = ?, is_editor_pick = ?, editor_pick_order = ?, published_at = ?
+                 read_time_minutes = ?, status = ?, visibility = ?, tags_json = ?, focus_keyword = ?,
+                 allow_comments = ?, is_featured = ?, featured_order = ?, is_popular = ?, popular_order = ?,
+                 is_editor_pick = ?, editor_pick_order = ?, published_at = ?
              WHERE id = ?'
         );
         $stmt->bind_param(
-            'sssssssisiiiiiisi',
+            'sssssssissssiiiiiiisi',
             $payload['slug'],
             $payload['title'],
             $payload['excerpt'],
@@ -2636,42 +2825,766 @@ class AdminController {
             $payload['author_name'],
             $payload['read_time_minutes'],
             $payload['status'],
+            $payload['visibility'],
+            $payload['tags_json'],
+            $payload['focus_keyword'],
+            $payload['allow_comments'],
             $payload['is_featured'],
             $payload['featured_order'],
             $payload['is_popular'],
             $payload['popular_order'],
             $payload['is_editor_pick'],
             $payload['editor_pick_order'],
-            $publishedAt,
+            $payload['published_at'],
             $articleId
         );
 
         if (!$stmt->execute()) {
-            sendResponse('error', 'Gagal memperbarui berita', ['details' => $stmt->error], 500);
+            sendResponse('error', 'Gagal memperbarui draft berita', ['details' => $stmt->error], 500);
         }
 
-        $article = $this->getNewsArticleById($articleId);
-        sendResponse('success', 'Berita berhasil diperbarui', $article);
+        $article = $this->getNewsArticleById($articleId, self::WORKSPACE_DRAFT);
+        sendResponse('success', 'Draft berita berhasil diperbarui', $article);
+    }
+
+    public function publishNewsDraft() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            sendResponse('error', 'Body JSON tidak valid', null, 400);
+        }
+
+        $draftId = (int) ($data['id'] ?? 0);
+        if ($draftId <= 0) {
+            sendResponse('error', 'ID draft berita harus diisi', null, 422);
+        }
+
+        $draftArticle = $this->getNewsArticleById($draftId, self::WORKSPACE_DRAFT);
+        if (!$draftArticle) {
+            sendResponse('error', 'Draft berita tidak ditemukan', null, 404);
+        }
+
+        $linkedArticleId = (int) ($draftArticle['article_id'] ?? 0);
+        $publishedPayload = $this->normalizeNewsPayload($draftArticle, self::WORKSPACE_PUBLISHED, $linkedArticleId);
+        $publishedArticle = $linkedArticleId > 0
+            ? $this->getNewsArticleById($linkedArticleId, self::WORKSPACE_PUBLISHED)
+            : null;
+
+        $transactionStarted = false;
+
+        try {
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
+
+            if ($publishedArticle) {
+                $updatePublished = $this->mysqli->prepare(
+                    'UPDATE news_articles
+                     SET slug = ?, title = ?, excerpt = ?, content = ?, cover_image_url = ?, category = ?, author_name = ?,
+                         read_time_minutes = ?, status = ?, visibility = ?, tags_json = ?, focus_keyword = ?,
+                         allow_comments = ?, is_featured = ?, featured_order = ?, is_popular = ?, popular_order = ?,
+                         is_editor_pick = ?, editor_pick_order = ?, published_at = ?
+                     WHERE id = ?'
+                );
+                $updatePublished->bind_param(
+                    'sssssssissssiiiiiiisi',
+                    $publishedPayload['slug'],
+                    $publishedPayload['title'],
+                    $publishedPayload['excerpt'],
+                    $publishedPayload['content'],
+                    $publishedPayload['cover_image_url'],
+                    $publishedPayload['category'],
+                    $publishedPayload['author_name'],
+                    $publishedPayload['read_time_minutes'],
+                    $publishedPayload['status'],
+                    $publishedPayload['visibility'],
+                    $publishedPayload['tags_json'],
+                    $publishedPayload['focus_keyword'],
+                    $publishedPayload['allow_comments'],
+                    $publishedPayload['is_featured'],
+                    $publishedPayload['featured_order'],
+                    $publishedPayload['is_popular'],
+                    $publishedPayload['popular_order'],
+                    $publishedPayload['is_editor_pick'],
+                    $publishedPayload['editor_pick_order'],
+                    $publishedPayload['published_at'],
+                    $linkedArticleId
+                );
+                $updatePublished->execute();
+            } else {
+                $insertPublished = $this->mysqli->prepare(
+                    'INSERT INTO news_articles (
+                        slug, title, excerpt, content, cover_image_url, category, author_name,
+                        read_time_minutes, status, visibility, tags_json, focus_keyword, allow_comments,
+                        is_featured, featured_order, is_popular, popular_order, is_editor_pick,
+                        editor_pick_order, published_at
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $insertPublished->bind_param(
+                    'sssssssissssiiiiiiis',
+                    $publishedPayload['slug'],
+                    $publishedPayload['title'],
+                    $publishedPayload['excerpt'],
+                    $publishedPayload['content'],
+                    $publishedPayload['cover_image_url'],
+                    $publishedPayload['category'],
+                    $publishedPayload['author_name'],
+                    $publishedPayload['read_time_minutes'],
+                    $publishedPayload['status'],
+                    $publishedPayload['visibility'],
+                    $publishedPayload['tags_json'],
+                    $publishedPayload['focus_keyword'],
+                    $publishedPayload['allow_comments'],
+                    $publishedPayload['is_featured'],
+                    $publishedPayload['featured_order'],
+                    $publishedPayload['is_popular'],
+                    $publishedPayload['popular_order'],
+                    $publishedPayload['is_editor_pick'],
+                    $publishedPayload['editor_pick_order'],
+                    $publishedPayload['published_at']
+                );
+                $insertPublished->execute();
+                $linkedArticleId = (int) $insertPublished->insert_id;
+            }
+
+            $syncDraft = $this->mysqli->prepare(
+                'UPDATE news_article_drafts
+                 SET article_id = ?, slug = ?, published_at = ?, last_published_at = CURRENT_TIMESTAMP
+                 WHERE id = ?'
+            );
+            $syncDraft->bind_param(
+                'issi',
+                $linkedArticleId,
+                $publishedPayload['slug'],
+                $publishedPayload['published_at'],
+                $draftId
+            );
+            $syncDraft->execute();
+
+            $this->mysqli->commit();
+        } catch (Throwable $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', 'Gagal mempublish draft berita', ['details' => $error->getMessage()], 500);
+        }
+
+        sendResponse('success', 'Draft berita berhasil dipublish', [
+            'draft' => $this->getNewsArticleById($draftId, self::WORKSPACE_DRAFT),
+            'published' => $this->getNewsArticleById($linkedArticleId, self::WORKSPACE_PUBLISHED),
+            'draft_id' => $draftId,
+            'article_id' => $linkedArticleId,
+        ]);
     }
 
     public function deleteNewsArticle() {
         verifyAdmin();
+
+        $workspace = $this->getRequestWorkspace();
         $articleId = (int) ($_GET['id'] ?? 0);
         if ($articleId <= 0) {
             sendResponse('error', 'ID berita harus diisi', null, 422);
         }
 
-        $article = $this->getNewsArticleById($articleId);
+        $article = $this->getNewsArticleById($articleId, $workspace);
         if (!$article) {
-            sendResponse('error', 'Berita tidak ditemukan', null, 404);
+            sendResponse('error', $workspace === self::WORKSPACE_DRAFT ? 'Draft berita tidak ditemukan' : 'Berita tidak ditemukan', null, 404);
         }
 
-        $stmt = $this->mysqli->prepare('DELETE FROM news_articles WHERE id = ?');
-        $stmt->bind_param('i', $articleId);
-        $stmt->execute();
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $stmt = $this->mysqli->prepare('DELETE FROM news_article_drafts WHERE id = ?');
+            $stmt->bind_param('i', $articleId);
+            $stmt->execute();
 
-        sendResponse('success', 'Berita berhasil dihapus', [
+            sendResponse('success', 'Draft berita berhasil dihapus', [
+                'id' => $articleId,
+            ]);
+        }
+
+        $transactionStarted = false;
+
+        try {
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
+
+            $deleteDraft = $this->mysqli->prepare('DELETE FROM news_article_drafts WHERE article_id = ?');
+            $deleteDraft->bind_param('i', $articleId);
+            $deleteDraft->execute();
+
+            $deletePublished = $this->mysqli->prepare('DELETE FROM news_articles WHERE id = ?');
+            $deletePublished->bind_param('i', $articleId);
+            $deletePublished->execute();
+
+            $this->mysqli->commit();
+        } catch (Throwable $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', 'Gagal menghapus berita published', ['details' => $error->getMessage()], 500);
+        }
+
+        sendResponse('success', 'Berita published berhasil dihapus', [
             'id' => $articleId,
+        ]);
+    }
+
+    private function normalizeNewsSectionLayout($value): string {
+        $normalized = strtolower(trim((string) $value));
+        $allowedLayouts = ['hero', 'ranked', 'lead-grid', 'cards'];
+        return in_array($normalized, $allowedLayouts, true) ? $normalized : 'cards';
+    }
+
+    private function getNewsSectionWorkspaceTable(string $workspace): string {
+        return $workspace === self::WORKSPACE_DRAFT
+            ? 'news_section_drafts'
+            : 'news_sections';
+    }
+
+    private function getNewsSectionRelationTable(string $workspace): string {
+        return $workspace === self::WORKSPACE_DRAFT
+            ? 'news_section_draft_articles'
+            : 'news_section_articles';
+    }
+
+    private function getNewsSectionRelationKey(string $workspace): string {
+        return $workspace === self::WORKSPACE_DRAFT ? 'section_draft_id' : 'section_id';
+    }
+
+    private function getNewsSectionArticleKey(string $workspace): string {
+        return $workspace === self::WORKSPACE_DRAFT ? 'draft_article_id' : 'article_id';
+    }
+
+    private function normalizeNewsSectionCount($value): int {
+        return max(1, min(24, (int) $value));
+    }
+
+    private function generateUniqueNewsSectionSlug(string $candidate, string $workspace = self::WORKSPACE_PUBLISHED, int $excludeId = 0): string {
+        $tableName = $this->getNewsSectionWorkspaceTable($workspace);
+        $baseSlug = $this->slugifyNews($candidate);
+        $slug = $baseSlug;
+        $suffix = 2;
+
+        while (true) {
+            $query = "SELECT id FROM {$tableName} WHERE slug = ?" . ($excludeId > 0 ? ' AND id != ?' : '') . ' LIMIT 1';
+            $stmt = $this->mysqli->prepare($query);
+            if ($excludeId > 0) {
+                $stmt->bind_param('si', $slug, $excludeId);
+            } else {
+                $stmt->bind_param('s', $slug);
+            }
+            $stmt->execute();
+            $existing = $stmt->get_result()->fetch_assoc();
+            if (!$existing) {
+                return $slug;
+            }
+
+            $slug = $baseSlug . '-' . $suffix;
+            $suffix += 1;
+        }
+    }
+
+    private function normalizeNewsSection(array $row, string $workspace = self::WORKSPACE_PUBLISHED): array {
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'section_id' => (int) ($row['section_id'] ?? 0),
+            'workspace' => $workspace,
+            'slug' => (string) ($row['slug'] ?? ''),
+            'title' => (string) ($row['title'] ?? ''),
+            'description' => (string) ($row['description'] ?? ''),
+            'layout_style' => $this->normalizeNewsSectionLayout($row['layout_style'] ?? 'cards'),
+            'article_count' => $this->normalizeNewsSectionCount($row['article_count'] ?? 5),
+            'section_order' => max(0, (int) ($row['section_order'] ?? 0)),
+            'is_active' => (int) ($row['is_active'] ?? 1),
+            'created_at' => $row['created_at'] ?? null,
+            'updated_at' => $row['updated_at'] ?? null,
+            'last_saved_at' => $row['last_saved_at'] ?? ($row['updated_at'] ?? null),
+            'last_published_at' => $row['last_published_at'] ?? null,
+        ];
+    }
+
+    private function getNewsSectionById(int $sectionId, string $workspace = self::WORKSPACE_PUBLISHED): ?array {
+        $tableName = $this->getNewsSectionWorkspaceTable($workspace);
+        $stmt = $this->mysqli->prepare("SELECT * FROM {$tableName} WHERE id = ? LIMIT 1");
+        $stmt->bind_param('i', $sectionId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        return $row ? $this->normalizeNewsSection($row, $workspace) : null;
+    }
+
+    private function getNewsSectionDraftByPublishedId(int $publishedSectionId): ?array {
+        $stmt = $this->mysqli->prepare('SELECT * FROM news_section_drafts WHERE section_id = ? LIMIT 1');
+        $stmt->bind_param('i', $publishedSectionId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        return $row ? $this->normalizeNewsSection($row, self::WORKSPACE_DRAFT) : null;
+    }
+
+    private function normalizeNewsSectionPayload(array $data, string $workspace, int $recordId = 0): array {
+        $title = trim((string) ($data['title'] ?? ''));
+        if ($title === '') {
+            sendResponse('error', 'Judul section berita wajib diisi', null, 422);
+        }
+
+        $slugSource = trim((string) ($data['slug'] ?? ''));
+        return [
+            'slug' => $this->generateUniqueNewsSectionSlug($slugSource !== '' ? $slugSource : $title, $workspace, $recordId),
+            'title' => $title,
+            'description' => trim((string) ($data['description'] ?? '')),
+            'layout_style' => $this->normalizeNewsSectionLayout($data['layout_style'] ?? 'cards'),
+            'article_count' => $this->normalizeNewsSectionCount($data['article_count'] ?? 5),
+            'section_order' => max(0, (int) ($data['section_order'] ?? 0)),
+            'is_active' => $this->normalizeNewsFlag($data['is_active'] ?? 1),
+        ];
+    }
+
+    private function loadNewsSectionAssignments(int $sectionId, string $workspace = self::WORKSPACE_PUBLISHED): array {
+        $relationTable = $this->getNewsSectionRelationTable($workspace);
+        $relationKey = $this->getNewsSectionRelationKey($workspace);
+        $articleKey = $this->getNewsSectionArticleKey($workspace);
+        $articleTable = $workspace === self::WORKSPACE_DRAFT ? 'news_article_drafts' : 'news_articles';
+
+        $query = "SELECT rsa.id AS relation_id,
+                         rsa.article_order,
+                         a.id AS article_id,
+                         a.article_id AS published_article_id,
+                         a.slug,
+                         a.title,
+                         a.category,
+                         a.cover_image_url,
+                         a.status,
+                         a.published_at,
+                         a.updated_at
+                  FROM {$relationTable} rsa
+                  JOIN {$articleTable} a ON a.id = rsa.{$articleKey}
+                  WHERE rsa.{$relationKey} = ?
+                  ORDER BY rsa.article_order ASC, a.id ASC";
+        $stmt = $this->mysqli->prepare($query);
+        $stmt->bind_param('i', $sectionId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $assignments = [];
+        while ($row = $result->fetch_assoc()) {
+            $assignments[] = [
+                'relation_id' => (int) ($row['relation_id'] ?? 0),
+                'article_order' => (int) ($row['article_order'] ?? 0),
+                'article_id' => (int) ($row['article_id'] ?? 0),
+                'published_article_id' => (int) ($row['published_article_id'] ?? 0),
+                'slug' => (string) ($row['slug'] ?? ''),
+                'title' => (string) ($row['title'] ?? ''),
+                'category' => (string) ($row['category'] ?? 'Nasional'),
+                'cover_image_url' => (string) ($row['cover_image_url'] ?? ''),
+                'status' => $this->normalizeNewsStatus($row['status'] ?? 'draft'),
+                'published_at' => $row['published_at'] ?? null,
+                'updated_at' => $row['updated_at'] ?? null,
+            ];
+        }
+
+        return $assignments;
+    }
+
+    private function syncNewsSectionAssignments(int $sectionId, array $articleIds, string $workspace): void {
+        $relationTable = $this->getNewsSectionRelationTable($workspace);
+        $relationKey = $this->getNewsSectionRelationKey($workspace);
+        $articleKey = $this->getNewsSectionArticleKey($workspace);
+
+        $normalizedArticleIds = [];
+        foreach ($articleIds as $articleId) {
+            $numericId = (int) $articleId;
+            if ($numericId > 0 && !in_array($numericId, $normalizedArticleIds, true)) {
+                $normalizedArticleIds[] = $numericId;
+            }
+        }
+
+        $deleteStmt = $this->mysqli->prepare("DELETE FROM {$relationTable} WHERE {$relationKey} = ?");
+        $deleteStmt->bind_param('i', $sectionId);
+        $deleteStmt->execute();
+
+        if ($normalizedArticleIds === []) {
+            return;
+        }
+
+        $insertStmt = $this->mysqli->prepare(
+            "INSERT INTO {$relationTable} ({$relationKey}, {$articleKey}, article_order)
+             VALUES (?, ?, ?)"
+        );
+
+        foreach ($normalizedArticleIds as $index => $articleId) {
+            $articleOrder = $index + 1;
+            $insertStmt->bind_param('iii', $sectionId, $articleId, $articleOrder);
+            $insertStmt->execute();
+        }
+    }
+
+    private function ensureNewsSectionDraftExists(int $publishedSectionId): ?array {
+        if ($publishedSectionId <= 0) {
+            return null;
+        }
+
+        $existingDraft = $this->getNewsSectionDraftByPublishedId($publishedSectionId);
+        if ($existingDraft) {
+            return $existingDraft;
+        }
+
+        $publishedSection = $this->getNewsSectionById($publishedSectionId, self::WORKSPACE_PUBLISHED);
+        if (!$publishedSection) {
+            return null;
+        }
+
+        $this->ensureAllNewsDraftsExist();
+
+        $insertDraft = $this->mysqli->prepare(
+            'INSERT INTO news_section_drafts (
+                section_id, slug, title, description, layout_style, article_count, section_order, is_active, last_published_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+        );
+        $insertDraft->bind_param(
+            'issssiii',
+            $publishedSectionId,
+            $publishedSection['slug'],
+            $publishedSection['title'],
+            $publishedSection['description'],
+            $publishedSection['layout_style'],
+            $publishedSection['article_count'],
+            $publishedSection['section_order'],
+            $publishedSection['is_active']
+        );
+        $insertDraft->execute();
+        $draftSectionId = (int) $insertDraft->insert_id;
+
+        $publishedAssignments = $this->loadNewsSectionAssignments($publishedSectionId, self::WORKSPACE_PUBLISHED);
+        $insertAssignment = $this->mysqli->prepare(
+            'INSERT INTO news_section_draft_articles (section_draft_id, draft_article_id, article_order)
+             VALUES (?, ?, ?)'
+        );
+
+        foreach ($publishedAssignments as $assignment) {
+            $draftArticle = $this->ensureNewsDraftExists((int) ($assignment['article_id'] ?? 0));
+            if (!$draftArticle || (int) ($draftArticle['id'] ?? 0) <= 0) {
+                continue;
+            }
+
+            $draftArticleId = (int) $draftArticle['id'];
+            $articleOrder = (int) ($assignment['article_order'] ?? 0);
+            $insertAssignment->bind_param('iii', $draftSectionId, $draftArticleId, $articleOrder);
+            $insertAssignment->execute();
+        }
+
+        return $this->getNewsSectionById($draftSectionId, self::WORKSPACE_DRAFT);
+    }
+
+    private function ensureAllNewsSectionDraftsExist(): void {
+        $result = $this->mysqli->query('SELECT id FROM news_sections ORDER BY id ASC');
+        if (!$result) {
+            return;
+        }
+
+        while ($row = $result->fetch_assoc()) {
+            $publishedSectionId = (int) ($row['id'] ?? 0);
+            if ($publishedSectionId > 0) {
+                $this->ensureNewsSectionDraftExists($publishedSectionId);
+            }
+        }
+    }
+
+    public function getNewsSections() {
+        verifyAdmin();
+
+        $workspace = $this->getRequestWorkspace();
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $this->ensureAllNewsSectionDraftsExist();
+        }
+
+        $tableName = $this->getNewsSectionWorkspaceTable($workspace);
+        $query = "SELECT * FROM {$tableName} ORDER BY section_order ASC, id ASC";
+        $result = $this->mysqli->query($query);
+        if (!$result) {
+            sendResponse('error', 'Gagal mengambil master section berita', null, 500);
+        }
+
+        $sections = [];
+        while ($row = $result->fetch_assoc()) {
+            $section = $this->normalizeNewsSection($row, $workspace);
+            $section['assignments'] = $this->loadNewsSectionAssignments((int) $section['id'], $workspace);
+            $sections[] = $section;
+        }
+
+        sendResponse('success', 'Master section berita berhasil diambil', $sections);
+    }
+
+    public function createNewsSection() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            sendResponse('error', 'Body JSON tidak valid', null, 400);
+        }
+
+        $workspace = $this->getRequestWorkspace($data);
+        if ($workspace !== self::WORKSPACE_DRAFT) {
+            sendResponse('error', 'Section baru dibuat di Draft workspace', null, 422);
+        }
+
+        $payload = $this->normalizeNewsSectionPayload($data, $workspace);
+        $assignedArticleIds = is_array($data['assigned_article_ids'] ?? null) ? $data['assigned_article_ids'] : [];
+
+        $stmt = $this->mysqli->prepare(
+            'INSERT INTO news_section_drafts (
+                slug, title, description, layout_style, article_count, section_order, is_active
+             ) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->bind_param(
+            'ssssiii',
+            $payload['slug'],
+            $payload['title'],
+            $payload['description'],
+            $payload['layout_style'],
+            $payload['article_count'],
+            $payload['section_order'],
+            $payload['is_active']
+        );
+
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal membuat section berita', ['details' => $stmt->error], 500);
+        }
+
+        $draftSectionId = (int) $stmt->insert_id;
+        $this->syncNewsSectionAssignments($draftSectionId, $assignedArticleIds, self::WORKSPACE_DRAFT);
+
+        $section = $this->getNewsSectionById($draftSectionId, self::WORKSPACE_DRAFT);
+        $section['assignments'] = $this->loadNewsSectionAssignments($draftSectionId, self::WORKSPACE_DRAFT);
+        sendResponse('success', 'Section berita draft berhasil dibuat', $section, 201);
+    }
+
+    public function updateNewsSection() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            sendResponse('error', 'Body JSON tidak valid', null, 400);
+        }
+
+        $workspace = $this->getRequestWorkspace($data);
+        if ($workspace !== self::WORKSPACE_DRAFT) {
+            sendResponse('error', 'Published workspace bersifat baca-saja. Gunakan Draft untuk edit section berita.', null, 422);
+        }
+
+        $sectionId = (int) ($data['id'] ?? 0);
+        if ($sectionId <= 0) {
+            sendResponse('error', 'ID section berita harus diisi', null, 422);
+        }
+
+        $existingSection = $this->getNewsSectionById($sectionId, self::WORKSPACE_DRAFT);
+        if (!$existingSection) {
+            sendResponse('error', 'Section berita draft tidak ditemukan', null, 404);
+        }
+
+        $payload = $this->normalizeNewsSectionPayload($data, $workspace, $sectionId);
+        $assignedArticleIds = is_array($data['assigned_article_ids'] ?? null) ? $data['assigned_article_ids'] : [];
+
+        $stmt = $this->mysqli->prepare(
+            'UPDATE news_section_drafts
+             SET slug = ?, title = ?, description = ?, layout_style = ?, article_count = ?, section_order = ?, is_active = ?
+             WHERE id = ?'
+        );
+        $stmt->bind_param(
+            'ssssiiii',
+            $payload['slug'],
+            $payload['title'],
+            $payload['description'],
+            $payload['layout_style'],
+            $payload['article_count'],
+            $payload['section_order'],
+            $payload['is_active'],
+            $sectionId
+        );
+
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal memperbarui section berita', ['details' => $stmt->error], 500);
+        }
+
+        $this->syncNewsSectionAssignments($sectionId, $assignedArticleIds, self::WORKSPACE_DRAFT);
+
+        $section = $this->getNewsSectionById($sectionId, self::WORKSPACE_DRAFT);
+        $section['assignments'] = $this->loadNewsSectionAssignments($sectionId, self::WORKSPACE_DRAFT);
+        sendResponse('success', 'Section berita draft berhasil diperbarui', $section);
+    }
+
+    public function publishNewsSectionDraft() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            sendResponse('error', 'Body JSON tidak valid', null, 400);
+        }
+
+        $draftSectionId = (int) ($data['id'] ?? 0);
+        if ($draftSectionId <= 0) {
+            sendResponse('error', 'ID draft section berita harus diisi', null, 422);
+        }
+
+        $draftSection = $this->getNewsSectionById($draftSectionId, self::WORKSPACE_DRAFT);
+        if (!$draftSection) {
+            sendResponse('error', 'Draft section berita tidak ditemukan', null, 404);
+        }
+
+        $linkedSectionId = (int) ($draftSection['section_id'] ?? 0);
+        $publishedSection = $linkedSectionId > 0
+            ? $this->getNewsSectionById($linkedSectionId, self::WORKSPACE_PUBLISHED)
+            : null;
+        $draftAssignments = $this->loadNewsSectionAssignments($draftSectionId, self::WORKSPACE_DRAFT);
+        $publishedPayload = $this->normalizeNewsSectionPayload($draftSection, self::WORKSPACE_PUBLISHED, $linkedSectionId);
+
+        $transactionStarted = false;
+        try {
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
+
+            if ($publishedSection) {
+                $updateSection = $this->mysqli->prepare(
+                    'UPDATE news_sections
+                     SET slug = ?, title = ?, description = ?, layout_style = ?, article_count = ?, section_order = ?, is_active = ?
+                     WHERE id = ?'
+                );
+                $updateSection->bind_param(
+                    'ssssiiii',
+                    $publishedPayload['slug'],
+                    $publishedPayload['title'],
+                    $publishedPayload['description'],
+                    $publishedPayload['layout_style'],
+                    $publishedPayload['article_count'],
+                    $publishedPayload['section_order'],
+                    $publishedPayload['is_active'],
+                    $linkedSectionId
+                );
+                $updateSection->execute();
+            } else {
+                $insertSection = $this->mysqli->prepare(
+                    'INSERT INTO news_sections (
+                        slug, title, description, layout_style, article_count, section_order, is_active
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?)'
+                );
+                $insertSection->bind_param(
+                    'ssssiii',
+                    $publishedPayload['slug'],
+                    $publishedPayload['title'],
+                    $publishedPayload['description'],
+                    $publishedPayload['layout_style'],
+                    $publishedPayload['article_count'],
+                    $publishedPayload['section_order'],
+                    $publishedPayload['is_active']
+                );
+                $insertSection->execute();
+                $linkedSectionId = (int) $insertSection->insert_id;
+            }
+
+            $deleteRelations = $this->mysqli->prepare('DELETE FROM news_section_articles WHERE section_id = ?');
+            $deleteRelations->bind_param('i', $linkedSectionId);
+            $deleteRelations->execute();
+
+            $insertRelation = $this->mysqli->prepare(
+                'INSERT INTO news_section_articles (section_id, article_id, article_order)
+                 VALUES (?, ?, ?)'
+            );
+            foreach ($draftAssignments as $assignment) {
+                $publishedArticleId = (int) ($assignment['published_article_id'] ?? 0);
+                if ($publishedArticleId <= 0) {
+                    continue;
+                }
+
+                $articleOrder = (int) ($assignment['article_order'] ?? 0);
+                $insertRelation->bind_param('iii', $linkedSectionId, $publishedArticleId, $articleOrder);
+                $insertRelation->execute();
+            }
+
+            $syncDraft = $this->mysqli->prepare(
+                'UPDATE news_section_drafts
+                 SET section_id = ?, slug = ?, last_published_at = CURRENT_TIMESTAMP
+                 WHERE id = ?'
+            );
+            $syncDraft->bind_param('isi', $linkedSectionId, $publishedPayload['slug'], $draftSectionId);
+            $syncDraft->execute();
+
+            $this->mysqli->commit();
+        } catch (Throwable $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', 'Gagal mempublish draft section berita', ['details' => $error->getMessage()], 500);
+        }
+
+        $draftSection = $this->getNewsSectionById($draftSectionId, self::WORKSPACE_DRAFT);
+        $draftSection['assignments'] = $this->loadNewsSectionAssignments($draftSectionId, self::WORKSPACE_DRAFT);
+        $publishedSection = $this->getNewsSectionById($linkedSectionId, self::WORKSPACE_PUBLISHED);
+        $publishedSection['assignments'] = $this->loadNewsSectionAssignments($linkedSectionId, self::WORKSPACE_PUBLISHED);
+
+        sendResponse('success', 'Draft section berita berhasil dipublish', [
+            'draft' => $draftSection,
+            'published' => $publishedSection,
+        ]);
+    }
+
+    public function deleteNewsSection() {
+        verifyAdmin();
+
+        $workspace = $this->getRequestWorkspace();
+        $sectionId = (int) ($_GET['id'] ?? 0);
+        if ($sectionId <= 0) {
+            sendResponse('error', 'ID section berita harus diisi', null, 422);
+        }
+
+        $section = $this->getNewsSectionById($sectionId, $workspace);
+        if (!$section) {
+            sendResponse('error', $workspace === self::WORKSPACE_DRAFT ? 'Draft section berita tidak ditemukan' : 'Section berita tidak ditemukan', null, 404);
+        }
+
+        if ($workspace === self::WORKSPACE_DRAFT) {
+            $deleteRelations = $this->mysqli->prepare('DELETE FROM news_section_draft_articles WHERE section_draft_id = ?');
+            $deleteRelations->bind_param('i', $sectionId);
+            $deleteRelations->execute();
+
+            $deleteSection = $this->mysqli->prepare('DELETE FROM news_section_drafts WHERE id = ?');
+            $deleteSection->bind_param('i', $sectionId);
+            $deleteSection->execute();
+
+            sendResponse('success', 'Draft section berita berhasil dihapus', [
+                'id' => $sectionId,
+            ]);
+        }
+
+        $transactionStarted = false;
+        try {
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
+
+            $deleteDraftRelations = $this->mysqli->prepare(
+                'DELETE rsa FROM news_section_draft_articles rsa
+                 JOIN news_section_drafts rsd ON rsd.id = rsa.section_draft_id
+                 WHERE rsd.section_id = ?'
+            );
+            $deleteDraftRelations->bind_param('i', $sectionId);
+            $deleteDraftRelations->execute();
+
+            $deleteDraftSection = $this->mysqli->prepare('DELETE FROM news_section_drafts WHERE section_id = ?');
+            $deleteDraftSection->bind_param('i', $sectionId);
+            $deleteDraftSection->execute();
+
+            $deletePublishedRelations = $this->mysqli->prepare('DELETE FROM news_section_articles WHERE section_id = ?');
+            $deletePublishedRelations->bind_param('i', $sectionId);
+            $deletePublishedRelations->execute();
+
+            $deletePublishedSection = $this->mysqli->prepare('DELETE FROM news_sections WHERE id = ?');
+            $deletePublishedSection->bind_param('i', $sectionId);
+            $deletePublishedSection->execute();
+
+            $this->mysqli->commit();
+        } catch (Throwable $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', 'Gagal menghapus section berita published', ['details' => $error->getMessage()], 500);
+        }
+
+        sendResponse('success', 'Section berita published berhasil dihapus', [
+            'id' => $sectionId,
         ]);
     }
 
@@ -2803,6 +3716,18 @@ if (strpos($requestPath, '/api/admin/package-types') !== false && $requestMethod
     $controller->updateLearningMaterial();
 } elseif (strpos($requestPath, '/api/admin/learning-section-questions') !== false && $requestMethod === 'PUT') {
     $controller->updateLearningSectionQuestions();
+} elseif (strpos($requestPath, '/api/admin/news-sections/publish') !== false && $requestMethod === 'POST') {
+    $controller->publishNewsSectionDraft();
+} elseif (strpos($requestPath, '/api/admin/news-sections') !== false && $requestMethod === 'GET') {
+    $controller->getNewsSections();
+} elseif (strpos($requestPath, '/api/admin/news-sections') !== false && $requestMethod === 'POST') {
+    $controller->createNewsSection();
+} elseif (strpos($requestPath, '/api/admin/news-sections') !== false && $requestMethod === 'PUT') {
+    $controller->updateNewsSection();
+} elseif (strpos($requestPath, '/api/admin/news-sections') !== false && $requestMethod === 'DELETE') {
+    $controller->deleteNewsSection();
+} elseif (strpos($requestPath, '/api/admin/news/publish') !== false && $requestMethod === 'POST') {
+    $controller->publishNewsDraft();
 } elseif (strpos($requestPath, '/api/admin/news') !== false && $requestMethod === 'GET') {
     $controller->getNewsArticles();
 } elseif (strpos($requestPath, '/api/admin/news') !== false && $requestMethod === 'POST') {

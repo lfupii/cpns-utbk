@@ -2185,9 +2185,6 @@ export default function AdminPanel() {
       subtitle="Kelola paket, soal, gambar, dan import bank soal dari satu workspace yang lebih ringkas."
       navContent={(
         <div className="admin-workspace-topnav admin-workspace-topnav-link-row" aria-label="Navigasi workspace admin">
-          <Link to="/admin" className="admin-workspace-topnav-link">
-            Pilih Modul
-          </Link>
           <button
             type="button"
             className={`admin-workspace-topnav-link ${adminWorkspace === 'published' ? 'admin-workspace-topnav-link-active' : ''}`}

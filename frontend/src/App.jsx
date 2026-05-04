@@ -32,6 +32,7 @@ const AdminQuestionEditor = lazy(() => import('./pages/AdminQuestionEditor'));
 const AdminMiniTestQuestionEditor = lazy(() => import('./pages/AdminMiniTestQuestionEditor'));
 const Contact = lazy(() => import('./pages/Contact'));
 const News = lazy(() => import('./pages/News'));
+const NewsArticle = lazy(() => import('./pages/NewsArticle'));
 const TermsConditions = lazy(() => import('./pages/TermsConditions'));
 
 function RouteLoadingFallback() {
@@ -182,6 +183,7 @@ function AppRoutes() {
           <Routes location={location}>
             <Route path="/" element={<Home />} />
             <Route path="/news" element={<News />} />
+            <Route path="/news/:slug" element={<NewsArticle />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/terms" element={<TermsConditions />} />
             <Route path="/refund-policy" element={<Navigate to="/terms#refund-policy" replace />} />

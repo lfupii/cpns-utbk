@@ -718,6 +718,10 @@ function ensureNewsArticleSchema(mysqli $mysqli): void {
                 author_name VARCHAR(150) NOT NULL DEFAULT 'Tim Redaksi',
                 read_time_minutes INT NOT NULL DEFAULT 4,
                 status ENUM('draft', 'published') NOT NULL DEFAULT 'draft',
+                visibility VARCHAR(32) NOT NULL DEFAULT 'public',
+                tags_json LONGTEXT NULL,
+                focus_keyword VARCHAR(255) NOT NULL DEFAULT '',
+                allow_comments TINYINT(1) NOT NULL DEFAULT 1,
                 is_featured TINYINT(1) NOT NULL DEFAULT 0,
                 featured_order INT NOT NULL DEFAULT 0,
                 is_popular TINYINT(1) NOT NULL DEFAULT 0,
@@ -745,7 +749,11 @@ function ensureNewsArticleSchema(mysqli $mysqli): void {
         'author_name' => "ALTER TABLE news_articles ADD COLUMN author_name VARCHAR(150) NOT NULL DEFAULT 'Tim Redaksi' AFTER category",
         'read_time_minutes' => "ALTER TABLE news_articles ADD COLUMN read_time_minutes INT NOT NULL DEFAULT 4 AFTER author_name",
         'status' => "ALTER TABLE news_articles ADD COLUMN status ENUM('draft', 'published') NOT NULL DEFAULT 'draft' AFTER read_time_minutes",
-        'is_featured' => "ALTER TABLE news_articles ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER status",
+        'visibility' => "ALTER TABLE news_articles ADD COLUMN visibility VARCHAR(32) NOT NULL DEFAULT 'public' AFTER status",
+        'tags_json' => "ALTER TABLE news_articles ADD COLUMN tags_json LONGTEXT NULL AFTER visibility",
+        'focus_keyword' => "ALTER TABLE news_articles ADD COLUMN focus_keyword VARCHAR(255) NOT NULL DEFAULT '' AFTER tags_json",
+        'allow_comments' => "ALTER TABLE news_articles ADD COLUMN allow_comments TINYINT(1) NOT NULL DEFAULT 1 AFTER focus_keyword",
+        'is_featured' => "ALTER TABLE news_articles ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER allow_comments",
         'featured_order' => "ALTER TABLE news_articles ADD COLUMN featured_order INT NOT NULL DEFAULT 0 AFTER is_featured",
         'is_popular' => "ALTER TABLE news_articles ADD COLUMN is_popular TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_order",
         'popular_order' => "ALTER TABLE news_articles ADD COLUMN popular_order INT NOT NULL DEFAULT 0 AFTER is_popular",
@@ -758,6 +766,209 @@ function ensureNewsArticleSchema(mysqli $mysqli): void {
 
     foreach ($columnDefinitions as $columnName => $statement) {
         if (!databaseColumnExists($mysqli, 'news_articles', $columnName)) {
+            $mysqli->query($statement);
+        }
+    }
+}
+
+function ensureNewsArticleDraftSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'news_article_drafts')) {
+        $mysqli->query(
+            "CREATE TABLE IF NOT EXISTS news_article_drafts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                article_id INT NULL UNIQUE,
+                slug VARCHAR(180) NOT NULL UNIQUE,
+                title VARCHAR(255) NOT NULL,
+                excerpt TEXT NULL,
+                content LONGTEXT NULL,
+                cover_image_url TEXT NULL,
+                category VARCHAR(100) NOT NULL DEFAULT 'Nasional',
+                author_name VARCHAR(150) NOT NULL DEFAULT 'Tim Redaksi',
+                read_time_minutes INT NOT NULL DEFAULT 4,
+                status ENUM('draft', 'published') NOT NULL DEFAULT 'draft',
+                visibility VARCHAR(32) NOT NULL DEFAULT 'public',
+                tags_json LONGTEXT NULL,
+                focus_keyword VARCHAR(255) NOT NULL DEFAULT '',
+                allow_comments TINYINT(1) NOT NULL DEFAULT 1,
+                is_featured TINYINT(1) NOT NULL DEFAULT 0,
+                featured_order INT NOT NULL DEFAULT 0,
+                is_popular TINYINT(1) NOT NULL DEFAULT 0,
+                popular_order INT NOT NULL DEFAULT 0,
+                is_editor_pick TINYINT(1) NOT NULL DEFAULT 0,
+                editor_pick_order INT NOT NULL DEFAULT 0,
+                published_at TIMESTAMP NULL DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                last_saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                last_published_at TIMESTAMP NULL DEFAULT NULL,
+                INDEX idx_news_drafts_status_saved (status, last_saved_at),
+                INDEX idx_news_drafts_publish (article_id, last_published_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+    }
+
+    $columnDefinitions = [
+        'article_id' => "ALTER TABLE news_article_drafts ADD COLUMN article_id INT NULL UNIQUE AFTER id",
+        'slug' => "ALTER TABLE news_article_drafts ADD COLUMN slug VARCHAR(180) NOT NULL UNIQUE AFTER article_id",
+        'title' => "ALTER TABLE news_article_drafts ADD COLUMN title VARCHAR(255) NOT NULL AFTER slug",
+        'excerpt' => "ALTER TABLE news_article_drafts ADD COLUMN excerpt TEXT NULL AFTER title",
+        'content' => "ALTER TABLE news_article_drafts ADD COLUMN content LONGTEXT NULL AFTER excerpt",
+        'cover_image_url' => "ALTER TABLE news_article_drafts ADD COLUMN cover_image_url TEXT NULL AFTER content",
+        'category' => "ALTER TABLE news_article_drafts ADD COLUMN category VARCHAR(100) NOT NULL DEFAULT 'Nasional' AFTER cover_image_url",
+        'author_name' => "ALTER TABLE news_article_drafts ADD COLUMN author_name VARCHAR(150) NOT NULL DEFAULT 'Tim Redaksi' AFTER category",
+        'read_time_minutes' => "ALTER TABLE news_article_drafts ADD COLUMN read_time_minutes INT NOT NULL DEFAULT 4 AFTER author_name",
+        'status' => "ALTER TABLE news_article_drafts ADD COLUMN status ENUM('draft', 'published') NOT NULL DEFAULT 'draft' AFTER read_time_minutes",
+        'visibility' => "ALTER TABLE news_article_drafts ADD COLUMN visibility VARCHAR(32) NOT NULL DEFAULT 'public' AFTER status",
+        'tags_json' => "ALTER TABLE news_article_drafts ADD COLUMN tags_json LONGTEXT NULL AFTER visibility",
+        'focus_keyword' => "ALTER TABLE news_article_drafts ADD COLUMN focus_keyword VARCHAR(255) NOT NULL DEFAULT '' AFTER tags_json",
+        'allow_comments' => "ALTER TABLE news_article_drafts ADD COLUMN allow_comments TINYINT(1) NOT NULL DEFAULT 1 AFTER focus_keyword",
+        'is_featured' => "ALTER TABLE news_article_drafts ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER allow_comments",
+        'featured_order' => "ALTER TABLE news_article_drafts ADD COLUMN featured_order INT NOT NULL DEFAULT 0 AFTER is_featured",
+        'is_popular' => "ALTER TABLE news_article_drafts ADD COLUMN is_popular TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_order",
+        'popular_order' => "ALTER TABLE news_article_drafts ADD COLUMN popular_order INT NOT NULL DEFAULT 0 AFTER is_popular",
+        'is_editor_pick' => "ALTER TABLE news_article_drafts ADD COLUMN is_editor_pick TINYINT(1) NOT NULL DEFAULT 0 AFTER popular_order",
+        'editor_pick_order' => "ALTER TABLE news_article_drafts ADD COLUMN editor_pick_order INT NOT NULL DEFAULT 0 AFTER is_editor_pick",
+        'published_at' => "ALTER TABLE news_article_drafts ADD COLUMN published_at TIMESTAMP NULL DEFAULT NULL AFTER editor_pick_order",
+        'created_at' => "ALTER TABLE news_article_drafts ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER published_at",
+        'updated_at' => "ALTER TABLE news_article_drafts ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+        'last_saved_at' => "ALTER TABLE news_article_drafts ADD COLUMN last_saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER updated_at",
+        'last_published_at' => "ALTER TABLE news_article_drafts ADD COLUMN last_published_at TIMESTAMP NULL DEFAULT NULL AFTER last_saved_at",
+    ];
+
+    foreach ($columnDefinitions as $columnName => $statement) {
+        if (!databaseColumnExists($mysqli, 'news_article_drafts', $columnName)) {
+            $mysqli->query($statement);
+        }
+    }
+}
+
+function ensureNewsSectionSchema(mysqli $mysqli): void {
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS news_sections (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            slug VARCHAR(180) NOT NULL UNIQUE,
+            title VARCHAR(255) NOT NULL,
+            description TEXT NULL,
+            layout_style VARCHAR(40) NOT NULL DEFAULT 'cards',
+            article_count INT NOT NULL DEFAULT 5,
+            section_order INT NOT NULL DEFAULT 0,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_news_sections_order (section_order, is_active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $publishedSectionColumns = [
+        'slug' => "ALTER TABLE news_sections ADD COLUMN slug VARCHAR(180) NOT NULL UNIQUE AFTER id",
+        'title' => "ALTER TABLE news_sections ADD COLUMN title VARCHAR(255) NOT NULL AFTER slug",
+        'description' => "ALTER TABLE news_sections ADD COLUMN description TEXT NULL AFTER title",
+        'layout_style' => "ALTER TABLE news_sections ADD COLUMN layout_style VARCHAR(40) NOT NULL DEFAULT 'cards' AFTER description",
+        'article_count' => "ALTER TABLE news_sections ADD COLUMN article_count INT NOT NULL DEFAULT 5 AFTER layout_style",
+        'section_order' => "ALTER TABLE news_sections ADD COLUMN section_order INT NOT NULL DEFAULT 0 AFTER article_count",
+        'is_active' => "ALTER TABLE news_sections ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER section_order",
+        'created_at' => "ALTER TABLE news_sections ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER is_active",
+        'updated_at' => "ALTER TABLE news_sections ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+    ];
+
+    foreach ($publishedSectionColumns as $columnName => $statement) {
+        if (!databaseColumnExists($mysqli, 'news_sections', $columnName)) {
+            $mysqli->query($statement);
+        }
+    }
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS news_section_articles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            section_id INT NOT NULL,
+            article_id INT NOT NULL,
+            article_order INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_news_section_article (section_id, article_id),
+            INDEX idx_news_section_article_order (section_id, article_order)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $publishedSectionRelationColumns = [
+        'section_id' => "ALTER TABLE news_section_articles ADD COLUMN section_id INT NOT NULL AFTER id",
+        'article_id' => "ALTER TABLE news_section_articles ADD COLUMN article_id INT NOT NULL AFTER section_id",
+        'article_order' => "ALTER TABLE news_section_articles ADD COLUMN article_order INT NOT NULL DEFAULT 0 AFTER article_id",
+        'created_at' => "ALTER TABLE news_section_articles ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER article_order",
+        'updated_at' => "ALTER TABLE news_section_articles ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+    ];
+
+    foreach ($publishedSectionRelationColumns as $columnName => $statement) {
+        if (!databaseColumnExists($mysqli, 'news_section_articles', $columnName)) {
+            $mysqli->query($statement);
+        }
+    }
+}
+
+function ensureNewsSectionDraftSchema(mysqli $mysqli): void {
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS news_section_drafts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            section_id INT NULL UNIQUE,
+            slug VARCHAR(180) NOT NULL UNIQUE,
+            title VARCHAR(255) NOT NULL,
+            description TEXT NULL,
+            layout_style VARCHAR(40) NOT NULL DEFAULT 'cards',
+            article_count INT NOT NULL DEFAULT 5,
+            section_order INT NOT NULL DEFAULT 0,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            last_saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            last_published_at TIMESTAMP NULL DEFAULT NULL,
+            INDEX idx_news_section_drafts_order (section_order, is_active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $draftSectionColumns = [
+        'section_id' => "ALTER TABLE news_section_drafts ADD COLUMN section_id INT NULL UNIQUE AFTER id",
+        'slug' => "ALTER TABLE news_section_drafts ADD COLUMN slug VARCHAR(180) NOT NULL UNIQUE AFTER section_id",
+        'title' => "ALTER TABLE news_section_drafts ADD COLUMN title VARCHAR(255) NOT NULL AFTER slug",
+        'description' => "ALTER TABLE news_section_drafts ADD COLUMN description TEXT NULL AFTER title",
+        'layout_style' => "ALTER TABLE news_section_drafts ADD COLUMN layout_style VARCHAR(40) NOT NULL DEFAULT 'cards' AFTER description",
+        'article_count' => "ALTER TABLE news_section_drafts ADD COLUMN article_count INT NOT NULL DEFAULT 5 AFTER layout_style",
+        'section_order' => "ALTER TABLE news_section_drafts ADD COLUMN section_order INT NOT NULL DEFAULT 0 AFTER article_count",
+        'is_active' => "ALTER TABLE news_section_drafts ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER section_order",
+        'created_at' => "ALTER TABLE news_section_drafts ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER is_active",
+        'updated_at' => "ALTER TABLE news_section_drafts ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+        'last_saved_at' => "ALTER TABLE news_section_drafts ADD COLUMN last_saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER updated_at",
+        'last_published_at' => "ALTER TABLE news_section_drafts ADD COLUMN last_published_at TIMESTAMP NULL DEFAULT NULL AFTER last_saved_at",
+    ];
+
+    foreach ($draftSectionColumns as $columnName => $statement) {
+        if (!databaseColumnExists($mysqli, 'news_section_drafts', $columnName)) {
+            $mysqli->query($statement);
+        }
+    }
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS news_section_draft_articles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            section_draft_id INT NOT NULL,
+            draft_article_id INT NOT NULL,
+            article_order INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_news_section_draft_article (section_draft_id, draft_article_id),
+            INDEX idx_news_section_draft_article_order (section_draft_id, article_order)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $draftSectionRelationColumns = [
+        'section_draft_id' => "ALTER TABLE news_section_draft_articles ADD COLUMN section_draft_id INT NOT NULL AFTER id",
+        'draft_article_id' => "ALTER TABLE news_section_draft_articles ADD COLUMN draft_article_id INT NOT NULL AFTER section_draft_id",
+        'article_order' => "ALTER TABLE news_section_draft_articles ADD COLUMN article_order INT NOT NULL DEFAULT 0 AFTER draft_article_id",
+        'created_at' => "ALTER TABLE news_section_draft_articles ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER article_order",
+        'updated_at' => "ALTER TABLE news_section_draft_articles ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+    ];
+
+    foreach ($draftSectionRelationColumns as $columnName => $statement) {
+        if (!databaseColumnExists($mysqli, 'news_section_draft_articles', $columnName)) {
             $mysqli->query($statement);
         }
     }
@@ -1252,4 +1463,7 @@ ensureTryoutScoringSchema($mysqli);
 ensureLearningProgressSchema($mysqli);
 ensureQuestionOptionScoreWeightSchema($mysqli);
 ensureNewsArticleSchema($mysqli);
+ensureNewsArticleDraftSchema($mysqli);
+ensureNewsSectionSchema($mysqli);
+ensureNewsSectionDraftSchema($mysqli);
 bootstrapDefaultAdmin($mysqli);

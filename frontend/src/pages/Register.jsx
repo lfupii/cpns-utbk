@@ -17,6 +17,9 @@ export default function Register() {
   const navigate = useNavigate();
   const location = useLocation();
   const hasGoogleAuth = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim());
+  const redirectTo = typeof location.state?.redirectTo === 'string' && location.state.redirectTo.trim() !== ''
+    ? location.state.redirectTo
+    : '/';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,13 +69,13 @@ export default function Register() {
     const result = await registerWithGoogle(credential);
     if (result.success) {
       clearPendingGoogleCredential();
-      navigate('/');
+      navigate(redirectTo, { replace: true });
     } else {
       clearPendingGoogleCredential();
       setGoogleRedirectInProgress(false);
       setError(result.message || 'Daftar dengan Google gagal.');
     }
-  }, [navigate, registerWithGoogle]);
+  }, [navigate, redirectTo, registerWithGoogle]);
 
   const handleGoogleRegister = useCallback(async (credential) => {
     await completeGoogleRegistration(credential);
@@ -261,7 +264,7 @@ export default function Register() {
         {successMessage && (
           <button
             type="button"
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/login', { state: { redirectTo } })}
             className="w-full btn btn-outline mb-4"
           >
             Lanjut ke Login
@@ -270,7 +273,7 @@ export default function Register() {
 
         <div className="text-center">
           <p className="text-gray-600">Sudah punya akun?{' '}
-            <Link to="/login" className="text-blue-600 font-semibold hover:underline">
+            <Link to="/login" state={{ redirectTo }} className="text-blue-600 font-semibold hover:underline">
               Login di sini
             </Link>
           </p>

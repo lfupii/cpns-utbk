@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import GoogleAuthButton from '../components/GoogleAuthButton';
 import { setPendingGoogleCredential } from '../utils/googleAuth';
@@ -13,7 +13,11 @@ export default function Login() {
   const [googleRedirectPending, setGoogleRedirectPending] = useState(false);
   const { login, loginWithGoogle, resendVerification, loading, error: authError } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const hasGoogleAuth = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim());
+  const redirectTo = typeof location.state?.redirectTo === 'string' && location.state.redirectTo.trim() !== ''
+    ? location.state.redirectTo
+    : '/';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,7 +27,7 @@ export default function Login() {
 
     const result = await login(email, password);
     if (result.success) {
-      navigate('/');
+      navigate(redirectTo, { replace: true });
     } else {
       setError(result.message || 'Login gagal. Periksa email dan password Anda.');
       setShowResendButton(Boolean(result.data?.requires_email_verification));
@@ -55,7 +59,7 @@ export default function Login() {
 
     const result = await loginWithGoogle(credential);
     if (result.success) {
-      navigate('/');
+      navigate(redirectTo, { replace: true });
     } else if (result.data?.requires_google_registration) {
       setGoogleRedirectPending(true);
       setInfoMessage('Akun Google belum terdaftar. Kami sedang mengarahkan Anda ke halaman daftar...');
@@ -65,13 +69,14 @@ export default function Login() {
           googleRegistrationRequired: true,
           email: result.data?.email || '',
           fullName: result.data?.full_name || '',
+          redirectTo,
         },
       });
     } else {
       setGoogleRedirectPending(false);
       setError(result.message || 'Login dengan Google gagal.');
     }
-  }, [loginWithGoogle, navigate]);
+  }, [loginWithGoogle, navigate, redirectTo]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
@@ -164,7 +169,7 @@ export default function Login() {
 
         <div className="text-center">
           <p className="text-gray-600">Belum punya akun?{' '}
-            <Link to="/register" className="text-blue-600 font-semibold hover:underline">
+            <Link to="/register" state={{ redirectTo }} className="text-blue-600 font-semibold hover:underline">
               Daftar sekarang
             </Link>
           </p>

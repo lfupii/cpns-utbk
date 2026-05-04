@@ -400,6 +400,7 @@ export function findFallbackArticleBySlug(slug) {
       published_at: null,
       tags: story.tags || [],
       focus_keyword: story.tags?.[0] || story.category,
+      allow_comments: 1,
     },
     related_stories: relatedStories,
   };

@@ -974,6 +974,45 @@ function ensureNewsSectionDraftSchema(mysqli $mysqli): void {
     }
 }
 
+function ensureNewsCommentSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'users') || !databaseTableExists($mysqli, 'news_articles')) {
+        return;
+    }
+
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS news_article_comments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            article_id INT NOT NULL,
+            user_id INT NOT NULL,
+            comment_text TEXT NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'published',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_news_comments_article (article_id, status, created_at),
+            INDEX idx_news_comments_user (user_id, created_at),
+            CONSTRAINT fk_news_comments_article
+                FOREIGN KEY (article_id) REFERENCES news_articles(id) ON DELETE CASCADE,
+            CONSTRAINT fk_news_comments_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $commentColumns = [
+        'article_id' => "ALTER TABLE news_article_comments ADD COLUMN article_id INT NOT NULL AFTER id",
+        'user_id' => "ALTER TABLE news_article_comments ADD COLUMN user_id INT NOT NULL AFTER article_id",
+        'comment_text' => "ALTER TABLE news_article_comments ADD COLUMN comment_text TEXT NOT NULL AFTER user_id",
+        'status' => "ALTER TABLE news_article_comments ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'published' AFTER comment_text",
+        'created_at' => "ALTER TABLE news_article_comments ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER status",
+        'updated_at' => "ALTER TABLE news_article_comments ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+    ];
+
+    foreach ($commentColumns as $columnName => $statement) {
+        if (!databaseColumnExists($mysqli, 'news_article_comments', $columnName)) {
+            $mysqli->query($statement);
+        }
+    }
+}
+
 function seedDefaultLearningContent(mysqli $mysqli): void {
     if (!databaseTableExists($mysqli, 'test_packages')) {
         return;
@@ -1466,4 +1505,5 @@ ensureNewsArticleSchema($mysqli);
 ensureNewsArticleDraftSchema($mysqli);
 ensureNewsSectionSchema($mysqli);
 ensureNewsSectionDraftSchema($mysqli);
+ensureNewsCommentSchema($mysqli);
 bootstrapDefaultAdmin($mysqli);

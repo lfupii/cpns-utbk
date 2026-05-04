@@ -124,6 +124,84 @@ class NewsController {
         ];
     }
 
+    private function readJsonInput(): array {
+        $rawInput = file_get_contents('php://input');
+        $decoded = json_decode($rawInput ?: '', true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function fetchPublishedArticleBySlug(string $slug): ?array {
+        $stmt = $this->mysqli->prepare(
+            "SELECT *
+             FROM news_articles
+             WHERE slug = ?
+               AND status = 'published'
+               AND visibility = 'public'
+             LIMIT 1"
+        );
+        $stmt->bind_param('s', $slug);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        return $row ? $this->normalizeArticle($row) : null;
+    }
+
+    private function fetchAuthenticatedUser(int $userId): ?array {
+        if ($userId <= 0) {
+            return null;
+        }
+
+        $stmt = $this->mysqli->prepare(
+            "SELECT id, full_name
+             FROM users
+             WHERE id = ?
+             LIMIT 1"
+        );
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        return $row ?: null;
+    }
+
+    private function buildCommentPayload(array $comment): array {
+        return [
+            'id' => (int) ($comment['id'] ?? 0),
+            'user_id' => (int) ($comment['user_id'] ?? 0),
+            'author' => trim((string) ($comment['full_name'] ?? '')) !== '' ? (string) $comment['full_name'] : 'Pembaca Ujiin',
+            'text' => (string) ($comment['comment_text'] ?? ''),
+            'age' => $this->formatRelativeTime($comment['created_at'] ?? null),
+            'likes' => 0,
+            'created_at' => $comment['created_at'] ?? null,
+            'updated_at' => $comment['updated_at'] ?? null,
+        ];
+    }
+
+    private function fetchCommentsForArticle(int $articleId): array {
+        if ($articleId <= 0 || !databaseTableExists($this->mysqli, 'news_article_comments')) {
+            return [];
+        }
+
+        $stmt = $this->mysqli->prepare(
+            "SELECT nac.id, nac.user_id, nac.comment_text, nac.created_at, nac.updated_at, u.full_name
+             FROM news_article_comments nac
+             JOIN users u ON u.id = nac.user_id
+             WHERE nac.article_id = ?
+               AND nac.status = 'published'
+             ORDER BY nac.created_at DESC, nac.id DESC"
+        );
+        $stmt->bind_param('i', $articleId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $comments = [];
+        while ($row = $result->fetch_assoc()) {
+            $comments[] = $this->buildCommentPayload($row);
+        }
+
+        return $comments;
+    }
+
     private function sortByPublishedAtDesc(array $articles): array {
         usort($articles, static function (array $left, array $right): int {
             $leftTimestamp = strtotime((string) ($left['published_at'] ?? $left['updated_at'] ?? $left['created_at'] ?? '')) ?: 0;
@@ -363,22 +441,12 @@ class NewsController {
             sendResponse('error', 'Slug berita wajib diisi', null, 422);
         }
 
-        $stmt = $this->mysqli->prepare(
-            "SELECT *
-             FROM news_articles
-             WHERE slug = ?
-               AND status = 'published'
-               AND visibility = 'public'
-             LIMIT 1"
-        );
-        $stmt->bind_param('s', $slug);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        if (!$row) {
+        $article = $this->fetchPublishedArticleBySlug($slug);
+        if (!$article) {
             sendResponse('error', 'Berita tidak ditemukan', null, 404);
         }
 
-        $article = $this->normalizeArticle($row);
+        $comments = $this->fetchCommentsForArticle((int) $article['id']);
         $detail = [
             'id' => (int) $article['id'],
             'slug' => (string) $article['slug'],
@@ -393,6 +461,7 @@ class NewsController {
             'published_at' => $article['published_at'],
             'tags' => $article['tags'],
             'focus_keyword' => $article['focus_keyword'],
+            'allow_comments' => (int) ($article['allow_comments'] ?? 1),
         ];
 
         $relatedStmt = $this->mysqli->prepare(
@@ -417,7 +486,72 @@ class NewsController {
         sendResponse('success', 'Detail berita berhasil diambil', [
             'article' => $detail,
             'related_stories' => $relatedStories,
+            'comments' => $comments,
+            'comments_count' => count($comments),
         ]);
+    }
+
+    public function createComment(): void {
+        $tokenData = verifyToken();
+        $userId = (int) ($tokenData['userId'] ?? 0);
+        if ($userId <= 0) {
+            sendResponse('error', 'Sesi login tidak valid', null, 401);
+        }
+
+        $payload = $this->readJsonInput();
+        $slug = trim((string) ($payload['slug'] ?? ''));
+        $commentText = trim((string) ($payload['content'] ?? ''));
+
+        if ($slug === '') {
+            sendResponse('error', 'Slug berita wajib diisi', null, 422);
+        }
+
+        if ($commentText === '') {
+            sendResponse('error', 'Komentar tidak boleh kosong', null, 422);
+        }
+
+        if (mb_strlen($commentText) > 1200) {
+            sendResponse('error', 'Komentar maksimal 1200 karakter', null, 422);
+        }
+
+        $article = $this->fetchPublishedArticleBySlug($slug);
+        if (!$article) {
+            sendResponse('error', 'Berita tidak ditemukan', null, 404);
+        }
+
+        if ((int) ($article['allow_comments'] ?? 1) !== 1) {
+            sendResponse('error', 'Komentar untuk berita ini sedang ditutup', null, 403);
+        }
+
+        $user = $this->fetchAuthenticatedUser($userId);
+        if (!$user) {
+            sendResponse('error', 'Pengguna tidak ditemukan', null, 404);
+        }
+
+        $status = 'published';
+        $insertStmt = $this->mysqli->prepare(
+            "INSERT INTO news_article_comments (article_id, user_id, comment_text, status)
+             VALUES (?, ?, ?, ?)"
+        );
+        $articleId = (int) $article['id'];
+        $insertStmt->bind_param('iiss', $articleId, $userId, $commentText, $status);
+
+        if (!$insertStmt->execute()) {
+            sendResponse('error', 'Gagal menyimpan komentar', null, 500);
+        }
+
+        $comment = $this->buildCommentPayload([
+            'id' => (int) $insertStmt->insert_id,
+            'user_id' => $userId,
+            'full_name' => $user['full_name'] ?? 'Pembaca Ujiin',
+            'comment_text' => $commentText,
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+
+        sendResponse('success', 'Komentar berhasil dikirim', [
+            'comment' => $comment,
+        ], 201);
     }
 }
 
@@ -430,6 +564,8 @@ if (strpos($requestPath, '/api/news/feed') !== false && $requestMethod === 'GET'
     $controller->getFeed();
 } elseif (strpos($requestPath, '/api/news/article') !== false && $requestMethod === 'GET') {
     $controller->getArticleDetail();
+} elseif (strpos($requestPath, '/api/news/comment') !== false && $requestMethod === 'POST') {
+    $controller->createComment();
 } else {
     sendResponse('error', 'Endpoint berita tidak ditemukan', null, 404);
 }

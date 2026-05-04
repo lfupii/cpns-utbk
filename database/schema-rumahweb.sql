@@ -497,6 +497,3 @@ INSERT INTO question_options (question_id, option_letter, option_text, is_correc
 (40, 'C', 'Rp80.000', 1),
 (40, 'D', 'Rp82.000', 0),
 (40, 'E', 'Rp84.000', 0);
-
-INSERT INTO users (email, password, full_name, role, email_verified_at) VALUES
-('REMOVED_ADMIN_EMAIL', 'REMOVED_ADMIN_PASSWORD_HASH', 'Admin Ujiin', 'admin', NOW());

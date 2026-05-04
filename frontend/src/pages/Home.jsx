@@ -137,9 +137,14 @@ export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [activeLandingSection, setActiveLandingSection] = useState('tentang');
 
   const displayName = user?.full_name || 'Pejuang ASN';
+  const isHomePage = location.pathname === '/';
   const isNewsPage = location.pathname.startsWith('/news');
+  const isContactPage = location.pathname === '/contact';
+  const isTermsPage = location.pathname === '/terms';
+  const isLandingSectionActive = (sectionId) => isHomePage && activeLandingSection === sectionId;
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -176,6 +181,47 @@ export default function Home() {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isHomePage) {
+      return undefined;
+    }
+
+    const sectionIds = ['tentang', 'keunggulan', 'paket'];
+    const resolveActiveSection = () => {
+      const viewportOffset = window.innerWidth >= 1024 ? 180 : 140;
+      let nextActiveSection = sectionIds[0];
+
+      sectionIds.forEach((sectionId) => {
+        const sectionElement = document.getElementById(sectionId);
+        if (!sectionElement) {
+          return;
+        }
+
+        const sectionTop = sectionElement.getBoundingClientRect().top;
+        if (sectionTop - viewportOffset <= 0) {
+          nextActiveSection = sectionId;
+        }
+      });
+
+      setActiveLandingSection((current) => (
+        current === nextActiveSection ? current : nextActiveSection
+      ));
+    };
+
+    const hashSection = location.hash.replace('#', '');
+    if (sectionIds.includes(hashSection)) {
+      setActiveLandingSection(hashSection);
+    } else {
+      resolveActiveSection();
+    }
+
+    window.addEventListener('scroll', resolveActiveSection, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', resolveActiveSection);
+    };
+  }, [isHomePage, location.hash]);
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -308,11 +354,41 @@ export default function Home() {
               className={`landing-navbar-panel ${isMobileMenuOpen ? 'landing-navbar-panel-open' : ''}`}
             >
               <div className="landing-nav-links">
-                <a href="#tentang" onClick={closeMobileMenu}>Tentang</a>
-                <a href="#keunggulan" onClick={closeMobileMenu}>Fitur</a>
-                <a href="#paket" onClick={closeMobileMenu}>Program</a>
-                <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
-                <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
+                <a
+                  href="#tentang"
+                  className={isLandingSectionActive('tentang') ? 'landing-nav-link-active' : ''}
+                  onClick={closeMobileMenu}
+                >
+                  Tentang
+                </a>
+                <a
+                  href="#keunggulan"
+                  className={isLandingSectionActive('keunggulan') ? 'landing-nav-link-active' : ''}
+                  onClick={closeMobileMenu}
+                >
+                  Fitur
+                </a>
+                <a
+                  href="#paket"
+                  className={isLandingSectionActive('paket') ? 'landing-nav-link-active' : ''}
+                  onClick={closeMobileMenu}
+                >
+                  Program
+                </a>
+                <Link
+                  to="/contact"
+                  className={isContactPage ? 'landing-nav-link-active' : ''}
+                  onClick={closeMobileMenu}
+                >
+                  Kontak
+                </Link>
+                <Link
+                  to="/terms"
+                  className={isTermsPage ? 'landing-nav-link-active' : ''}
+                  onClick={closeMobileMenu}
+                >
+                  Syarat &amp; Ketentuan
+                </Link>
                 <Link
                   to="/news"
                   className={isNewsPage ? 'landing-nav-link-active' : ''}

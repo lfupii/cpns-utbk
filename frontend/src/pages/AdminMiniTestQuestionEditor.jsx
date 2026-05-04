@@ -209,7 +209,7 @@ export default function AdminMiniTestQuestionEditor() {
     return uniqueTopicTitles;
   }, [activeSection?.material, questionForm.material_topic]);
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
-  const backToMiniTestHref = `/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&mode=quiz&workspace=${workspace}${questionForm.id ? `&mini_preview=${questionForm.id}` : ''}`;
+  const backToMiniTestHref = `/admin/workspace?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&mode=quiz&workspace=${workspace}${questionForm.id ? `&mini_preview=${questionForm.id}` : ''}`;
   const extractQuestionSource = useMemo(() => ({
     ...questionForm,
     section_name: activeSection?.name || '',

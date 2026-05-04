@@ -24,11 +24,14 @@ const MiniTestReview = lazy(() => import('./pages/MiniTestReview'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ActivePackages = lazy(() => import('./pages/ActivePackages'));
 const TestHistory = lazy(() => import('./pages/TestHistory'));
+const AdminHub = lazy(() => import('./pages/AdminHub'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const AdminNewsPanel = lazy(() => import('./pages/AdminNewsPanel'));
 const AdminLearningMaterialEditor = lazy(() => import('./pages/AdminLearningMaterialEditor'));
 const AdminQuestionEditor = lazy(() => import('./pages/AdminQuestionEditor'));
 const AdminMiniTestQuestionEditor = lazy(() => import('./pages/AdminMiniTestQuestionEditor'));
 const Contact = lazy(() => import('./pages/Contact'));
+const News = lazy(() => import('./pages/News'));
 const TermsConditions = lazy(() => import('./pages/TermsConditions'));
 
 function RouteLoadingFallback() {
@@ -178,6 +181,7 @@ function AppRoutes() {
         <Suspense fallback={<RouteLoadingFallback />}>
           <Routes location={location}>
             <Route path="/" element={<Home />} />
+            <Route path="/news" element={<News />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/terms" element={<TermsConditions />} />
             <Route path="/refund-policy" element={<Navigate to="/terms#refund-policy" replace />} />
@@ -261,7 +265,23 @@ function AppRoutes() {
               path="/admin"
               element={
                 <AdminRoute>
+                  <AdminHub />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/workspace"
+              element={
+                <AdminRoute>
                   <AdminPanel />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/news"
+              element={
+                <AdminRoute>
+                  <AdminNewsPanel />
                 </AdminRoute>
               }
             />

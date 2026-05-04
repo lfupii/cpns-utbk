@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import ProfileDropdown from './ProfileDropdown';
 import BrandLogo from './BrandLogo';
@@ -12,12 +12,21 @@ const footerLinks = [
   { label: 'Kebijakan Refund', to: '/terms#refund-policy' },
 ];
 
-export default function PublicSiteChrome({ eyebrow, title, subtitle, children }) {
+export default function PublicSiteChrome({
+  eyebrow,
+  title,
+  subtitle,
+  children,
+  showHero = true,
+  mainClassName = '',
+}) {
   const { user, logout, isAdmin } = useAuth();
+  const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const displayName = user?.full_name || localStorage.getItem('fullName') || 'Pejuang ASN';
+  const isNewsPage = location.pathname === '/news';
 
   const handleLogout = () => {
     setIsMobileMenuOpen(false);
@@ -87,6 +96,13 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
                 <Link to="/#tentang" onClick={closeMobileMenu}>Tentang</Link>
                 <Link to="/#keunggulan" onClick={closeMobileMenu}>Fitur</Link>
                 <Link to="/#paket" onClick={closeMobileMenu}>Program</Link>
+                <Link
+                  to="/news"
+                  className={`landing-nav-link-mobile-only ${isNewsPage ? 'landing-nav-link-active' : ''}`}
+                  onClick={closeMobileMenu}
+                >
+                  Berita
+                </Link>
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
                 <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
@@ -105,6 +121,12 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
           </div>
 
           <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
+            <Link
+              to="/news"
+              className={`landing-header-link-button ${isNewsPage ? 'landing-header-link-button-active' : ''}`}
+            >
+              Berita
+            </Link>
             {user ? (
               <ProfileDropdown
                 displayName={displayName}
@@ -127,12 +149,14 @@ export default function PublicSiteChrome({ eyebrow, title, subtitle, children })
         </div>
       </nav>
 
-      <main className="container policy-main">
-        <section className="policy-hero">
-          {eyebrow && <span className="landing-kicker">{eyebrow}</span>}
-          <h1>{title}</h1>
-          {subtitle && <p>{subtitle}</p>}
-        </section>
+      <main className={`container policy-main ${mainClassName}`.trim()}>
+        {showHero && (
+          <section className="policy-hero">
+            {eyebrow && <span className="landing-kicker">{eyebrow}</span>}
+            <h1>{title}</h1>
+            {subtitle && <p>{subtitle}</p>}
+          </section>
+        )}
 
         {children}
       </main>

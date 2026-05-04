@@ -197,7 +197,7 @@ export default function AdminQuestionEditor() {
   );
   const usesPointScoring = isTkpSection(activeSection);
   const questionImagePanelVisible = showQuestionImageTools || Boolean(questionForm.question_image_url);
-  const backToBankSoalHref = `/admin?view=soal&package=${numericPackageId}&workspace=${workspace}${questionForm.question_id ? `&preview=${questionForm.question_id}` : ''}`;
+  const backToBankSoalHref = `/admin/workspace?view=soal&package=${numericPackageId}&workspace=${workspace}${questionForm.question_id ? `&preview=${questionForm.question_id}` : ''}`;
   const activeSectionName = useMemo(
     () => activeSection?.name || selectedQuestion?.section_name || '',
     [activeSection?.name, selectedQuestion?.section_name]

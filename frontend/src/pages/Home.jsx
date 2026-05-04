@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import apiClient from '../api';
 import ProfileDropdown from '../components/ProfileDropdown';
@@ -129,6 +129,7 @@ function FeatureIcon({ name }) {
 }
 
 export default function Home() {
+  const location = useLocation();
   const { user, logout, isAdmin } = useAuth();
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +139,7 @@ export default function Home() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const displayName = user?.full_name || 'Pejuang ASN';
+  const isNewsPage = location.pathname === '/news';
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -309,6 +311,13 @@ export default function Home() {
                 <a href="#tentang" onClick={closeMobileMenu}>Tentang</a>
                 <a href="#keunggulan" onClick={closeMobileMenu}>Fitur</a>
                 <a href="#paket" onClick={closeMobileMenu}>Program</a>
+                <Link
+                  to="/news"
+                  className={`landing-nav-link-mobile-only ${isNewsPage ? 'landing-nav-link-active' : ''}`}
+                  onClick={closeMobileMenu}
+                >
+                  Berita
+                </Link>
                 <Link to="/contact" onClick={closeMobileMenu}>Kontak</Link>
                 <Link to="/terms" onClick={closeMobileMenu}>Syarat &amp; Ketentuan</Link>
               </div>
@@ -327,6 +336,12 @@ export default function Home() {
           </div>
 
           <div className={`landing-nav-actions ${user ? 'landing-nav-actions-authenticated' : 'landing-nav-actions-guest'}`}>
+            <Link
+              to="/news"
+              className={`landing-header-link-button ${isNewsPage ? 'landing-header-link-button-active' : ''}`}
+            >
+              Berita
+            </Link>
             {user ? (
               <ProfileDropdown
                 displayName={displayName}

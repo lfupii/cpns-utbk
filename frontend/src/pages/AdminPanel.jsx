@@ -861,7 +861,7 @@ export default function AdminPanel() {
       query.set('package', String(selectedPackageId));
     }
 
-    navigate(`/admin?${query.toString()}`);
+    navigate(`/admin/workspace?${query.toString()}`);
   };
 
   const handleSaveWorkspaceDraft = async () => {
@@ -1779,7 +1779,7 @@ export default function AdminPanel() {
     query.delete('mode');
     query.delete('preview');
     query.delete('mini_preview');
-    navigate(`/admin?${query.toString()}`);
+    navigate(`/admin/workspace?${query.toString()}`);
   }, [adminWorkspace, location.search, navigate]);
 
   const openPackageListView = useCallback((typeId, workspace = adminWorkspace) => {
@@ -1792,7 +1792,7 @@ export default function AdminPanel() {
     query.delete('mode');
     query.delete('preview');
     query.delete('mini_preview');
-    navigate(`/admin?${query.toString()}`);
+    navigate(`/admin/workspace?${query.toString()}`);
   }, [adminWorkspace, location.search, navigate]);
 
   const openPackageEditor = useCallback((packageId, workspace = adminWorkspace) => {
@@ -1812,7 +1812,7 @@ export default function AdminPanel() {
     query.delete('mode');
     query.delete('preview');
     query.delete('mini_preview');
-    navigate(`/admin?${query.toString()}`);
+    navigate(`/admin/workspace?${query.toString()}`);
   }, [adminWorkspace, location.search, navigate, packages]);
 
   const openLearningView = (sectionCode = null, mode = '', shouldExpand = true, topicIndex = null) => {
@@ -2184,7 +2184,10 @@ export default function AdminPanel() {
       title="Panel Admin"
       subtitle="Kelola paket, soal, gambar, dan import bank soal dari satu workspace yang lebih ringkas."
       navContent={(
-        <div className="admin-workspace-topnav" role="tablist" aria-label="Navigasi workspace admin">
+        <div className="admin-workspace-topnav admin-workspace-topnav-link-row" aria-label="Navigasi workspace admin">
+          <Link to="/admin" className="admin-workspace-topnav-link">
+            Pilih Modul
+          </Link>
           <button
             type="button"
             className={`admin-workspace-topnav-link ${adminWorkspace === 'published' ? 'admin-workspace-topnav-link-active' : ''}`}

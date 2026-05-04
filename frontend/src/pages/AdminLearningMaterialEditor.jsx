@@ -4372,7 +4372,7 @@ export default function AdminLearningMaterialEditor() {
                   Sinkronkan Halaman
                 </button>
                 <Link
-                  to={`/admin?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`}
+                  to={`/admin/workspace?view=materi&package=${numericPackageId}&section=${encodeURIComponent(sectionCode || '')}&workspace=${workspace}`}
                   className="admin-word-ribbon-action-button"
                 >
                   Kembali ke Admin

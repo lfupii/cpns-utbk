@@ -2409,6 +2409,272 @@ class AdminController {
         }
     }
 
+    private function normalizeNewsStatus($value): string {
+        return strtolower(trim((string) $value)) === 'published' ? 'published' : 'draft';
+    }
+
+    private function normalizeNewsFlag($value): int {
+        $normalized = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        return $normalized ? 1 : 0;
+    }
+
+    private function normalizeNewsOrder($value): int {
+        $numericValue = (int) $value;
+        return max(0, $numericValue);
+    }
+
+    private function slugifyNews(string $value): string {
+        $normalized = strtolower(trim($value));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $normalized) ?: '';
+        $slug = trim($slug, '-');
+
+        return $slug !== '' ? $slug : 'berita';
+    }
+
+    private function generateUniqueNewsSlug(string $candidate, int $excludeId = 0): string {
+        $baseSlug = $this->slugifyNews($candidate);
+        $slug = $baseSlug;
+        $suffix = 2;
+
+        while (true) {
+            $query = 'SELECT id FROM news_articles WHERE slug = ?' . ($excludeId > 0 ? ' AND id != ?' : '') . ' LIMIT 1';
+            $stmt = $this->mysqli->prepare($query);
+            if ($excludeId > 0) {
+                $stmt->bind_param('si', $slug, $excludeId);
+            } else {
+                $stmt->bind_param('s', $slug);
+            }
+            $stmt->execute();
+            $existing = $stmt->get_result()->fetch_assoc();
+            if (!$existing) {
+                return $slug;
+            }
+
+            $slug = $baseSlug . '-' . $suffix;
+            $suffix += 1;
+        }
+    }
+
+    private function normalizeNewsArticle(array $row): array {
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'slug' => (string) ($row['slug'] ?? ''),
+            'title' => (string) ($row['title'] ?? ''),
+            'excerpt' => (string) ($row['excerpt'] ?? ''),
+            'content' => (string) ($row['content'] ?? ''),
+            'cover_image_url' => (string) ($row['cover_image_url'] ?? ''),
+            'category' => (string) ($row['category'] ?? 'Nasional'),
+            'author_name' => (string) ($row['author_name'] ?? 'Tim Redaksi'),
+            'read_time_minutes' => max(1, (int) ($row['read_time_minutes'] ?? 4)),
+            'status' => $this->normalizeNewsStatus($row['status'] ?? 'draft'),
+            'is_featured' => (int) ($row['is_featured'] ?? 0),
+            'featured_order' => (int) ($row['featured_order'] ?? 0),
+            'is_popular' => (int) ($row['is_popular'] ?? 0),
+            'popular_order' => (int) ($row['popular_order'] ?? 0),
+            'is_editor_pick' => (int) ($row['is_editor_pick'] ?? 0),
+            'editor_pick_order' => (int) ($row['editor_pick_order'] ?? 0),
+            'published_at' => $row['published_at'] ?? null,
+            'created_at' => $row['created_at'] ?? null,
+            'updated_at' => $row['updated_at'] ?? null,
+        ];
+    }
+
+    private function getNewsArticleById(int $articleId): ?array {
+        $stmt = $this->mysqli->prepare('SELECT * FROM news_articles WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $articleId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        return $row ? $this->normalizeNewsArticle($row) : null;
+    }
+
+    private function normalizeNewsPayload(array $data, int $articleId = 0): array {
+        $title = trim((string) ($data['title'] ?? ''));
+        if ($title === '') {
+            sendResponse('error', 'Judul berita wajib diisi', null, 422);
+        }
+
+        $status = $this->normalizeNewsStatus($data['status'] ?? 'draft');
+        $slugSource = trim((string) ($data['slug'] ?? ''));
+        $slug = $this->generateUniqueNewsSlug($slugSource !== '' ? $slugSource : $title, $articleId);
+
+        return [
+            'slug' => $slug,
+            'title' => $title,
+            'excerpt' => trim((string) ($data['excerpt'] ?? '')),
+            'content' => trim((string) ($data['content'] ?? '')),
+            'cover_image_url' => trim((string) ($data['cover_image_url'] ?? '')),
+            'category' => trim((string) ($data['category'] ?? '')) ?: 'Nasional',
+            'author_name' => trim((string) ($data['author_name'] ?? '')) ?: 'Tim Redaksi',
+            'read_time_minutes' => max(1, (int) ($data['read_time_minutes'] ?? 4)),
+            'status' => $status,
+            'is_featured' => $this->normalizeNewsFlag($data['is_featured'] ?? 0),
+            'featured_order' => $this->normalizeNewsOrder($data['featured_order'] ?? 0),
+            'is_popular' => $this->normalizeNewsFlag($data['is_popular'] ?? 0),
+            'popular_order' => $this->normalizeNewsOrder($data['popular_order'] ?? 0),
+            'is_editor_pick' => $this->normalizeNewsFlag($data['is_editor_pick'] ?? 0),
+            'editor_pick_order' => $this->normalizeNewsOrder($data['editor_pick_order'] ?? 0),
+        ];
+    }
+
+    public function getNewsArticles() {
+        verifyAdmin();
+
+        $statusFilter = strtolower(trim((string) ($_GET['status'] ?? '')));
+        $query = 'SELECT * FROM news_articles';
+        if (in_array($statusFilter, ['published', 'draft'], true)) {
+            $query .= ' WHERE status = ?';
+        }
+        $query .= ' ORDER BY status ASC, COALESCE(published_at, created_at) DESC, id DESC';
+
+        if (in_array($statusFilter, ['published', 'draft'], true)) {
+            $stmt = $this->mysqli->prepare($query);
+            $stmt->bind_param('s', $statusFilter);
+            $stmt->execute();
+            $result = $stmt->get_result();
+        } else {
+            $result = $this->mysqli->query($query);
+        }
+
+        if (!$result) {
+            sendResponse('error', 'Gagal mengambil daftar berita', null, 500);
+        }
+
+        $articles = [];
+        while ($row = $result->fetch_assoc()) {
+            $articles[] = $this->normalizeNewsArticle($row);
+        }
+
+        sendResponse('success', 'Daftar berita berhasil diambil', $articles);
+    }
+
+    public function createNewsArticle() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            sendResponse('error', 'Body JSON tidak valid', null, 400);
+        }
+
+        $payload = $this->normalizeNewsPayload($data);
+        $publishedAt = $payload['status'] === 'published' ? date('Y-m-d H:i:s') : null;
+        $stmt = $this->mysqli->prepare(
+            'INSERT INTO news_articles (
+                slug, title, excerpt, content, cover_image_url, category, author_name,
+                read_time_minutes, status, is_featured, featured_order, is_popular,
+                popular_order, is_editor_pick, editor_pick_order, published_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->bind_param(
+            'sssssssisiiiiiis',
+            $payload['slug'],
+            $payload['title'],
+            $payload['excerpt'],
+            $payload['content'],
+            $payload['cover_image_url'],
+            $payload['category'],
+            $payload['author_name'],
+            $payload['read_time_minutes'],
+            $payload['status'],
+            $payload['is_featured'],
+            $payload['featured_order'],
+            $payload['is_popular'],
+            $payload['popular_order'],
+            $payload['is_editor_pick'],
+            $payload['editor_pick_order'],
+            $publishedAt
+        );
+
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal membuat berita', ['details' => $stmt->error], 500);
+        }
+
+        $article = $this->getNewsArticleById((int) $stmt->insert_id);
+        sendResponse('success', 'Berita berhasil dibuat', $article, 201);
+    }
+
+    public function updateNewsArticle() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            sendResponse('error', 'Body JSON tidak valid', null, 400);
+        }
+
+        $articleId = (int) ($data['id'] ?? 0);
+        if ($articleId <= 0) {
+            sendResponse('error', 'ID berita harus diisi', null, 422);
+        }
+
+        $existingArticle = $this->getNewsArticleById($articleId);
+        if (!$existingArticle) {
+            sendResponse('error', 'Berita tidak ditemukan', null, 404);
+        }
+
+        $payload = $this->normalizeNewsPayload($data, $articleId);
+        $publishedAt = $existingArticle['published_at'];
+        if ($payload['status'] === 'published' && !$publishedAt) {
+            $publishedAt = date('Y-m-d H:i:s');
+        }
+        if ($payload['status'] === 'draft') {
+            $publishedAt = null;
+        }
+
+        $stmt = $this->mysqli->prepare(
+            'UPDATE news_articles
+             SET slug = ?, title = ?, excerpt = ?, content = ?, cover_image_url = ?, category = ?, author_name = ?,
+                 read_time_minutes = ?, status = ?, is_featured = ?, featured_order = ?, is_popular = ?,
+                 popular_order = ?, is_editor_pick = ?, editor_pick_order = ?, published_at = ?
+             WHERE id = ?'
+        );
+        $stmt->bind_param(
+            'sssssssisiiiiiisi',
+            $payload['slug'],
+            $payload['title'],
+            $payload['excerpt'],
+            $payload['content'],
+            $payload['cover_image_url'],
+            $payload['category'],
+            $payload['author_name'],
+            $payload['read_time_minutes'],
+            $payload['status'],
+            $payload['is_featured'],
+            $payload['featured_order'],
+            $payload['is_popular'],
+            $payload['popular_order'],
+            $payload['is_editor_pick'],
+            $payload['editor_pick_order'],
+            $publishedAt,
+            $articleId
+        );
+
+        if (!$stmt->execute()) {
+            sendResponse('error', 'Gagal memperbarui berita', ['details' => $stmt->error], 500);
+        }
+
+        $article = $this->getNewsArticleById($articleId);
+        sendResponse('success', 'Berita berhasil diperbarui', $article);
+    }
+
+    public function deleteNewsArticle() {
+        verifyAdmin();
+        $articleId = (int) ($_GET['id'] ?? 0);
+        if ($articleId <= 0) {
+            sendResponse('error', 'ID berita harus diisi', null, 422);
+        }
+
+        $article = $this->getNewsArticleById($articleId);
+        if (!$article) {
+            sendResponse('error', 'Berita tidak ditemukan', null, 404);
+        }
+
+        $stmt = $this->mysqli->prepare('DELETE FROM news_articles WHERE id = ?');
+        $stmt->bind_param('i', $articleId);
+        $stmt->execute();
+
+        sendResponse('success', 'Berita berhasil dihapus', [
+            'id' => $articleId,
+        ]);
+    }
+
     public function savePackageDraft() {
         verifyAdmin();
         $data = json_decode(file_get_contents('php://input'), true);
@@ -2537,6 +2803,14 @@ if (strpos($requestPath, '/api/admin/package-types') !== false && $requestMethod
     $controller->updateLearningMaterial();
 } elseif (strpos($requestPath, '/api/admin/learning-section-questions') !== false && $requestMethod === 'PUT') {
     $controller->updateLearningSectionQuestions();
+} elseif (strpos($requestPath, '/api/admin/news') !== false && $requestMethod === 'GET') {
+    $controller->getNewsArticles();
+} elseif (strpos($requestPath, '/api/admin/news') !== false && $requestMethod === 'POST') {
+    $controller->createNewsArticle();
+} elseif (strpos($requestPath, '/api/admin/news') !== false && $requestMethod === 'PUT') {
+    $controller->updateNewsArticle();
+} elseif (strpos($requestPath, '/api/admin/news') !== false && $requestMethod === 'DELETE') {
+    $controller->deleteNewsArticle();
 } elseif (strpos($requestPath, '/api/admin/package-drafts/save') !== false && $requestMethod === 'POST') {
     $controller->savePackageDraft();
 } elseif (strpos($requestPath, '/api/admin/package-drafts/publish') !== false && $requestMethod === 'POST') {

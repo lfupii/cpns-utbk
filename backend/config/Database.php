@@ -704,6 +704,65 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
     refreshTwkDraftMaterials($mysqli);
 }
 
+function ensureNewsArticleSchema(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'news_articles')) {
+        $mysqli->query(
+            "CREATE TABLE IF NOT EXISTS news_articles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                slug VARCHAR(180) NOT NULL UNIQUE,
+                title VARCHAR(255) NOT NULL,
+                excerpt TEXT NULL,
+                content LONGTEXT NULL,
+                cover_image_url TEXT NULL,
+                category VARCHAR(100) NOT NULL DEFAULT 'Nasional',
+                author_name VARCHAR(150) NOT NULL DEFAULT 'Tim Redaksi',
+                read_time_minutes INT NOT NULL DEFAULT 4,
+                status ENUM('draft', 'published') NOT NULL DEFAULT 'draft',
+                is_featured TINYINT(1) NOT NULL DEFAULT 0,
+                featured_order INT NOT NULL DEFAULT 0,
+                is_popular TINYINT(1) NOT NULL DEFAULT 0,
+                popular_order INT NOT NULL DEFAULT 0,
+                is_editor_pick TINYINT(1) NOT NULL DEFAULT 0,
+                editor_pick_order INT NOT NULL DEFAULT 0,
+                published_at TIMESTAMP NULL DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_news_status_published (status, published_at),
+                INDEX idx_news_featured (is_featured, featured_order, published_at),
+                INDEX idx_news_popular (is_popular, popular_order, published_at),
+                INDEX idx_news_editor_pick (is_editor_pick, editor_pick_order, published_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+    }
+
+    $columnDefinitions = [
+        'slug' => "ALTER TABLE news_articles ADD COLUMN slug VARCHAR(180) NOT NULL UNIQUE AFTER id",
+        'title' => "ALTER TABLE news_articles ADD COLUMN title VARCHAR(255) NOT NULL AFTER slug",
+        'excerpt' => "ALTER TABLE news_articles ADD COLUMN excerpt TEXT NULL AFTER title",
+        'content' => "ALTER TABLE news_articles ADD COLUMN content LONGTEXT NULL AFTER excerpt",
+        'cover_image_url' => "ALTER TABLE news_articles ADD COLUMN cover_image_url TEXT NULL AFTER content",
+        'category' => "ALTER TABLE news_articles ADD COLUMN category VARCHAR(100) NOT NULL DEFAULT 'Nasional' AFTER cover_image_url",
+        'author_name' => "ALTER TABLE news_articles ADD COLUMN author_name VARCHAR(150) NOT NULL DEFAULT 'Tim Redaksi' AFTER category",
+        'read_time_minutes' => "ALTER TABLE news_articles ADD COLUMN read_time_minutes INT NOT NULL DEFAULT 4 AFTER author_name",
+        'status' => "ALTER TABLE news_articles ADD COLUMN status ENUM('draft', 'published') NOT NULL DEFAULT 'draft' AFTER read_time_minutes",
+        'is_featured' => "ALTER TABLE news_articles ADD COLUMN is_featured TINYINT(1) NOT NULL DEFAULT 0 AFTER status",
+        'featured_order' => "ALTER TABLE news_articles ADD COLUMN featured_order INT NOT NULL DEFAULT 0 AFTER is_featured",
+        'is_popular' => "ALTER TABLE news_articles ADD COLUMN is_popular TINYINT(1) NOT NULL DEFAULT 0 AFTER featured_order",
+        'popular_order' => "ALTER TABLE news_articles ADD COLUMN popular_order INT NOT NULL DEFAULT 0 AFTER is_popular",
+        'is_editor_pick' => "ALTER TABLE news_articles ADD COLUMN is_editor_pick TINYINT(1) NOT NULL DEFAULT 0 AFTER popular_order",
+        'editor_pick_order' => "ALTER TABLE news_articles ADD COLUMN editor_pick_order INT NOT NULL DEFAULT 0 AFTER is_editor_pick",
+        'published_at' => "ALTER TABLE news_articles ADD COLUMN published_at TIMESTAMP NULL DEFAULT NULL AFTER editor_pick_order",
+        'created_at' => "ALTER TABLE news_articles ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER published_at",
+        'updated_at' => "ALTER TABLE news_articles ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+    ];
+
+    foreach ($columnDefinitions as $columnName => $statement) {
+        if (!databaseColumnExists($mysqli, 'news_articles', $columnName)) {
+            $mysqli->query($statement);
+        }
+    }
+}
+
 function seedDefaultLearningContent(mysqli $mysqli): void {
     if (!databaseTableExists($mysqli, 'test_packages')) {
         return;
@@ -1192,4 +1251,5 @@ ensureAttemptQuestionFlagsSchema($mysqli);
 ensureTryoutScoringSchema($mysqli);
 ensureLearningProgressSchema($mysqli);
 ensureQuestionOptionScoreWeightSchema($mysqli);
+ensureNewsArticleSchema($mysqli);
 bootstrapDefaultAdmin($mysqli);

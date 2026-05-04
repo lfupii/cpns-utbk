@@ -14,21 +14,3 @@ CREATE TABLE IF NOT EXISTS system_settings (
 UPDATE users
 SET email_verified_at = COALESCE(email_verified_at, created_at)
 WHERE email_verified_at IS NULL;
-
-DELETE FROM users;
-
-INSERT INTO users (email, password, full_name, role, email_verified_at)
-VALUES (
-  'REMOVED_ADMIN_EMAIL',
-  'REMOVED_ADMIN_PASSWORD_HASH',
-  'Admin Ujiin',
-  'admin',
-  NOW()
-);
-
-INSERT INTO system_settings (setting_key, setting_value)
-VALUES (
-  'default_admin_reset_v1',
-  JSON_OBJECT('email', 'REMOVED_ADMIN_EMAIL', 'completed_at', NOW())
-)
-ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value);

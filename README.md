@@ -282,8 +282,8 @@ Submit & Get Results
 
 ### Test User Account
 ```
-Email: test@example.com
-Password: test1234 (lihat database/schema.sql)
+Buat akun lewat halaman register
+atau buat admin manual lewat backend/scripts/create_admin.php
 ```
 
 ### Test Payment

@@ -289,19 +289,21 @@ Langkah import:
 Setelah import, data awal yang tersedia:
 - paket `CPNS Intensif`
 - paket `UTBK Intensif`
-- akun admin default
 
-## 8. Akun default setelah import database
+## 8. Admin setelah import database
 
-Setelah import `schema.sql`, akun admin default adalah:
+Setelah import `schema.sql`, tidak ada akun admin default dari repo.
 
-- Email: `REMOVED_ADMIN_EMAIL`
-- Password: `REMOVED_ADMIN_PASSWORD`
+Buat admin manual dari server atau lokal dengan script:
+
+```bash
+php backend/scripts/create_admin.php --email=admin@example.com --password='GantiPasswordKuat123!' --name='Admin Ujiin'
+```
 
 Saran setelah live:
 1. login sebagai admin
 2. cek panel admin `/admin`
-3. ubah password admin langsung di database atau siapkan flow ganti password berikutnya
+3. matikan atau kosongkan `DEFAULT_ADMIN_FORCE_BOOTSTRAP` setelah selesai jika pernah dipakai
 
 ## 9. Webhook Midtrans production
 
@@ -380,7 +382,7 @@ Sebelum mengumumkan website live, cek ini:
 - Jangan upload `.env` lokal sandbox ke server production.
 - Jangan pakai key sandbox di domain live.
 - Simpan backup database sebelum mengubah data paket/soal besar-besaran.
-- Kalau mau live penuh, ganti akun admin default setelah deployment.
+- Buat akun admin manual setelah deployment, lalu simpan kredensialnya di tempat aman.
 
 ## 14. Referensi
 

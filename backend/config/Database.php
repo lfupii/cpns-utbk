@@ -60,9 +60,9 @@ define('FROM_EMAIL', env('FROM_EMAIL', 'noreply@cpns-utbk.com'));
 define('FROM_NAME', env('FROM_NAME', 'Ujiin'));
 define('EMAIL_VERIFICATION_EXPIRY_HOURS', (int) env('EMAIL_VERIFICATION_EXPIRY_HOURS', 24));
 define('EMAIL_VERIFICATION_URL', env('EMAIL_VERIFICATION_URL', rtrim(FRONTEND_URL, '/') . '/verify-email'));
-define('DEFAULT_ADMIN_EMAIL', env('DEFAULT_ADMIN_EMAIL', 'REMOVED_ADMIN_EMAIL'));
-define('DEFAULT_ADMIN_FULL_NAME', env('DEFAULT_ADMIN_FULL_NAME', 'Admin Ujiin'));
-define('DEFAULT_ADMIN_PASSWORD_HASH', env('DEFAULT_ADMIN_PASSWORD_HASH', 'REMOVED_ADMIN_PASSWORD_HASH'));
+define('DEFAULT_ADMIN_EMAIL', trim((string) env('DEFAULT_ADMIN_EMAIL', '')));
+define('DEFAULT_ADMIN_FULL_NAME', trim((string) env('DEFAULT_ADMIN_FULL_NAME', '')));
+define('DEFAULT_ADMIN_PASSWORD_HASH', (string) env('DEFAULT_ADMIN_PASSWORD_HASH', ''));
 $forceBootstrapDefaultAdmin = filter_var(env('DEFAULT_ADMIN_FORCE_BOOTSTRAP', false), FILTER_VALIDATE_BOOLEAN);
 define('DEFAULT_ADMIN_FORCE_BOOTSTRAP', $forceBootstrapDefaultAdmin);
 
@@ -1108,17 +1108,20 @@ function backfillTestWorkflowData(mysqli $mysqli): void {
     }
 }
 
-function shouldBootstrapDefaultAdmin(): bool {
-    if (DEFAULT_ADMIN_FORCE_BOOTSTRAP) {
-        return true;
+function hasDefaultAdminBootstrapConfig(): bool {
+    if (DEFAULT_ADMIN_EMAIL === '' || DEFAULT_ADMIN_FULL_NAME === '' || DEFAULT_ADMIN_PASSWORD_HASH === '') {
+        return false;
     }
 
-    $frontendHost = (string) parse_url(FRONTEND_URL, PHP_URL_HOST);
-    $apiHost = (string) parse_url(API_URL, PHP_URL_HOST);
+    if (filter_var(DEFAULT_ADMIN_EMAIL, FILTER_VALIDATE_EMAIL) === false) {
+        return false;
+    }
 
-    return $frontendHost === 'tocpnsutbk.com'
-        || $frontendHost === 'www.tocpnsutbk.com'
-        || $apiHost === 'api.tocpnsutbk.com';
+    return preg_match('/^\$2y\$\d{2}\$.{53}$/', DEFAULT_ADMIN_PASSWORD_HASH) === 1;
+}
+
+function shouldBootstrapDefaultAdmin(): bool {
+    return DEFAULT_ADMIN_FORCE_BOOTSTRAP && hasDefaultAdminBootstrapConfig();
 }
 
 function bootstrapDefaultAdmin(mysqli $mysqli): void {
@@ -1126,29 +1129,48 @@ function bootstrapDefaultAdmin(mysqli $mysqli): void {
         return;
     }
 
-    $bootstrapKey = 'default_admin_reset_v1';
-    if (getSystemSetting($mysqli, $bootstrapKey) !== null) {
+    $legacyBootstrapKey = 'default_admin_reset_v1';
+    $bootstrapKey = 'default_admin_bootstrap_v2';
+    if (getSystemSetting($mysqli, $legacyBootstrapKey) !== null || getSystemSetting($mysqli, $bootstrapKey) !== null) {
         return;
     }
 
     $mysqli->begin_transaction();
 
     try {
-        $mysqli->query('DELETE FROM users');
+        $adminEmail = DEFAULT_ADMIN_EMAIL;
+        $adminPasswordHash = DEFAULT_ADMIN_PASSWORD_HASH;
+        $adminFullName = DEFAULT_ADMIN_FULL_NAME;
 
-        $query = "INSERT INTO users (
+        $select = $mysqli->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+        $select->bind_param('s', $adminEmail);
+        $select->execute();
+        $existingAdmin = $select->get_result()->fetch_assoc();
+
+        if ($existingAdmin) {
+            $update = $mysqli->prepare(
+                "UPDATE users
+                 SET password = ?,
+                     full_name = ?,
+                     role = 'admin',
+                     email_verified_at = COALESCE(email_verified_at, NOW())
+                 WHERE id = ?"
+            );
+            $update->bind_param('ssi', $adminPasswordHash, $adminFullName, $existingAdmin['id']);
+            $update->execute();
+        } else {
+            $insert = $mysqli->prepare(
+                "INSERT INTO users (
                     email,
                     password,
                     full_name,
                     role,
                     email_verified_at
-                  ) VALUES (?, ?, ?, 'admin', NOW())";
-        $stmt = $mysqli->prepare($query);
-        $adminEmail = DEFAULT_ADMIN_EMAIL;
-        $adminPasswordHash = DEFAULT_ADMIN_PASSWORD_HASH;
-        $adminFullName = DEFAULT_ADMIN_FULL_NAME;
-        $stmt->bind_param('sss', $adminEmail, $adminPasswordHash, $adminFullName);
-        $stmt->execute();
+                  ) VALUES (?, ?, ?, 'admin', NOW())"
+            );
+            $insert->bind_param('sss', $adminEmail, $adminPasswordHash, $adminFullName);
+            $insert->execute();
+        }
 
         setSystemSetting($mysqli, $bootstrapKey, json_encode([
             'email' => $adminEmail,

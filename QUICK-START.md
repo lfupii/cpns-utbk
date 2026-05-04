@@ -62,8 +62,8 @@ http://localhost:5173
 ### Test Login
 
 ```
-Email: test@example.com
-Password: test1234
+Buat akun lewat halaman register
+atau buat admin manual lewat backend/scripts/create_admin.php
 ```
 
 ---

@@ -3143,11 +3143,12 @@ class AdminController {
         $relationKey = $this->getNewsSectionRelationKey($workspace);
         $articleKey = $this->getNewsSectionArticleKey($workspace);
         $articleTable = $workspace === self::WORKSPACE_DRAFT ? 'news_article_drafts' : 'news_articles';
+        $publishedArticleIdSelect = $workspace === self::WORKSPACE_DRAFT ? 'a.article_id' : 'a.id';
 
         $query = "SELECT rsa.id AS relation_id,
                          rsa.article_order,
                          a.id AS article_id,
-                         a.article_id AS published_article_id,
+                         {$publishedArticleIdSelect} AS published_article_id,
                          a.slug,
                          a.title,
                          a.category,

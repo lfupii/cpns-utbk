@@ -61,25 +61,34 @@ function createStoryLinkProps(storySlug, linkTarget) {
   };
 }
 
+function createArchiveLinkProps(linkTarget) {
+  return {
+    to: '/news?view=list',
+    target: linkTarget || undefined,
+    rel: linkTarget === '_blank' ? 'noreferrer' : undefined,
+  };
+}
+
+function renderSectionArchiveLink(linkTarget) {
+  return (
+    <div className="news-section-footer">
+      <Link {...createArchiveLinkProps(linkTarget)} className="news-inline-link news-section-more-link">
+        Lihat berita selengkapnya
+      </Link>
+    </div>
+  );
+}
+
 export default function NewsSectionsPreview({
   feed,
-  activeHeroStoryBySection = {},
-  onHeroStoryChange = null,
   linkTarget = '',
   className = '',
 }) {
   const safeFeed = normalizeNewsFeed(feed);
 
-  const handleHeroStoryChange = (sectionSlug, storySlug) => {
-    if (typeof onHeroStoryChange === 'function') {
-      onHeroStoryChange(sectionSlug, storySlug);
-    }
-  };
-
   const renderHeroSection = (section) => {
-    const activeSlug = activeHeroStoryBySection[section.slug] || section.items[0]?.slug || '';
-    const activeStory = section.items.find((story) => story.slug === activeSlug) || section.items[0];
-    const supportingStories = section.items.filter((story) => story.slug !== activeStory.slug).slice(0, 4);
+    const activeStory = section.items[0];
+    const supportingStories = section.items.slice(1, 4);
 
     return (
       <section key={section.slug} className="news-section">
@@ -89,19 +98,6 @@ export default function NewsSectionsPreview({
             <h2>{section.title}</h2>
             {renderSectionDescription(section)}
           </div>
-        </div>
-
-        <div className="news-topics-bar news-topics-bar-article">
-          {section.items.map((story) => (
-            <button
-              key={story.slug}
-              type="button"
-              className={`news-topic-pill ${activeStory.slug === story.slug ? 'news-topic-pill-active' : ''}`}
-              onClick={() => handleHeroStoryChange(section.slug, story.slug)}
-            >
-              {story.category}
-            </button>
-          ))}
         </div>
 
         <div className="news-section-shell">
@@ -148,6 +144,8 @@ export default function NewsSectionsPreview({
             </div>
           )}
         </div>
+
+        {renderSectionArchiveLink(linkTarget)}
       </section>
     );
   };
@@ -181,12 +179,14 @@ export default function NewsSectionsPreview({
           </Link>
         ))}
       </div>
+
+      {renderSectionArchiveLink(linkTarget)}
     </section>
   );
 
   const renderLeadGridSection = (section) => {
     const leadStory = section.items[0];
-    const sideStories = section.items.slice(1, 5);
+    const sideStories = section.items.slice(1, 4);
 
     return (
       <section key={section.slug} className="news-section">
@@ -238,40 +238,48 @@ export default function NewsSectionsPreview({
             ))}
           </div>
         </div>
+
+        {renderSectionArchiveLink(linkTarget)}
       </section>
     );
   };
 
-  const renderCardsSection = (section) => (
-    <section key={section.slug} className="news-section">
-      <div className="news-block-head news-block-head-spaced">
-        <div>
-          <span className="landing-kicker">Kurasi section</span>
-          <h2>{section.title}</h2>
-          {renderSectionDescription(section)}
-        </div>
-      </div>
+  const renderCardsSection = (section) => {
+    const editorialStories = section.items.slice(0, 5);
 
-      <div className="news-editorial-grid">
-        {section.items.map((story, index) => (
-          <Link
-            key={story.id || story.slug || `${story.title}-${index}`}
-            {...createStoryLinkProps(story.slug, linkTarget)}
-            className="policy-card news-editorial-card news-story-link"
-          >
-            <div className="news-story-cover">
-              <img src={story.image} alt={story.title} className="news-story-cover-image" />
-            </div>
-            <div className="news-card-copy">
-              <span className="news-story-tag">{story.category}</span>
-              <h3>{story.title}</h3>
-              <small>{story.age}</small>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
+    return (
+      <section key={section.slug} className="news-section">
+        <div className="news-block-head news-block-head-spaced">
+          <div>
+            <span className="landing-kicker">Kurasi section</span>
+            <h2>{section.title}</h2>
+            {renderSectionDescription(section)}
+          </div>
+        </div>
+
+        <div className="news-editorial-grid">
+          {editorialStories.map((story, index) => (
+            <Link
+              key={story.id || story.slug || `${story.title}-${index}`}
+              {...createStoryLinkProps(story.slug, linkTarget)}
+              className="policy-card news-editorial-card news-story-link"
+            >
+              <div className="news-story-cover">
+                <img src={story.image} alt={story.title} className="news-story-cover-image" />
+              </div>
+              <div className="news-card-copy">
+                <span className="news-story-tag">{story.category}</span>
+                <h3>{story.title}</h3>
+                <small>{story.age}</small>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {renderSectionArchiveLink(linkTarget)}
+      </section>
+    );
+  };
 
   const renderSection = (section) => {
     if (section.layout_style === 'hero') {

@@ -220,6 +220,46 @@ function getSectionLayoutLabel(layoutStyle) {
   return NEWS_SECTION_LAYOUT_OPTIONS.find((option) => option.value === layoutStyle)?.label || 'Cards';
 }
 
+function reindexSectionCollection(sectionList) {
+  return sectionList.map((section, index) => ({
+    ...section,
+    section_order: index + 1,
+  }));
+}
+
+function reorderSectionCollection(sectionList, draggedSectionId, targetSectionId, placement = 'before') {
+  const normalizedSections = Array.isArray(sectionList) ? [...sectionList] : [];
+  const sourceId = Number(draggedSectionId || 0);
+  const destinationId = Number(targetSectionId || 0);
+  if (sourceId <= 0 || destinationId <= 0 || sourceId === destinationId) {
+    return reindexSectionCollection(normalizedSections);
+  }
+
+  const sourceIndex = normalizedSections.findIndex((section) => Number(section.id) === sourceId);
+  if (sourceIndex === -1) {
+    return reindexSectionCollection(normalizedSections);
+  }
+
+  const [movedSection] = normalizedSections.splice(sourceIndex, 1);
+  const targetIndex = normalizedSections.findIndex((section) => Number(section.id) === destinationId);
+  if (targetIndex === -1) {
+    return reindexSectionCollection(sectionList);
+  }
+
+  const insertIndex = placement === 'after' ? targetIndex + 1 : targetIndex;
+  normalizedSections.splice(insertIndex, 0, movedSection);
+
+  return reindexSectionCollection(normalizedSections);
+}
+
+function isSameSectionSequence(currentSections, nextSections) {
+  if (currentSections.length !== nextSections.length) {
+    return false;
+  }
+
+  return currentSections.every((section, index) => Number(section.id) === Number(nextSections[index]?.id));
+}
+
 export default function AdminNewsPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [articles, setArticles] = useState([]);
@@ -232,12 +272,19 @@ export default function AdminNewsPanel() {
   const [sectionSaving, setSectionSaving] = useState(false);
   const [sectionPublishing, setSectionPublishing] = useState(false);
   const [sectionDeleting, setSectionDeleting] = useState(false);
+  const [sectionOrderSaving, setSectionOrderSaving] = useState(false);
+  const [sectionOrderPublishing, setSectionOrderPublishing] = useState(false);
   const [sectionQuickUpdatingId, setSectionQuickUpdatingId] = useState(0);
+  const [articleQuickPublishingId, setArticleQuickPublishingId] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [selectedSectionId, setSelectedSectionId] = useState(null);
+  const [sectionArticlePickerId, setSectionArticlePickerId] = useState(0);
+  const [draggedSectionId, setDraggedSectionId] = useState(0);
+  const [dragOverSectionId, setDragOverSectionId] = useState(0);
+  const [dragOverSectionPlacement, setDragOverSectionPlacement] = useState('before');
   const [statusFilter, setStatusFilter] = useState('semua');
   const [workspaceCarryArticleId, setWorkspaceCarryArticleId] = useState(0);
   const [workspaceCarrySectionId, setWorkspaceCarrySectionId] = useState(0);
@@ -247,7 +294,6 @@ export default function AdminNewsPanel() {
   const fallbackPublishedPreviewFeed = useMemo(() => normalizeNewsFeed(FALLBACK_NEWS_FEED), []);
   const [publishedPreviewFeed, setPublishedPreviewFeed] = useState(fallbackPublishedPreviewFeed);
   const [publishedPreviewLoading, setPublishedPreviewLoading] = useState(false);
-  const [activePublishedPreviewHeroStoryBySection, setActivePublishedPreviewHeroStoryBySection] = useState({});
   const contentInputRef = useRef(null);
   const selectedArticleIdRef = useRef(null);
   const selectedSectionIdRef = useRef(null);
@@ -267,6 +313,13 @@ export default function AdminNewsPanel() {
   const sectionEditorTab = sectionEditorTabParam === 'settings' ? 'settings' : 'content';
   const formLocked = !isDraftWorkspace || saving || publishing;
   const sectionFormLocked = !isDraftWorkspace || sectionSaving || sectionPublishing;
+  const sectionOrderLocked = !isDraftWorkspace
+    || sectionsLoading
+    || sectionOrderSaving
+    || sectionOrderPublishing
+    || sectionQuickUpdatingId > 0
+    || sectionSaving
+    || sectionPublishing;
 
   const filteredArticles = useMemo(() => (
     statusFilter === 'semua'
@@ -314,6 +367,9 @@ export default function AdminNewsPanel() {
   const selectedSection = useMemo(() => (
     sections.find((section) => Number(section.id) === Number(selectedSectionId)) || null
   ), [sections, selectedSectionId]);
+  const availableSectionArticles = useMemo(() => (
+    articles.filter((article) => !sectionForm.assigned_article_ids.includes(Number(article.id)))
+  ), [articles, sectionForm.assigned_article_ids]);
   const selectedSectionLeadAssignment = selectedSectionAssignments[0] || null;
   const selectedSectionLeadArticle = selectedSectionLeadAssignment
     ? (articlesById.get(Number(selectedSectionLeadAssignment.article_id)) || null)
@@ -376,6 +432,24 @@ export default function AdminNewsPanel() {
   useEffect(() => {
     selectedSectionIdRef.current = selectedSectionId;
   }, [selectedSectionId]);
+
+  const clearSectionDragState = useCallback(() => {
+    setDraggedSectionId(0);
+    setDragOverSectionId(0);
+    setDragOverSectionPlacement('before');
+  }, []);
+
+  const syncSelectedSectionFromCollection = useCallback((nextSections) => {
+    const activeSectionId = Number(selectedSectionIdRef.current || 0);
+    if (activeSectionId <= 0) {
+      return;
+    }
+
+    const matchedSection = nextSections.find((section) => Number(section.id) === activeSectionId);
+    if (matchedSection) {
+      setSectionForm(normalizeSectionForm(matchedSection));
+    }
+  }, []);
 
   const loadArticles = useCallback(async (preferredId = null, preferredSourceArticleId = 0) => {
     setLoading(true);
@@ -462,6 +536,22 @@ export default function AdminNewsPanel() {
       setWorkspaceCarrySectionId(0);
     }
   }, [loadSections, workspaceCarrySectionId]);
+
+  useEffect(() => {
+    clearSectionDragState();
+  }, [clearSectionDragState, newsWorkspace, sectionsLoading]);
+
+  useEffect(() => {
+    if (availableSectionArticles.length === 0) {
+      setSectionArticlePickerId(0);
+      return;
+    }
+
+    const hasCurrentValue = availableSectionArticles.some((article) => Number(article.id) === Number(sectionArticlePickerId));
+    if (!hasCurrentValue) {
+      setSectionArticlePickerId(Number(availableSectionArticles[0].id));
+    }
+  }, [availableSectionArticles, sectionArticlePickerId]);
 
   const loadPublishedPreview = useCallback(async () => {
     setPublishedPreviewLoading(true);
@@ -589,10 +679,16 @@ export default function AdminNewsPanel() {
     setSuccess('');
   }, [updateSearchParamState]);
 
-  const openArticleWorkspace = useCallback((article) => {
+  const openArticleWorkspace = useCallback((article, options = {}) => {
+    const keepSectionContext = Boolean(options.keepSection && selectedSectionIdRef.current);
+
     if (article) {
       setSelectedArticleId(article.id);
       setNewsForm(normalizeNewsForm(article));
+    } else {
+      setSelectedArticleId(null);
+      setTagDraft('');
+      setNewsForm(createEmptyNewsForm());
     }
 
     updateSearchParamState((nextQuery) => {
@@ -602,13 +698,22 @@ export default function AdminNewsPanel() {
       } else {
         nextQuery.delete('articleId');
       }
-      nextQuery.delete('sectionId');
-      nextQuery.delete('sectionView');
+      if (keepSectionContext) {
+        nextQuery.set('sectionId', String(selectedSectionIdRef.current));
+        nextQuery.set('sectionView', options.sectionView === 'edit' ? 'edit' : 'manage');
+      } else {
+        nextQuery.delete('sectionId');
+        nextQuery.delete('sectionView');
+      }
       nextQuery.delete('sectionTab');
     });
     setError('');
     setSuccess('');
   }, [updateSearchParamState]);
+
+  const openNewArticleWorkspace = useCallback((options = {}) => {
+    openArticleWorkspace(null, options);
+  }, [openArticleWorkspace]);
 
   const handleCreateNew = () => {
     if (!isDraftWorkspace) {
@@ -1051,6 +1156,127 @@ export default function AdminNewsPanel() {
     }
   };
 
+  const persistSectionOrder = useCallback(async (nextSections) => {
+    if (!isDraftWorkspace) {
+      return null;
+    }
+
+    const orderedIds = nextSections
+      .map((section) => Number(section.id))
+      .filter((sectionId) => sectionId > 0);
+    if (orderedIds.length === 0) {
+      return null;
+    }
+
+    setSectionOrderSaving(true);
+    setError('');
+
+    try {
+      const response = await apiClient.put('/admin/news-sections/reorder', {
+        workspace: newsWorkspace,
+        ordered_ids: orderedIds,
+      });
+      const savedSections = Array.isArray(response.data?.data)
+        ? response.data.data.map(normalizeSectionForm)
+        : reindexSectionCollection(nextSections);
+
+      setSections(savedSections);
+      syncSelectedSectionFromCollection(savedSections);
+      setSuccess(response.data?.message || 'Urutan section draft berhasil diperbarui.');
+      return savedSections;
+    } catch (saveError) {
+      setError(saveError?.response?.data?.message || 'Gagal memperbarui urutan section draft');
+      await loadSections(selectedSectionIdRef.current || null);
+      return null;
+    } finally {
+      setSectionOrderSaving(false);
+    }
+  }, [isDraftWorkspace, loadSections, newsWorkspace, syncSelectedSectionFromCollection]);
+
+  const handlePublishSectionOrder = async () => {
+    if (!isDraftWorkspace) {
+      return;
+    }
+
+    setSectionOrderPublishing(true);
+    setError('');
+
+    try {
+      const response = await apiClient.post('/admin/news-sections/publish-order', {
+        workspace: newsWorkspace,
+      });
+      setSuccess(response.data?.message || 'Urutan section live berhasil diperbarui.');
+    } catch (publishError) {
+      setError(publishError?.response?.data?.message || 'Gagal mempublish urutan section live');
+    } finally {
+      setSectionOrderPublishing(false);
+    }
+  };
+
+  const getSectionDropPlacement = (event) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const pointerY = Number(event.clientY || 0);
+    return pointerY >= bounds.top + (bounds.height / 2) ? 'after' : 'before';
+  };
+
+  const handleSectionDragStart = (sectionId, event) => {
+    if (sectionOrderLocked) {
+      event.preventDefault();
+      return;
+    }
+
+    const numericId = Number(sectionId || 0);
+    if (numericId <= 0) {
+      event.preventDefault();
+      return;
+    }
+
+    setDraggedSectionId(numericId);
+    setDragOverSectionId(numericId);
+    setDragOverSectionPlacement('before');
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(numericId));
+    }
+  };
+
+  const handleSectionDragOver = (sectionId, event) => {
+    if (sectionOrderLocked || Number(draggedSectionId) <= 0) {
+      return;
+    }
+
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+
+    setDragOverSectionId(Number(sectionId || 0));
+    setDragOverSectionPlacement(getSectionDropPlacement(event));
+  };
+
+  const handleSectionDrop = async (sectionId, event) => {
+    if (sectionOrderLocked || Number(draggedSectionId) <= 0) {
+      clearSectionDragState();
+      return;
+    }
+
+    event.preventDefault();
+    const nextPlacement = getSectionDropPlacement(event);
+    const nextSections = reorderSectionCollection(sections, draggedSectionId, sectionId, nextPlacement);
+    const hasChanged = !isSameSectionSequence(sections, nextSections);
+
+    clearSectionDragState();
+
+    if (!hasChanged) {
+      return;
+    }
+
+    setSections(nextSections);
+    syncSelectedSectionFromCollection(nextSections);
+    await persistSectionOrder(nextSections);
+  };
+
   const toggleSectionAssignment = (articleId) => {
     if (sectionFormLocked) {
       return;
@@ -1100,8 +1326,48 @@ export default function AdminNewsPanel() {
     });
   };
 
-  const scrollToSectionAssignmentPicker = () => {
-    sectionAssignmentPickerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const handleAddArticleToSection = () => {
+    if (sectionFormLocked) {
+      return;
+    }
+
+    const targetArticleId = Number(sectionArticlePickerId || availableSectionArticles[0]?.id || 0);
+    if (targetArticleId <= 0) {
+      return;
+    }
+
+    setSectionForm((currentForm) => ({
+      ...currentForm,
+      assigned_article_ids: [...currentForm.assigned_article_ids, targetArticleId],
+    }));
+    setSuccess('Berita ditambahkan ke daftar section. Klik simpan perubahan untuk menyimpan draft section.');
+  };
+
+  const handleQuickPublishSectionArticle = async (articleId) => {
+    if (!isDraftWorkspace) {
+      return;
+    }
+
+    const draftArticle = articlesById.get(Number(articleId));
+    if (!draftArticle?.id) {
+      return;
+    }
+
+    setArticleQuickPublishingId(Number(articleId));
+    setError('');
+
+    try {
+      const response = await apiClient.post('/admin/news/publish', {
+        id: draftArticle.id,
+      });
+      const refreshedDraft = normalizeNewsForm(response.data?.data?.draft || {});
+      await loadArticles(refreshedDraft.id || draftArticle.id);
+      setSuccess(response.data?.message || 'Draft berita berhasil dipublish.');
+    } catch (publishError) {
+      setError(publishError?.response?.data?.message || 'Gagal mempublish draft berita');
+    } finally {
+      setArticleQuickPublishingId(0);
+    }
   };
 
   const renderArticleSidebarList = () => (
@@ -1171,24 +1437,38 @@ export default function AdminNewsPanel() {
     <div className="admin-news-section-page">
       <section className="admin-news-overview-head">
         <div>
-          <span className="admin-preview-eyebrow">Kelola Halaman Utama</span>
-          <h2>Kelola Halaman Utama</h2>
-          <p className="text-muted">Atur dan kelola setiap section yang tampil di halaman utama website berita.</p>
+          <span className="admin-preview-eyebrow">Alur Section</span>
+          <h2>Daftar Section Beranda</h2>
+          <p className="text-muted">Fokus kerja dimulai dari section. Ubah judul dan deskripsi di menu Ubah, lalu kelola daftar artikelnya di menu Kelola.</p>
         </div>
       </section>
 
-      <section className="admin-news-kpi-grid">
-        {newsOverviewStats.map((stat) => (
-          <div key={stat.key} className="admin-news-kpi-card">
-            <div className={`admin-news-kpi-icon admin-news-kpi-icon-${stat.tone}`}>{stat.icon}</div>
-            <div className="admin-news-kpi-copy">
-              <span>{stat.title}</span>
-              <strong>{stat.value}</strong>
-              <small>{stat.note}</small>
-            </div>
+      {isDraftWorkspace && (
+        <section className="account-card admin-news-section-order-banner">
+          <div className="admin-news-section-order-banner-copy">
+            <strong>Urutan layout pakai drag handle</strong>
+            <p>Tarik ikon titik di kiri kartu untuk pindah posisi section. Urutan draft tersimpan otomatis, lalu klik publish supaya posisi live ikut berubah.</p>
+            <small>
+              {sectionOrderSaving
+                ? 'Menyimpan urutan draft...'
+                : sectionOrderPublishing
+                  ? 'Mempublish urutan ke live...'
+                  : 'Drop kartu di atas atau bawah section tujuan.'}
+            </small>
           </div>
-        ))}
-      </section>
+
+          <div className="admin-news-section-page-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handlePublishSectionOrder}
+              disabled={sectionOrderLocked || sections.length === 0}
+            >
+              {sectionOrderPublishing ? 'Publish Urutan...' : 'Publish Urutan ke Live'}
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="admin-news-section-overview-list">
         {sectionsLoading ? (
@@ -1203,15 +1483,38 @@ export default function AdminNewsPanel() {
         ) : sections.map((section) => {
           const assignments = (section.assignments || []).map((assignment, index) => resolveAssignmentDisplay(assignment, index));
           const leadAssignment = assignments[0] || null;
-          const previewAssignments = assignments.slice(0, 4);
           const updatedAt = section.last_saved_at || section.updated_at || leadAssignment?.updated_at || leadAssignment?.published_at || null;
 
           return (
-            <article key={section.id} className="account-card admin-news-section-row">
-              <div className="admin-news-section-row-handle" aria-hidden="true">
+            <article
+              key={section.id}
+              className={[
+                'account-card',
+                'admin-news-section-row',
+                Number(draggedSectionId) === Number(section.id) ? 'admin-news-section-row-dragging' : '',
+                Number(dragOverSectionId) === Number(section.id) && dragOverSectionPlacement === 'before'
+                  ? 'admin-news-section-row-drop-before'
+                  : '',
+                Number(dragOverSectionId) === Number(section.id) && dragOverSectionPlacement === 'after'
+                  ? 'admin-news-section-row-drop-after'
+                  : '',
+              ].filter(Boolean).join(' ')}
+              onDragOver={isDraftWorkspace ? (event) => handleSectionDragOver(section.id, event) : undefined}
+              onDrop={isDraftWorkspace ? (event) => handleSectionDrop(section.id, event) : undefined}
+            >
+              <button
+                type="button"
+                className="admin-news-section-row-handle"
+                draggable={!sectionOrderLocked}
+                onDragStart={(event) => handleSectionDragStart(section.id, event)}
+                onDragEnd={clearSectionDragState}
+                disabled={sectionOrderLocked}
+                aria-label={`Geser untuk mengubah urutan section ${section.title || 'tanpa judul'}`}
+                title={isDraftWorkspace ? 'Drag untuk ubah urutan section' : 'Urutan hanya bisa diubah di draft'}
+              >
                 <span />
                 <span />
-              </div>
+              </button>
 
               <div className="admin-news-section-row-copy">
                 <div className="admin-news-section-row-title">
@@ -1221,38 +1524,27 @@ export default function AdminNewsPanel() {
                   </span>
                 </div>
                 <p>{section.description || 'Section ini belum memiliki deskripsi.'}</p>
-              </div>
 
-              <div className="admin-news-section-row-preview">
-                {previewAssignments.length > 0 ? (
-                  <div className={`admin-news-section-preview-grid admin-news-section-preview-grid-${Math.min(previewAssignments.length, 4)}`}>
-                    {previewAssignments.map((assignment) => (
-                      <div key={`${section.id}-${assignment.article_id}`} className="admin-news-section-preview-tile">
-                        {assignment.cover_image_url ? (
-                          <img src={assignment.cover_image_url} alt={assignment.title} />
-                        ) : (
-                          <div className="admin-news-section-preview-empty">No Cover</div>
-                        )}
-                        {leadAssignment?.article_id === assignment.article_id ? (
-                          <div className="admin-news-section-preview-caption">
-                            <strong>{assignment.title}</strong>
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
+                <div className="admin-news-section-row-summary">
+                  <div className="admin-news-section-row-stat">
+                    <span>Posisi</span>
+                    <strong>#{section.section_order || 0}</strong>
                   </div>
-                ) : (
-                  <div className="admin-news-section-preview-placeholder">
-                    <strong>Belum ada konten</strong>
-                    <p>Masuk ke Kelola untuk menambahkan berita.</p>
+                  <div className="admin-news-section-row-stat">
+                    <span>Layout</span>
+                    <strong>{getSectionLayoutLabel(section.layout_style)}</strong>
                   </div>
-                )}
+                  <div className="admin-news-section-row-stat">
+                    <span>Jumlah berita</span>
+                    <strong>{assignments.length}</strong>
+                  </div>
+                </div>
               </div>
 
               <div className="admin-news-section-row-meta">
-                <span>{leadAssignment ? 'Berita saat ini' : 'Jumlah berita'}</span>
-                <strong>{leadAssignment ? leadAssignment.title : `${assignments.length} berita`}</strong>
-                <small>Diupdate: {formatDateTime(updatedAt, '-')}</small>
+                <span>{leadAssignment ? 'Highlight saat ini' : 'Status section'}</span>
+                <strong>{leadAssignment ? leadAssignment.title : 'Belum ada berita di section ini'}</strong>
+                <small>Posisi #{section.section_order} • Diupdate: {formatDateTime(updatedAt, '-')}</small>
 
                 <div className="admin-news-section-row-actions">
                   <button type="button" className="btn btn-outline" onClick={() => openSectionWorkspace(section, 'edit')}>
@@ -1292,7 +1584,9 @@ export default function AdminNewsPanel() {
   );
 
   const renderSectionEditWorkspace = () => {
-    if (!selectedSection) {
+    const isCreatingNewSection = !selectedSection && !sectionForm.id && isDraftWorkspace;
+
+    if (!selectedSection && !isCreatingNewSection) {
       return (
         <div className="account-card admin-news-section-overview-empty">
           <h3>Section belum dipilih</h3>
@@ -1304,258 +1598,59 @@ export default function AdminNewsPanel() {
       );
     }
 
-    const leadAssignment = selectedSectionLeadAssignment ? resolveAssignmentDisplay(selectedSectionLeadAssignment, 0) : null;
-    const leadLink = leadAssignment?.slug ? `/news/${leadAssignment.slug}` : `/news#${sectionForm.slug || selectedSection.slug}`;
-
     return (
       <form className="account-card admin-news-section-editor-page" onSubmit={handleSectionSubmit}>
         <div className="admin-news-section-page-head">
           <div>
             <div className="admin-news-section-page-title">
-              <h2>Edit Section: {sectionForm.title || selectedSection.title}</h2>
+              <h2>{isCreatingNewSection ? 'Tambah Section Baru' : `Edit Section: ${sectionForm.title || selectedSection?.title}`}</h2>
               <span className={`admin-news-chip ${sectionForm.is_active ? 'admin-news-chip-active' : 'admin-news-chip-muted'}`}>
                 {sectionForm.is_active ? 'Aktif' : 'Nonaktif'}
               </span>
             </div>
-            <p className="text-muted">Atur konten yang tampil pada bagian section ini di halaman utama website.</p>
+            <p className="text-muted">Di halaman ini section hanya mengatur nama dan deskripsi. Daftar artikel diatur terpisah lewat menu Kelola.</p>
           </div>
 
           <div className="admin-news-section-page-actions">
             <button type="button" className="btn btn-outline" onClick={openSectionOverview}>
               Kembali
             </button>
-            <button type="button" className="btn btn-outline" onClick={() => openSectionWorkspace(selectedSection, 'manage')}>
-              Kelola Konten
-            </button>
+            {selectedSection ? (
+              <button type="button" className="btn btn-outline" onClick={() => openSectionWorkspace(selectedSection, 'manage')}>
+                Kelola Konten
+              </button>
+            ) : null}
           </div>
         </div>
 
-        <div className="admin-news-mode-switch admin-news-mode-switch-compact" role="tablist" aria-label="Tab edit section">
-          <button
-            type="button"
-            className={`admin-news-mode-button ${sectionEditorTab === 'content' ? 'admin-news-mode-button-active' : ''}`}
-            onClick={() => handleSectionEditorTabChange('content')}
-          >
-            Konten
-          </button>
-          <button
-            type="button"
-            className={`admin-news-mode-button ${sectionEditorTab === 'settings' ? 'admin-news-mode-button-active' : ''}`}
-            onClick={() => handleSectionEditorTabChange('settings')}
-          >
-            Pengaturan Section
-          </button>
+        <div className="admin-news-section-edit-simple">
+          <label className="admin-news-field">
+            <span>Judul Section</span>
+            <input
+              type="text"
+              value={sectionForm.title}
+              onChange={(event) => handleSectionFormChange('title', event.target.value)}
+              disabled={sectionFormLocked}
+              required
+            />
+          </label>
+
+          <label className="admin-news-field">
+            <span>Deskripsi Section</span>
+            <textarea
+              rows={5}
+              value={sectionForm.description}
+              onChange={(event) => handleSectionFormChange('description', event.target.value)}
+              disabled={sectionFormLocked}
+              placeholder="Teks pengantar singkat untuk section ini."
+            />
+          </label>
+
+          <div className="admin-news-section-edit-note">
+            <strong>Info section</strong>
+            <p>Konten artikel, urutan berita, dan aksi publish artikel dikelola di menu Kelola. Halaman ini hanya untuk nama dan deskripsi section.</p>
+          </div>
         </div>
-
-        {sectionEditorTab === 'content' ? (
-          <div className="admin-news-section-edit-grid">
-            <div className="admin-news-section-edit-column">
-              <label className="admin-news-field">
-                <span>Judul Section</span>
-                <input
-                  type="text"
-                  value={sectionForm.title}
-                  onChange={(event) => handleSectionFormChange('title', event.target.value)}
-                  disabled={sectionFormLocked}
-                  required
-                />
-              </label>
-
-              <label className="admin-news-field">
-                <span>Deskripsi</span>
-                <textarea
-                  rows={5}
-                  value={sectionForm.description}
-                  onChange={(event) => handleSectionFormChange('description', event.target.value)}
-                  disabled={sectionFormLocked}
-                  placeholder="Teks pengantar singkat untuk section ini."
-                />
-              </label>
-
-              <label className="admin-news-field">
-                <span>Tautan (Link)</span>
-                <input type="text" value={leadLink} readOnly disabled />
-                <small>Kosongkan jika tidak ingin menambahkan tautan terpisah dari artikel.</small>
-              </label>
-
-              {leadAssignment ? (
-                <>
-                  <label className="admin-news-field">
-                    <span>Label / Kategori</span>
-                    <input type="text" value={leadAssignment.category} readOnly disabled />
-                  </label>
-
-                  <label className="admin-news-field">
-                    <span>Penulis</span>
-                    <input type="text" value={leadAssignment.author_name} readOnly disabled />
-                  </label>
-
-                  <div className="admin-news-inline-grid">
-                    <label className="admin-news-field">
-                      <span>Tanggal Tayang</span>
-                      <input type="text" value={formatDateTime(leadAssignment.published_at || leadAssignment.updated_at, '-')} readOnly disabled />
-                    </label>
-
-                    <label className="admin-news-field">
-                      <span>Status Artikel Utama</span>
-                      <input type="text" value={leadAssignment.status === 'published' ? 'Terbit' : 'Draft'} readOnly disabled />
-                    </label>
-                  </div>
-                </>
-              ) : (
-                <div className="admin-news-section-empty">
-                  <strong>Belum ada artikel utama.</strong>
-                  <p>Masuk ke menu Kelola untuk menambahkan berita pertama ke section ini.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="admin-news-section-edit-column">
-              <div className="admin-news-section-media-card">
-                <div className="admin-news-settings-head">
-                  <h3>Gambar Utama</h3>
-                  {leadAssignment ? (
-                    <div className="admin-news-section-page-actions">
-                      <button type="button" className="btn btn-outline" onClick={() => openSectionWorkspace(selectedSection, 'manage')}>
-                        Ganti
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        onClick={() => {
-                          const linkedArticle = articlesById.get(Number(leadAssignment.article_id));
-                          if (linkedArticle) {
-                            openArticleWorkspace(linkedArticle);
-                          }
-                        }}
-                      >
-                        Edit Artikel
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="admin-news-section-lead-cover">
-                  {leadAssignment?.cover_image_url ? (
-                    <img src={leadAssignment.cover_image_url} alt={leadAssignment.title} />
-                  ) : (
-                    <div className="admin-news-section-preview-placeholder">
-                      <strong>Belum ada gambar utama</strong>
-                      <p>Tambahkan artikel ke section ini untuk menampilkan spotlight image.</p>
-                    </div>
-                  )}
-                </div>
-
-                {leadAssignment ? (
-                  <>
-                    <div className="admin-news-section-lead-meta">
-                      <span className="news-story-tag">{leadAssignment.category}</span>
-                      <strong>{leadAssignment.title}</strong>
-                      <p>{leadAssignment.excerpt || 'Ringkasan artikel utama akan muncul di sini setelah berita dipilih.'}</p>
-                    </div>
-
-                    <div className="admin-news-section-page-actions">
-                      <Link to={leadLink} target="_blank" rel="noreferrer" className="btn btn-primary">
-                        Buka Artikel
-                      </Link>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="admin-news-section-settings-grid">
-            <label className="admin-news-field">
-              <span>Slug</span>
-              <input
-                type="text"
-                value={sectionForm.slug}
-                onChange={(event) => handleSectionFormChange('slug', event.target.value)}
-                disabled={sectionFormLocked}
-                placeholder="slug-section-otomatis"
-              />
-            </label>
-
-            <label className="admin-news-field">
-              <span>Layout</span>
-              <select
-                value={sectionForm.layout_style}
-                onChange={(event) => handleSectionFormChange('layout_style', event.target.value)}
-                disabled={sectionFormLocked}
-              >
-                {NEWS_SECTION_LAYOUT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-
-            <div className="admin-news-inline-grid">
-              <label className="admin-news-field">
-                <span>Jumlah artikel tampil</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="24"
-                  value={sectionForm.article_count}
-                  onChange={(event) => handleSectionFormChange('article_count', event.target.value)}
-                  disabled={sectionFormLocked}
-                />
-              </label>
-
-              <label className="admin-news-field">
-                <span>Urutan section</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={sectionForm.section_order}
-                  onChange={(event) => handleSectionFormChange('section_order', event.target.value)}
-                  disabled={sectionFormLocked}
-                />
-              </label>
-            </div>
-
-            <label className="admin-news-toggle-row">
-              <span>Section aktif di publik</span>
-              <button
-                type="button"
-                className={`theme-toggle admin-news-toggle ${sectionForm.is_active ? 'theme-toggle-on' : ''}`}
-                onClick={() => handleSectionFormChange('is_active', !sectionForm.is_active)}
-                disabled={sectionFormLocked}
-                aria-pressed={sectionForm.is_active}
-              >
-                <span className="theme-toggle-switch">
-                  <span className="theme-toggle-thumb" />
-                </span>
-              </button>
-            </label>
-
-            <div className="admin-news-section-stats">
-              <div className="admin-news-stat-card">
-                <strong>{selectedSectionAssignments.length}</strong>
-                <span>Total berita di section</span>
-              </div>
-              <div className="admin-news-stat-card">
-                <strong>{publishedReadyAssignmentsCount}</strong>
-                <span>Siap tampil di workspace live</span>
-              </div>
-            </div>
-
-            <div className="admin-news-meta-strip admin-news-meta-strip-stack">
-              <small>Dibuat: {formatDateTime(sectionForm.created_at, '-')}</small>
-              <small>Update: {formatDateTime(sectionForm.updated_at, '-')}</small>
-              <small>Simpan Draft: {formatDateTime(sectionForm.last_saved_at, '-')}</small>
-              <small>Publish Terakhir: {formatDateTime(sectionForm.last_published_at, '-')}</small>
-              {sectionForm.section_id ? <small>ID Live: #{sectionForm.section_id}</small> : null}
-            </div>
-
-            {sectionForm.id && (
-              <button type="button" className="btn btn-danger admin-news-trash-button" onClick={handleDeleteSection} disabled={sectionDeleting}>
-                {sectionDeleting ? 'Memindahkan...' : 'Pindahkan ke Sampah'}
-              </button>
-            )}
-          </div>
-        )}
 
         <div className="admin-news-form-actions admin-news-form-actions-bottom">
           {isDraftWorkspace ? (
@@ -1616,21 +1711,54 @@ export default function AdminNewsPanel() {
           </div>
         </div>
 
+        {isDraftWorkspace && (
+          <section className="admin-news-section-manage-toolbar">
+            <label className="admin-news-field">
+              <span>Tambahkan berita ke section ini</span>
+              <select
+                value={sectionArticlePickerId}
+                onChange={(event) => setSectionArticlePickerId(Number(event.target.value))}
+                disabled={loading || sectionFormLocked || availableSectionArticles.length === 0}
+              >
+                {loading ? (
+                  <option value="0">Memuat daftar berita...</option>
+                ) : availableSectionArticles.length === 0 ? (
+                  <option value="0">Semua berita sudah masuk ke section</option>
+                ) : availableSectionArticles.map((article) => (
+                  <option key={article.id} value={article.id}>
+                    {article.title || `Berita #${article.id}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="admin-news-section-manage-toolbar-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleAddArticleToSection}
+                disabled={sectionFormLocked || availableSectionArticles.length === 0}
+              >
+                Tambahkan
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => openNewArticleWorkspace({ keepSection: true, sectionView: 'manage' })}
+              >
+                Buat Berita Baru
+              </button>
+              <button type="button" className="btn btn-outline" onClick={persistSectionDraft} disabled={sectionSaving}>
+                {sectionSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
+              </button>
+            </div>
+          </section>
+        )}
+
         <div className="admin-news-section-table-head">
           <div>
             <h3>Daftar Berita ({selectedSectionAssignments.length} dari {sectionForm.article_count})</h3>
-            <p>Berita akan ditampilkan di halaman utama sesuai urutan.</p>
-          </div>
-
-          <div className="admin-news-section-page-actions">
-            <button type="button" className="btn btn-primary" onClick={scrollToSectionAssignmentPicker}>
-              Tambah Berita
-            </button>
-            {isDraftWorkspace && (
-              <button type="button" className="btn btn-outline" onClick={persistSectionDraft} disabled={sectionSaving}>
-                {sectionSaving ? 'Menyimpan...' : 'Urutkan & Simpan'}
-              </button>
-            )}
+            <p>Urutan 1 akan tampil paling dulu di section publik. Jika status artikel masih draft, publish bisa langsung dari daftar ini.</p>
           </div>
         </div>
 
@@ -1652,13 +1780,14 @@ export default function AdminNewsPanel() {
                   <td colSpan="6">
                     <div className="admin-news-section-overview-empty admin-news-section-overview-empty-inline">
                       <h3>Belum ada berita di section ini</h3>
-                      <p>Tambahkan berita dari katalog di bawah.</p>
+                      <p>Tambahkan dari dropdown ringkas di atas, atau buat berita baru dari section ini.</p>
                     </div>
                   </td>
                 </tr>
               ) : selectedSectionAssignments.map((assignment, index) => {
                 const displayAssignment = resolveAssignmentDisplay(assignment, index);
                 const linkedArticle = articlesById.get(Number(displayAssignment.article_id));
+                const isQuickPublishing = Number(articleQuickPublishingId) === Number(displayAssignment.article_id);
 
                 return (
                   <tr key={`${displayAssignment.article_id}-${index}`}>
@@ -1704,12 +1833,22 @@ export default function AdminNewsPanel() {
                           className="btn btn-outline"
                           onClick={() => {
                             if (linkedArticle) {
-                              openArticleWorkspace(linkedArticle);
+                              openArticleWorkspace(linkedArticle, { keepSection: true, sectionView: 'manage' });
                             }
                           }}
                         >
                           Edit
                         </button>
+                        {isDraftWorkspace && displayAssignment.status === 'draft' ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => handleQuickPublishSectionArticle(displayAssignment.article_id)}
+                            disabled={isQuickPublishing}
+                          >
+                            {isQuickPublishing ? 'Publishing...' : 'Publish'}
+                          </button>
+                        ) : null}
                         <button type="button" className="btn btn-outline" onClick={() => toggleSectionAssignment(displayAssignment.article_id)} disabled={!isDraftWorkspace}>
                           Lepas
                         </button>
@@ -1723,62 +1862,6 @@ export default function AdminNewsPanel() {
         </div>
 
         <small className="text-muted">Menampilkan {selectedSectionAssignments.length} dari {sectionForm.article_count} berita.</small>
-
-        <section ref={sectionAssignmentPickerRef} className="admin-news-section-builder">
-          <div className="admin-news-section-builder-head">
-            <div>
-              <span className="admin-preview-eyebrow">Tambah berita</span>
-              <h3>Pilih Berita untuk Section</h3>
-            </div>
-            <small>{articles.length} berita tersedia</small>
-          </div>
-
-          <div className="admin-news-assignment-grid">
-            {loading ? (
-              <p className="text-muted">Memuat artikel untuk assignment...</p>
-            ) : articles.length === 0 ? (
-              <div className="admin-news-section-empty">
-                <strong>Belum ada berita.</strong>
-                <p>Buat draft berita dulu, lalu pasang ke section yang diinginkan.</p>
-              </div>
-            ) : articles.map((article) => {
-              const isSelected = sectionForm.assigned_article_ids.includes(Number(article.id));
-              const isLiveLinked = isDraftWorkspace ? Number(article.article_id || 0) > 0 : true;
-
-              return (
-                <button
-                  key={article.id}
-                  type="button"
-                  className={`admin-news-assign-card ${isSelected ? 'admin-news-assign-card-active' : ''}`}
-                  onClick={() => toggleSectionAssignment(article.id)}
-                  disabled={sectionFormLocked}
-                >
-                  {article.cover_image_url ? (
-                    <div className="admin-news-assign-thumb">
-                      <img src={article.cover_image_url} alt={article.title} />
-                    </div>
-                  ) : (
-                    <div className="admin-news-assign-thumb admin-news-assign-thumb-empty">No Cover</div>
-                  )}
-
-                  <div className="admin-news-assign-copy">
-                    <div className="admin-news-assign-meta">
-                      <span className={`admin-inline-status admin-inline-status-${article.status}`}>
-                        {article.status === 'published' ? 'Terbit' : 'Draft'}
-                      </span>
-                      {isSelected ? <strong>Terpasang</strong> : <strong>Pilih</strong>}
-                    </div>
-                    <h4>{article.title || 'Berita tanpa judul'}</h4>
-                    <p>{article.category} • {article.author_name}</p>
-                    {isDraftWorkspace && !isLiveLinked ? (
-                      <small className="text-muted">Belum tersambung ke artikel live.</small>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
 
         {isDraftWorkspace && (
           <div className="admin-news-form-actions admin-news-form-actions-bottom">
@@ -1812,28 +1895,9 @@ export default function AdminNewsPanel() {
   return (
     <AccountShell
       shellClassName="account-shell-learning admin-news-shell"
-      title="Workspace Berita"
-      subtitle="Kelola artikel dan master section berita dengan alur draft dan live yang terpisah."
-      navContent={(
-        <div className="admin-workspace-topnav" role="tablist" aria-label="Navigasi workspace berita">
-          <button
-            type="button"
-            className={`admin-workspace-topnav-link ${newsWorkspace === 'published' ? 'admin-workspace-topnav-link-active' : ''}`}
-            onClick={() => handleWorkspaceChange('published')}
-            aria-pressed={newsWorkspace === 'published'}
-          >
-            Published
-          </button>
-          <button
-            type="button"
-            className={`admin-workspace-topnav-link ${newsWorkspace === 'draft' ? 'admin-workspace-topnav-link-active' : ''}`}
-            onClick={() => handleWorkspaceChange('draft')}
-            aria-pressed={newsWorkspace === 'draft'}
-          >
-            Draft
-          </button>
-        </div>
-      )}
+      title="Kelola Section Berita"
+      subtitle="Alur admin disederhanakan: mulai dari section, lalu kelola artikel di dalam section tersebut."
+      navContent={null}
     >
       {(error || success) && (
         <div className="account-card admin-message-card">
@@ -1857,29 +1921,16 @@ export default function AdminNewsPanel() {
           </div>
 
           <div className="admin-news-workspace-actions">
-            <Link to="/admin" className="btn btn-outline">
-              Pilih Modul
-            </Link>
-            {!isDraftWorkspace && (
+            {isDraftWorkspace ? (
+              <button type="button" className="btn btn-outline" onClick={() => handleWorkspaceChange('published')}>
+                Lihat Published
+              </button>
+            ) : (
               <button type="button" className="btn btn-primary" onClick={() => handleWorkspaceChange('draft')}>
                 Buka Draft
               </button>
             )}
           </div>
-        </div>
-
-        <div className="admin-news-mode-switch" role="tablist" aria-label="Mode workspace berita">
-          {NEWS_PANEL_MODES.map((mode) => (
-            <button
-              key={mode.value}
-              type="button"
-              className={`admin-news-mode-button ${newsPanelMode === mode.value ? 'admin-news-mode-button-active' : ''}`}
-              onClick={() => handlePanelModeChange(mode.value)}
-              aria-pressed={newsPanelMode === mode.value}
-            >
-              {mode.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -1909,44 +1960,41 @@ export default function AdminNewsPanel() {
               feed={publishedPreviewFeed}
               className="admin-news-live-preview-shell"
               linkTarget="_blank"
-              activeHeroStoryBySection={activePublishedPreviewHeroStoryBySection}
-              onHeroStoryChange={(sectionSlug, storySlug) => {
-                setActivePublishedPreviewHeroStoryBySection((current) => ({ ...current, [sectionSlug]: storySlug }));
-              }}
             />
           )}
         </section>
       )}
 
       {isSectionPanel ? renderSectionWorkspace() : (
-        <div className="admin-news-layout admin-news-layout-studio">
-          <aside className="account-card admin-news-sidebar">
-            <div className="admin-news-sidebar-head">
-              <div>
-                <span className="admin-preview-eyebrow">Daftar</span>
-                <h2>{isDraftWorkspace ? 'Draft Berita' : 'Berita Live'}</h2>
-              </div>
-              {isDraftWorkspace ? (
-                <button type="button" className="btn btn-primary" onClick={handleCreateNew}>
-                  Tambah Berita
-                </button>
-              ) : null}
-            </div>
-
-            {renderArticleSidebarList()}
-          </aside>
-
+        <div className="admin-news-layout admin-news-layout-editor">
           <form className="account-card admin-news-editor-card" onSubmit={handleSubmit}>
             <div className="admin-news-editor-head">
               <div>
                 <span className="admin-preview-eyebrow">{newsForm.id ? 'Edit berita' : 'Tambah berita'}</span>
                 <h2>{newsForm.title || (isDraftWorkspace ? 'Susun draft berita baru' : 'Preview berita live')}</h2>
               </div>
-              {!isDraftWorkspace && (
-                <button type="button" className="btn btn-outline" onClick={() => handleWorkspaceChange('draft')}>
-                  Edit via Draft
-                </button>
-              )}
+              <div className="admin-news-section-page-actions">
+                {sectionQueryId > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => {
+                      if (selectedSection) {
+                        openSectionWorkspace(selectedSection, sectionViewParam === 'edit' ? 'edit' : 'manage');
+                      } else {
+                        openSectionOverview();
+                      }
+                    }}
+                  >
+                    Kembali ke Section
+                  </button>
+                )}
+                {!isDraftWorkspace && (
+                  <button type="button" className="btn btn-outline" onClick={() => handleWorkspaceChange('draft')}>
+                    Edit via Draft
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="admin-news-editor-grid">
@@ -2056,17 +2104,9 @@ export default function AdminNewsPanel() {
 
             <div className="admin-news-form-actions admin-news-form-actions-bottom">
               {isDraftWorkspace ? (
-                <>
-                  <button type="button" className="btn btn-outline" onClick={handleCreateNew}>
-                    Tambah Berita Baru
-                  </button>
-                  <button type="submit" className="btn btn-outline" disabled={saving || publishing}>
-                    {saving ? 'Menyimpan...' : (newsForm.id ? 'Simpan Edit Draft' : 'Simpan Draft')}
-                  </button>
-                  <button type="button" className="btn btn-primary" onClick={handlePublishDraft} disabled={saving || publishing}>
-                    {publishing ? 'Publish Draft...' : 'Publish Draft'}
-                  </button>
-                </>
+                <button type="submit" className="btn btn-primary" disabled={saving || publishing}>
+                  {saving ? 'Menyimpan...' : (newsForm.id ? 'Simpan Edit Draft' : 'Simpan Draft')}
+                </button>
               ) : (
                 <button type="button" className="btn btn-primary" onClick={() => handleWorkspaceChange('draft')}>
                   Pindah ke Draft untuk Edit
@@ -2081,17 +2121,10 @@ export default function AdminNewsPanel() {
                 <h3>Status &amp; Publikasi</h3>
               </div>
 
-              <label className="admin-news-field">
-                <span>Status</span>
-                <select
-                  value={newsForm.status}
-                  onChange={(event) => handleFormChange('status', event.target.value)}
-                  disabled={formLocked}
-                >
-                  <option value="draft">Draft</option>
-                  <option value="published">Terbit</option>
-                </select>
-              </label>
+              <div className="admin-news-section-edit-note">
+                <strong>{isDraftWorkspace ? 'Status otomatis: Draft' : 'Status live: Terbit'}</strong>
+                <p>{isDraftWorkspace ? 'Publish artikel dilakukan dari daftar artikel di dalam menu Kelola section.' : 'Versi ini adalah artikel yang sudah tayang di publik.'}</p>
+              </div>
 
               <label className="admin-news-field">
                 <span>Visibilitas</span>
@@ -2147,12 +2180,6 @@ export default function AdminNewsPanel() {
                   disabled={formLocked}
                 />
               </label>
-
-              {newsForm.id && (
-                <button type="button" className="btn btn-danger admin-news-trash-button" onClick={handleDelete} disabled={deleting}>
-                  {deleting ? 'Memindahkan...' : 'Pindahkan ke Sampah'}
-                </button>
-              )}
             </section>
 
             <section className="account-card admin-news-settings-card">

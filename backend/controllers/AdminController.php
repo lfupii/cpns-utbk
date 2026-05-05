@@ -3289,6 +3289,44 @@ class AdminController {
         }
     }
 
+    private function syncPublishedNewsSectionOrderFromDrafts(): int {
+        $this->ensureAllNewsSectionDraftsExist();
+
+        $result = $this->mysqli->query(
+            'SELECT id, section_id
+             FROM news_section_drafts
+             ORDER BY section_order ASC, id ASC'
+        );
+        if (!$result) {
+            throw new RuntimeException('Gagal memuat urutan section draft');
+        }
+
+        $updateStmt = $this->mysqli->prepare('UPDATE news_sections SET section_order = ? WHERE id = ?');
+        if (!$updateStmt) {
+            throw new RuntimeException('Gagal menyiapkan sinkron urutan section live');
+        }
+
+        $nextOrder = 1;
+        $updatedCount = 0;
+
+        while ($row = $result->fetch_assoc()) {
+            $publishedSectionId = (int) ($row['section_id'] ?? 0);
+            if ($publishedSectionId <= 0) {
+                continue;
+            }
+
+            $updateStmt->bind_param('ii', $nextOrder, $publishedSectionId);
+            if (!$updateStmt->execute()) {
+                throw new RuntimeException($updateStmt->error ?: 'Gagal menyimpan urutan section live');
+            }
+
+            $nextOrder += 1;
+            $updatedCount += 1;
+        }
+
+        return $updatedCount;
+    }
+
     public function getNewsSections() {
         verifyAdmin();
 
@@ -3355,6 +3393,103 @@ class AdminController {
         $section = $this->getNewsSectionById($draftSectionId, self::WORKSPACE_DRAFT);
         $section['assignments'] = $this->loadNewsSectionAssignments($draftSectionId, self::WORKSPACE_DRAFT);
         sendResponse('success', 'Section berita draft berhasil dibuat', $section, 201);
+    }
+
+    public function reorderNewsSections() {
+        verifyAdmin();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            sendResponse('error', 'Body JSON tidak valid', null, 400);
+        }
+
+        $workspace = $this->getRequestWorkspace($data);
+        if ($workspace !== self::WORKSPACE_DRAFT) {
+            sendResponse('error', 'Urutan section hanya bisa diubah dari Draft workspace.', null, 422);
+        }
+
+        $orderedIds = is_array($data['ordered_ids'] ?? null) ? $data['ordered_ids'] : [];
+        if ($orderedIds === []) {
+            sendResponse('error', 'Urutan section draft wajib dikirim', null, 422);
+        }
+
+        $this->ensureAllNewsSectionDraftsExist();
+
+        $result = $this->mysqli->query('SELECT id FROM news_section_drafts ORDER BY section_order ASC, id ASC');
+        if (!$result) {
+            sendResponse('error', 'Gagal memuat section draft untuk diurutkan', null, 500);
+        }
+
+        $existingIds = [];
+        while ($row = $result->fetch_assoc()) {
+            $sectionId = (int) ($row['id'] ?? 0);
+            if ($sectionId > 0) {
+                $existingIds[] = $sectionId;
+            }
+        }
+
+        if ($existingIds === []) {
+            sendResponse('success', 'Belum ada section draft untuk diurutkan', []);
+        }
+
+        $existingLookup = array_fill_keys($existingIds, true);
+        $normalizedOrderedIds = [];
+        foreach ($orderedIds as $sectionId) {
+            $numericId = (int) $sectionId;
+            if ($numericId > 0 && isset($existingLookup[$numericId]) && !in_array($numericId, $normalizedOrderedIds, true)) {
+                $normalizedOrderedIds[] = $numericId;
+            }
+        }
+
+        foreach ($existingIds as $sectionId) {
+            if (!in_array($sectionId, $normalizedOrderedIds, true)) {
+                $normalizedOrderedIds[] = $sectionId;
+            }
+        }
+
+        $transactionStarted = false;
+        try {
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
+
+            $updateStmt = $this->mysqli->prepare(
+                'UPDATE news_section_drafts
+                 SET section_order = ?
+                 WHERE id = ?'
+            );
+            if (!$updateStmt) {
+                throw new RuntimeException('Gagal menyiapkan penyimpanan urutan section draft');
+            }
+
+            foreach ($normalizedOrderedIds as $index => $sectionId) {
+                $sectionOrder = $index + 1;
+                $updateStmt->bind_param('ii', $sectionOrder, $sectionId);
+                if (!$updateStmt->execute()) {
+                    throw new RuntimeException($updateStmt->error ?: 'Gagal menyimpan urutan section draft');
+                }
+            }
+
+            $this->mysqli->commit();
+        } catch (Throwable $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', 'Gagal memperbarui urutan section draft', ['details' => $error->getMessage()], 500);
+        }
+
+        $query = 'SELECT * FROM news_section_drafts ORDER BY section_order ASC, id ASC';
+        $orderedResult = $this->mysqli->query($query);
+        if (!$orderedResult) {
+            sendResponse('error', 'Urutan berhasil disimpan, tapi gagal memuat ulang section draft', null, 500);
+        }
+
+        $sections = [];
+        while ($row = $orderedResult->fetch_assoc()) {
+            $section = $this->normalizeNewsSection($row, self::WORKSPACE_DRAFT);
+            $section['assignments'] = $this->loadNewsSectionAssignments((int) $section['id'], self::WORKSPACE_DRAFT);
+            $sections[] = $section;
+        }
+
+        sendResponse('success', 'Urutan section draft berhasil diperbarui', $sections);
     }
 
     public function updateNewsSection() {
@@ -3504,6 +3639,8 @@ class AdminController {
             $syncDraft->bind_param('isi', $linkedSectionId, $publishedPayload['slug'], $draftSectionId);
             $syncDraft->execute();
 
+            $this->syncPublishedNewsSectionOrderFromDrafts();
+
             $this->mysqli->commit();
         } catch (Throwable $error) {
             if ($transactionStarted) {
@@ -3520,6 +3657,27 @@ class AdminController {
         sendResponse('success', 'Draft section berita berhasil dipublish', [
             'draft' => $draftSection,
             'published' => $publishedSection,
+        ]);
+    }
+
+    public function publishNewsSectionOrder() {
+        verifyAdmin();
+
+        $transactionStarted = false;
+        try {
+            $this->mysqli->begin_transaction();
+            $transactionStarted = true;
+            $syncedCount = $this->syncPublishedNewsSectionOrderFromDrafts();
+            $this->mysqli->commit();
+        } catch (Throwable $error) {
+            if ($transactionStarted) {
+                $this->mysqli->rollback();
+            }
+            sendResponse('error', 'Gagal mempublish urutan section berita', ['details' => $error->getMessage()], 500);
+        }
+
+        sendResponse('success', 'Urutan section berita live berhasil diperbarui', [
+            'published_section_count' => $syncedCount ?? 0,
         ]);
     }
 
@@ -3717,8 +3875,12 @@ if (strpos($requestPath, '/api/admin/package-types') !== false && $requestMethod
     $controller->updateLearningMaterial();
 } elseif (strpos($requestPath, '/api/admin/learning-section-questions') !== false && $requestMethod === 'PUT') {
     $controller->updateLearningSectionQuestions();
+} elseif (strpos($requestPath, '/api/admin/news-sections/publish-order') !== false && $requestMethod === 'POST') {
+    $controller->publishNewsSectionOrder();
 } elseif (strpos($requestPath, '/api/admin/news-sections/publish') !== false && $requestMethod === 'POST') {
     $controller->publishNewsSectionDraft();
+} elseif (strpos($requestPath, '/api/admin/news-sections/reorder') !== false && $requestMethod === 'PUT') {
+    $controller->reorderNewsSections();
 } elseif (strpos($requestPath, '/api/admin/news-sections') !== false && $requestMethod === 'GET') {
     $controller->getNewsSections();
 } elseif (strpos($requestPath, '/api/admin/news-sections') !== false && $requestMethod === 'POST') {

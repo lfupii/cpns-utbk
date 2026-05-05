@@ -435,6 +435,19 @@ class NewsController {
         ]);
     }
 
+    public function getArticles(): void {
+        $articles = $this->fetchPublishedArticles();
+        if ($articles === []) {
+            sendResponse('success', 'Daftar berita publik kosong', [
+                'articles' => [],
+            ]);
+        }
+
+        sendResponse('success', 'Daftar berita publik berhasil diambil', [
+            'articles' => array_map(fn (array $article): array => $this->buildStoryCard($article), $articles),
+        ]);
+    }
+
     public function getArticleDetail(): void {
         $slug = trim((string) ($_GET['slug'] ?? ''));
         if ($slug === '') {
@@ -562,6 +575,8 @@ $controller = new NewsController($mysqli);
 
 if (strpos($requestPath, '/api/news/feed') !== false && $requestMethod === 'GET') {
     $controller->getFeed();
+} elseif (strpos($requestPath, '/api/news/articles') !== false && $requestMethod === 'GET') {
+    $controller->getArticles();
 } elseif (strpos($requestPath, '/api/news/article') !== false && $requestMethod === 'GET') {
     $controller->getArticleDetail();
 } elseif (strpos($requestPath, '/api/news/comment') !== false && $requestMethod === 'POST') {

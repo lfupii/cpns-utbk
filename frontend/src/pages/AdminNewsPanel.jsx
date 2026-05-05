@@ -7,6 +7,12 @@ import { FALLBACK_NEWS_FEED } from '../data/newsFallback';
 import { formatDateTime } from '../utils/date';
 
 const NEWS_CATEGORY_OPTIONS = [
+  'CPNS',
+  'UTBK',
+  'Formasi',
+  'Regulasi',
+  'Kampus',
+  'Negara',
   'Nasional',
   'Ekonomi',
   'Politik',

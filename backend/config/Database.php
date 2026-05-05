@@ -106,6 +106,7 @@ $mysqli->set_charset('utf8mb4');
 
 require_once __DIR__ . '/../utils/TestWorkflow.php';
 require_once __DIR__ . '/../utils/LearningContent.php';
+require_once __DIR__ . '/NewsSeedData.php';
 
 function databaseTableExists(mysqli $mysqli, string $tableName): bool {
     $query = 'SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1';
@@ -1013,6 +1014,386 @@ function ensureNewsCommentSchema(mysqli $mysqli): void {
     }
 }
 
+function seedDefaultNewsContent(mysqli $mysqli): void {
+    if (
+        !databaseTableExists($mysqli, 'news_articles')
+        || !databaseTableExists($mysqli, 'news_sections')
+        || !databaseTableExists($mysqli, 'news_section_articles')
+        || !function_exists('getDefaultNewsSeedFeed')
+        || !function_exists('buildDefaultNewsSeedContent')
+    ) {
+        return;
+    }
+
+    $seedStateKey = 'default_news_seed_initialized';
+    if (getSystemSetting($mysqli, $seedStateKey) !== null) {
+        return;
+    }
+
+    $countTables = [
+        'news_articles',
+        'news_article_drafts',
+        'news_sections',
+        'news_section_drafts',
+        'news_section_articles',
+        'news_section_draft_articles',
+    ];
+
+    foreach ($countTables as $tableName) {
+        if (!databaseTableExists($mysqli, $tableName)) {
+            return;
+        }
+
+        $result = $mysqli->query("SELECT COUNT(*) AS total FROM {$tableName}");
+        $row = $result ? $result->fetch_assoc() : null;
+        if ((int) ($row['total'] ?? 0) > 0) {
+            return;
+        }
+    }
+
+    $feed = getDefaultNewsSeedFeed();
+    $sections = is_array($feed['sections'] ?? null) ? $feed['sections'] : [];
+    if ($sections === []) {
+        return;
+    }
+
+    $uniqueStoriesBySlug = [];
+    $sectionAssignments = [];
+
+    foreach ($sections as $sectionIndex => $section) {
+        $sectionSlug = trim((string) ($section['slug'] ?? ''));
+        if ($sectionSlug === '') {
+            continue;
+        }
+
+        $sectionAssignments[$sectionSlug] = [];
+        $items = is_array($section['items'] ?? null) ? $section['items'] : [];
+        foreach ($items as $storyIndex => $story) {
+            $storySlug = trim((string) ($story['slug'] ?? ''));
+            if ($storySlug === '') {
+                continue;
+            }
+
+            if (!isset($uniqueStoriesBySlug[$storySlug])) {
+                $publishedOffsetMinutes = max(1, (int) ($story['published_offset_minutes'] ?? (($sectionIndex + 1) * 60) + ($storyIndex * 15)));
+                $tags = is_array($story['tags'] ?? null)
+                    ? array_values(array_filter(array_map('strval', $story['tags'])))
+                    : [];
+                $category = trim((string) ($story['category'] ?? '')) ?: 'Nasional';
+
+                $uniqueStoriesBySlug[$storySlug] = [
+                    'slug' => $storySlug,
+                    'title' => trim((string) ($story['title'] ?? '')) ?: 'Berita tanpa judul',
+                    'excerpt' => trim((string) ($story['excerpt'] ?? '')),
+                    'content' => trim((string) ($story['content'] ?? '')) ?: buildDefaultNewsSeedContent($story),
+                    'cover_image_url' => trim((string) ($story['image'] ?? '')),
+                    'category' => $category,
+                    'author_name' => trim((string) ($story['author'] ?? '')) ?: 'Tim Redaksi',
+                    'read_time_minutes' => max(1, (int) ($story['read_time_minutes'] ?? 4)),
+                    'status' => 'published',
+                    'visibility' => 'public',
+                    'tags_json' => json_encode($tags, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'focus_keyword' => trim((string) ($story['focus_keyword'] ?? ($tags[0] ?? $category))),
+                    'allow_comments' => 1,
+                    'is_featured' => $sectionSlug === 'sorotan-cpns-utbk' ? 1 : 0,
+                    'featured_order' => $sectionSlug === 'sorotan-cpns-utbk' ? ($storyIndex + 1) : 0,
+                    'is_popular' => $sectionSlug === 'terpopuler' ? 1 : 0,
+                    'popular_order' => $sectionSlug === 'terpopuler' ? ($storyIndex + 1) : 0,
+                    'is_editor_pick' => $sectionSlug === 'pilihan-redaksi' ? 1 : 0,
+                    'editor_pick_order' => $sectionSlug === 'pilihan-redaksi' ? ($storyIndex + 1) : 0,
+                    'published_at' => date('Y-m-d H:i:s', time() - ($publishedOffsetMinutes * 60)),
+                ];
+            }
+
+            $sectionAssignments[$sectionSlug][] = $storySlug;
+        }
+    }
+
+    if ($uniqueStoriesBySlug === [] || $sectionAssignments === []) {
+        return;
+    }
+
+    $insertArticle = $mysqli->prepare(
+        'INSERT INTO news_articles (
+            slug, title, excerpt, content, cover_image_url, category, author_name,
+            read_time_minutes, status, visibility, tags_json, focus_keyword, allow_comments,
+            is_featured, featured_order, is_popular, popular_order, is_editor_pick,
+            editor_pick_order, published_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $insertSection = $mysqli->prepare(
+        'INSERT INTO news_sections (
+            slug, title, description, layout_style, article_count, section_order, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    $insertSectionRelation = $mysqli->prepare(
+        'INSERT INTO news_section_articles (section_id, article_id, article_order)
+         VALUES (?, ?, ?)'
+    );
+
+    $articleIdBySlug = [];
+    $transactionStarted = false;
+
+    try {
+        $mysqli->begin_transaction();
+        $transactionStarted = true;
+
+        foreach ($uniqueStoriesBySlug as $story) {
+            $insertArticle->bind_param(
+                'sssssssissssiiiiiiis',
+                $story['slug'],
+                $story['title'],
+                $story['excerpt'],
+                $story['content'],
+                $story['cover_image_url'],
+                $story['category'],
+                $story['author_name'],
+                $story['read_time_minutes'],
+                $story['status'],
+                $story['visibility'],
+                $story['tags_json'],
+                $story['focus_keyword'],
+                $story['allow_comments'],
+                $story['is_featured'],
+                $story['featured_order'],
+                $story['is_popular'],
+                $story['popular_order'],
+                $story['is_editor_pick'],
+                $story['editor_pick_order'],
+                $story['published_at']
+            );
+            $insertArticle->execute();
+            $articleIdBySlug[$story['slug']] = (int) $insertArticle->insert_id;
+        }
+
+        foreach ($sections as $sectionIndex => $section) {
+            $sectionSlug = trim((string) ($section['slug'] ?? ''));
+            if ($sectionSlug === '' || !isset($sectionAssignments[$sectionSlug])) {
+                continue;
+            }
+
+            $title = trim((string) ($section['title'] ?? '')) ?: 'Section Berita';
+            $description = trim((string) ($section['description'] ?? ''));
+            $layoutStyle = trim((string) ($section['layout_style'] ?? '')) ?: 'cards';
+            $articleCount = max(1, (int) ($section['article_count'] ?? count($sectionAssignments[$sectionSlug])));
+            $sectionOrder = max(0, (int) ($section['section_order'] ?? ($sectionIndex + 1)));
+            $isActive = 1;
+
+            $insertSection->bind_param(
+                'ssssiii',
+                $sectionSlug,
+                $title,
+                $description,
+                $layoutStyle,
+                $articleCount,
+                $sectionOrder,
+                $isActive
+            );
+            $insertSection->execute();
+            $sectionId = (int) $insertSection->insert_id;
+
+            foreach ($sectionAssignments[$sectionSlug] as $storyIndex => $storySlug) {
+                $articleId = (int) ($articleIdBySlug[$storySlug] ?? 0);
+                if ($articleId <= 0) {
+                    continue;
+                }
+
+                $articleOrder = $storyIndex + 1;
+                $insertSectionRelation->bind_param('iii', $sectionId, $articleId, $articleOrder);
+                $insertSectionRelation->execute();
+            }
+        }
+
+        setSystemSetting($mysqli, $seedStateKey, json_encode([
+            'seeded' => true,
+            'articles' => count($articleIdBySlug),
+            'sections' => count($sectionAssignments),
+            'seeded_at' => date(DATE_ATOM),
+        ], JSON_UNESCAPED_SLASHES));
+
+        $mysqli->commit();
+    } catch (Throwable $error) {
+        if ($transactionStarted) {
+            $mysqli->rollback();
+        }
+
+        error_log('Default news seed failed: ' . $error->getMessage());
+    }
+}
+
+function hydrateNewsDraftWorkspace(mysqli $mysqli): void {
+    $requiredTables = [
+        'news_articles',
+        'news_article_drafts',
+        'news_sections',
+        'news_section_articles',
+        'news_section_drafts',
+        'news_section_draft_articles',
+    ];
+
+    foreach ($requiredTables as $tableName) {
+        if (!databaseTableExists($mysqli, $tableName)) {
+            return;
+        }
+    }
+
+    $publishedArticles = $mysqli->query('SELECT * FROM news_articles ORDER BY id ASC');
+    if (!$publishedArticles) {
+        return;
+    }
+
+    $findDraftArticle = $mysqli->prepare('SELECT id FROM news_article_drafts WHERE article_id = ? LIMIT 1');
+    $insertDraftArticle = $mysqli->prepare(
+        'INSERT INTO news_article_drafts (
+            article_id, slug, title, excerpt, content, cover_image_url, category, author_name,
+            read_time_minutes, status, visibility, tags_json, focus_keyword, allow_comments,
+            is_featured, featured_order, is_popular, popular_order, is_editor_pick,
+            editor_pick_order, published_at, last_published_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+    );
+
+    while ($row = $publishedArticles->fetch_assoc()) {
+        $publishedArticleId = (int) ($row['id'] ?? 0);
+        if ($publishedArticleId <= 0) {
+            continue;
+        }
+
+        $findDraftArticle->bind_param('i', $publishedArticleId);
+        $findDraftArticle->execute();
+        if ($findDraftArticle->get_result()->fetch_assoc()) {
+            continue;
+        }
+
+        $slug = (string) ($row['slug'] ?? '');
+        $title = (string) ($row['title'] ?? '');
+        $excerpt = (string) ($row['excerpt'] ?? '');
+        $content = (string) ($row['content'] ?? '');
+        $coverImageUrl = (string) ($row['cover_image_url'] ?? '');
+        $category = (string) ($row['category'] ?? 'Nasional');
+        $authorName = (string) ($row['author_name'] ?? 'Tim Redaksi');
+        $readTimeMinutes = max(1, (int) ($row['read_time_minutes'] ?? 4));
+        $status = (string) ($row['status'] ?? 'published');
+        $visibility = (string) ($row['visibility'] ?? 'public');
+        $tagsJson = (string) ($row['tags_json'] ?? '[]');
+        $focusKeyword = (string) ($row['focus_keyword'] ?? '');
+        $allowComments = (int) ($row['allow_comments'] ?? 1);
+        $isFeatured = (int) ($row['is_featured'] ?? 0);
+        $featuredOrder = (int) ($row['featured_order'] ?? 0);
+        $isPopular = (int) ($row['is_popular'] ?? 0);
+        $popularOrder = (int) ($row['popular_order'] ?? 0);
+        $isEditorPick = (int) ($row['is_editor_pick'] ?? 0);
+        $editorPickOrder = (int) ($row['editor_pick_order'] ?? 0);
+        $publishedAt = $row['published_at'] ?? null;
+
+        $insertDraftArticle->bind_param(
+            'isssssssissssiiiiiiis',
+            $publishedArticleId,
+            $slug,
+            $title,
+            $excerpt,
+            $content,
+            $coverImageUrl,
+            $category,
+            $authorName,
+            $readTimeMinutes,
+            $status,
+            $visibility,
+            $tagsJson,
+            $focusKeyword,
+            $allowComments,
+            $isFeatured,
+            $featuredOrder,
+            $isPopular,
+            $popularOrder,
+            $isEditorPick,
+            $editorPickOrder,
+            $publishedAt
+        );
+        $insertDraftArticle->execute();
+    }
+
+    $draftArticleMap = [];
+    $draftArticleRows = $mysqli->query('SELECT id, article_id FROM news_article_drafts WHERE article_id IS NOT NULL');
+    if ($draftArticleRows) {
+        while ($row = $draftArticleRows->fetch_assoc()) {
+            $draftArticleMap[(int) ($row['article_id'] ?? 0)] = (int) ($row['id'] ?? 0);
+        }
+    }
+
+    $publishedSections = $mysqli->query('SELECT * FROM news_sections ORDER BY section_order ASC, id ASC');
+    if (!$publishedSections) {
+        return;
+    }
+
+    $findDraftSection = $mysqli->prepare('SELECT id FROM news_section_drafts WHERE section_id = ? LIMIT 1');
+    $insertDraftSection = $mysqli->prepare(
+        'INSERT INTO news_section_drafts (
+            section_id, slug, title, description, layout_style, article_count, section_order, is_active, last_published_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+    );
+    $insertDraftRelation = $mysqli->prepare(
+        'INSERT INTO news_section_draft_articles (section_draft_id, draft_article_id, article_order)
+         VALUES (?, ?, ?)'
+    );
+    $loadPublishedSectionArticles = $mysqli->prepare(
+        'SELECT article_id, article_order
+         FROM news_section_articles
+         WHERE section_id = ?
+         ORDER BY article_order ASC, id ASC'
+    );
+
+    while ($row = $publishedSections->fetch_assoc()) {
+        $publishedSectionId = (int) ($row['id'] ?? 0);
+        if ($publishedSectionId <= 0) {
+            continue;
+        }
+
+        $findDraftSection->bind_param('i', $publishedSectionId);
+        $findDraftSection->execute();
+        if ($findDraftSection->get_result()->fetch_assoc()) {
+            continue;
+        }
+
+        $slug = (string) ($row['slug'] ?? '');
+        $title = (string) ($row['title'] ?? '');
+        $description = (string) ($row['description'] ?? '');
+        $layoutStyle = (string) ($row['layout_style'] ?? 'cards');
+        $articleCount = max(1, (int) ($row['article_count'] ?? 5));
+        $sectionOrder = max(0, (int) ($row['section_order'] ?? 0));
+        $isActive = (int) ($row['is_active'] ?? 1);
+
+        $insertDraftSection->bind_param(
+            'issssiii',
+            $publishedSectionId,
+            $slug,
+            $title,
+            $description,
+            $layoutStyle,
+            $articleCount,
+            $sectionOrder,
+            $isActive
+        );
+        $insertDraftSection->execute();
+        $draftSectionId = (int) $insertDraftSection->insert_id;
+
+        $loadPublishedSectionArticles->bind_param('i', $publishedSectionId);
+        $loadPublishedSectionArticles->execute();
+        $relations = $loadPublishedSectionArticles->get_result();
+
+        while ($relation = $relations->fetch_assoc()) {
+            $publishedArticleId = (int) ($relation['article_id'] ?? 0);
+            $draftArticleId = (int) ($draftArticleMap[$publishedArticleId] ?? 0);
+            if ($draftArticleId <= 0) {
+                continue;
+            }
+
+            $articleOrder = max(1, (int) ($relation['article_order'] ?? 1));
+            $insertDraftRelation->bind_param('iii', $draftSectionId, $draftArticleId, $articleOrder);
+            $insertDraftRelation->execute();
+        }
+    }
+}
+
 function seedDefaultLearningContent(mysqli $mysqli): void {
     if (!databaseTableExists($mysqli, 'test_packages')) {
         return;
@@ -1506,4 +1887,6 @@ ensureNewsArticleDraftSchema($mysqli);
 ensureNewsSectionSchema($mysqli);
 ensureNewsSectionDraftSchema($mysqli);
 ensureNewsCommentSchema($mysqli);
+seedDefaultNewsContent($mysqli);
+hydrateNewsDraftWorkspace($mysqli);
 bootstrapDefaultAdmin($mysqli);

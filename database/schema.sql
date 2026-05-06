@@ -250,6 +250,35 @@ CREATE TABLE test_results (
   INDEX (user_id, package_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE question_reports (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  package_id INT NOT NULL,
+  tryout_attempt_id INT NULL,
+  section_test_attempt_id INT NULL,
+  assessment_type ENUM('tryout', 'mini_test') NOT NULL,
+  target_type ENUM('question', 'explanation') NOT NULL,
+  origin_context VARCHAR(50) NOT NULL DEFAULT 'tryout_active',
+  question_id INT NOT NULL,
+  question_number INT NULL,
+  section_code VARCHAR(100) NULL,
+  section_label VARCHAR(150) NULL,
+  reported_content_snapshot LONGTEXT NULL,
+  message LONGTEXT NULL,
+  image_url VARCHAR(1000) NULL,
+  image_path VARCHAR(1000) NULL,
+  status ENUM('open', 'reviewed', 'resolved') NOT NULL DEFAULT 'open',
+  admin_note LONGTEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+  INDEX (package_id, status),
+  INDEX (assessment_type, target_type),
+  INDEX (question_id),
+  INDEX (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_questions_package ON questions(package_id);
 CREATE INDEX idx_test_attempts_user_package ON test_attempts(user_id, package_id);

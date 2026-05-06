@@ -219,6 +219,20 @@ export default function AdminMiniTestQuestionEditor() {
     () => hasQuestionExtractContent(extractQuestionSource),
     [extractQuestionSource]
   );
+  const previewQuestion = useMemo(() => {
+    if (!selectedQuestion && !questionForm.id) {
+      return null;
+    }
+
+    return {
+      id: questionForm.id || selectedQuestion?.id || null,
+      question_text: questionForm.question_text,
+      question_image_url: questionForm.question_image_url,
+      explanation_notes: questionForm.explanation_notes,
+      material_topic: questionForm.material_topic,
+      options: questionForm.options || [],
+    };
+  }, [questionForm, selectedQuestion]);
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !sectionCode) {
@@ -586,14 +600,14 @@ export default function AdminMiniTestQuestionEditor() {
             </div>
           </div>
 
-          {!isCreating && selectedQuestion && (
+          {!isCreating && previewQuestion && (
             <section className="admin-question-preview-shell">
               <div className="admin-question-preview-head">
                 <div>
                   <span className="admin-preview-eyebrow">Preview aktif</span>
-                  <h3>{truncateText(selectedQuestion.question_text || 'Soal berbasis gambar')}</h3>
+                  <h3>{truncateText(previewQuestion.question_text || 'Soal berbasis gambar')}</h3>
                   <p className="text-muted">
-                    {activeSection?.name || 'Subtest aktif'} • {(selectedQuestion.options || []).length} opsi
+                    {activeSection?.name || 'Subtest aktif'} • {(previewQuestion.options || []).length} opsi
                   </p>
                 </div>
               </div>
@@ -602,28 +616,28 @@ export default function AdminMiniTestQuestionEditor() {
                 <div className="admin-question-row-detail-main">
                   <div>
                     <LatexContent
-                      content={selectedQuestion.question_text}
+                      content={previewQuestion.question_text}
                       placeholder="Soal berbasis gambar"
                       className="admin-question-rich-title"
                     />
                     <p className="text-muted">
-                      {selectedQuestion.material_topic
-                        ? `${selectedQuestion.material_topic} • ${selectedQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}`
-                        : selectedQuestion.question_image_url
+                      {previewQuestion.material_topic
+                        ? `${previewQuestion.material_topic} • ${previewQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}`
+                        : previewQuestion.question_image_url
                         ? 'Ada gambar soal'
                         : 'Tanpa gambar soal'}
                     </p>
                   </div>
                   <AdminImagePreview
-                    src={selectedQuestion.question_image_url}
-                    alt={`Preview mini test ${selectedQuestion.id}`}
+                    src={previewQuestion.question_image_url}
+                    alt={`Preview mini test ${previewQuestion.id || 'aktif'}`}
                     className="admin-question-preview-image"
                   />
                 </div>
 
                 <div className="admin-question-options-preview-grid">
-                  {(selectedQuestion.options || []).map((option) => (
-                    <div key={option.id || `${selectedQuestion.id}-${option.letter}`} className="admin-option-preview-card">
+                  {(previewQuestion.options || []).map((option, optionIndex) => (
+                    <div key={option.id || `${previewQuestion.id || 'active'}-${option.letter}-${optionIndex}`} className="admin-option-preview-card">
                       <div className="admin-option-preview-head">
                         <strong>{option.letter}.</strong>
                         {usesPointScoring ? (
@@ -644,6 +658,18 @@ export default function AdminMiniTestQuestionEditor() {
                       />
                     </div>
                   ))}
+                </div>
+
+                <div className="admin-inline-note">
+                  <strong>Catatan pembahasan aktif</strong>
+                  {previewQuestion.explanation_notes ? (
+                    <LatexContent
+                      content={previewQuestion.explanation_notes}
+                      className="admin-rich-note-text"
+                    />
+                  ) : (
+                    <p className="text-muted">Catatan pembahasan belum diisi.</p>
+                  )}
                 </div>
               </div>
             </section>

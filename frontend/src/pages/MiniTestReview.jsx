@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import LatexContent from '../components/LatexContent';
+import QuestionReportModal from '../components/QuestionReportModal';
 import apiClient from '../api';
 
 function ReviewOption({ option, isPointQuestion = false }) {
@@ -60,6 +61,8 @@ export default function MiniTestReview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [reportTarget, setReportTarget] = useState('');
+  const [reportFeedback, setReportFeedback] = useState('');
 
   useEffect(() => {
     const fetchReview = async () => {
@@ -299,6 +302,35 @@ export default function MiniTestReview() {
             />
           </div>
 
+          <div className="question-review-report-bar">
+            <div className="question-review-report-copy">
+              <strong>Catatan mini test ini terasa keliru?</strong>
+              <span>Kirim laporan ke admin dengan penjelasan singkat dan lampiran screenshot jika perlu.</span>
+            </div>
+            <div className="question-review-report-actions">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setReportTarget('question')}
+              >
+                Laporkan Soal
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setReportTarget('explanation')}
+              >
+                Laporkan Pembahasan
+              </button>
+            </div>
+          </div>
+
+          {reportFeedback && (
+            <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">
+              {reportFeedback}
+            </div>
+          )}
+
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
             <button
               type="button"
@@ -319,6 +351,23 @@ export default function MiniTestReview() {
           </div>
         </div>
       </div>
+
+      <QuestionReportModal
+        isOpen={Boolean(reportTarget)}
+        onClose={() => setReportTarget('')}
+        onSubmitted={(message) => setReportFeedback(message)}
+        assessmentType="mini_test"
+        targetType={reportTarget || 'question'}
+        originContext="mini_test_review"
+        packageId={Number(packageId)}
+        questionId={activeItem.id}
+        sectionTestAttemptId={Number(reviewData?.attempt_id || 0)}
+        sectionCode={String(sectionCode || '')}
+        sectionLabel={reviewData.section?.name || 'Mini test'}
+        questionNumber={activeItem.number}
+        questionText={activeItem.question_text || ''}
+        questionImageUrl={activeItem.question_image_url || ''}
+      />
     </div>
   );
 }

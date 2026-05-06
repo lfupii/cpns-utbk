@@ -5,6 +5,7 @@ import BrandLogo from '../components/BrandLogo';
 import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
 import LatexContent from '../components/LatexContent';
 import ProfileDropdown from '../components/ProfileDropdown';
+import QuestionReportModal from '../components/QuestionReportModal';
 import apiClient from '../api';
 import { useAuth } from '../AuthContext';
 import {
@@ -371,6 +372,8 @@ export default function Learning() {
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [miniTestReportFeedback, setMiniTestReportFeedback] = useState('');
+  const [miniTestReportModalOpen, setMiniTestReportModalOpen] = useState(false);
   const [learningSearch, setLearningSearch] = useState('');
   const sectionTestSavingRef = useRef({});
   const sectionTestPendingSaveRef = useRef({});
@@ -1743,6 +1746,9 @@ export default function Learning() {
               {currentSectionTest.saveMessage && (
                 <div className="test-feedback test-feedback-success">{currentSectionTest.saveMessage}</div>
               )}
+              {miniTestReportFeedback && (
+                <div className="test-feedback test-feedback-success">{miniTestReportFeedback}</div>
+              )}
 
               <section className="test-hero">
                 <div className="test-hero-copy">
@@ -1962,6 +1968,15 @@ export default function Learning() {
                           >
                             {isCurrentQuestionMarkedForReview ? 'Batalkan Ragu-ragu' : 'Tandai Ragu-ragu'}
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setMiniTestReportModalOpen(true)}
+                            disabled={Boolean(currentSectionTest.result)}
+                            className="btn btn-outline test-action-button test-action-button-report"
+                          >
+                            Laporkan Soal
+                          </button>
                         </div>
 
                         <div className="test-action-helper">
@@ -2019,6 +2034,25 @@ export default function Learning() {
                       </div>
                     </div>
                   </div>
+                )}
+
+                {currentSectionQuestion && (
+                  <QuestionReportModal
+                    isOpen={miniTestReportModalOpen}
+                    onClose={() => setMiniTestReportModalOpen(false)}
+                    onSubmitted={(message) => setMiniTestReportFeedback(message)}
+                    assessmentType="mini_test"
+                    targetType="question"
+                    originContext="mini_test_active"
+                    packageId={numericPackageId}
+                    questionId={currentSectionQuestion.id}
+                    sectionTestAttemptId={currentSectionTest.attemptId}
+                    sectionCode={activeSection.code}
+                    sectionLabel={activeSection.name || activeSection.session_name || 'Mini test aktif'}
+                    questionNumber={Math.max(1, currentSectionQuestionIndex + 1)}
+                    questionText={currentSectionQuestion.question_text || ''}
+                    questionImageUrl={currentSectionQuestion.question_image_url || ''}
+                  />
                 )}
               </div>
             </>

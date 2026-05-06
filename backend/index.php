@@ -88,6 +88,8 @@ if (strpos($requestPath, '/auth/') !== false) {
     require_once __DIR__ . '/controllers/NewsController.php';
 } elseif (strpos($requestPath, '/learning/') !== false) {
     require_once __DIR__ . '/controllers/LearningController.php';
+} elseif (strpos($requestPath, '/reports/') !== false) {
+    require_once __DIR__ . '/controllers/ReportController.php';
 } elseif (strpos($requestPath, '/test/') !== false) {
     require_once __DIR__ . '/controllers/TestController.php';
 } else {

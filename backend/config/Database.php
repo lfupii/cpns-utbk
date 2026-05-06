@@ -1014,6 +1014,95 @@ function ensureNewsCommentSchema(mysqli $mysqli): void {
     }
 }
 
+function ensureQuestionReportsSchema(mysqli $mysqli): void {
+    $mysqli->query(
+        "CREATE TABLE IF NOT EXISTS question_reports (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT NOT NULL,
+            package_id INT NOT NULL,
+            tryout_attempt_id INT NULL,
+            section_test_attempt_id INT NULL,
+            assessment_type ENUM('tryout', 'mini_test') NOT NULL,
+            target_type ENUM('question', 'explanation') NOT NULL,
+            origin_context VARCHAR(50) NOT NULL DEFAULT 'tryout_active',
+            question_id INT NOT NULL,
+            question_number INT NULL,
+            section_code VARCHAR(100) NULL,
+            section_label VARCHAR(150) NULL,
+            reported_content_snapshot LONGTEXT NULL,
+            message LONGTEXT NULL,
+            image_url VARCHAR(1000) NULL,
+            image_path VARCHAR(1000) NULL,
+            status ENUM('open', 'reviewed', 'resolved') NOT NULL DEFAULT 'open',
+            admin_note LONGTEXT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
+            INDEX (package_id, status),
+            INDEX (assessment_type, target_type),
+            INDEX (question_id),
+            INDEX (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'tryout_attempt_id')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN tryout_attempt_id INT NULL AFTER package_id");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'section_test_attempt_id')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN section_test_attempt_id INT NULL AFTER tryout_attempt_id");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'assessment_type')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN assessment_type ENUM('tryout', 'mini_test') NOT NULL DEFAULT 'tryout' AFTER section_test_attempt_id");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'target_type')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN target_type ENUM('question', 'explanation') NOT NULL DEFAULT 'question' AFTER assessment_type");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'origin_context')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN origin_context VARCHAR(50) NOT NULL DEFAULT 'tryout_active' AFTER target_type");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'question_number')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN question_number INT NULL AFTER question_id");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'section_code')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN section_code VARCHAR(100) NULL AFTER question_number");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'section_label')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN section_label VARCHAR(150) NULL AFTER section_code");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'reported_content_snapshot')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN reported_content_snapshot LONGTEXT NULL AFTER section_label");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'message')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN message LONGTEXT NULL AFTER reported_content_snapshot");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'image_url')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN image_url VARCHAR(1000) NULL AFTER message");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'image_path')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN image_path VARCHAR(1000) NULL AFTER image_url");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'status')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN status ENUM('open', 'reviewed', 'resolved') NOT NULL DEFAULT 'open' AFTER image_path");
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_reports', 'admin_note')) {
+        $mysqli->query("ALTER TABLE question_reports ADD COLUMN admin_note LONGTEXT NULL AFTER status");
+    }
+}
+
 function seedDefaultNewsContent(mysqli $mysqli): void {
     if (
         !databaseTableExists($mysqli, 'news_articles')
@@ -1887,6 +1976,7 @@ ensureNewsArticleDraftSchema($mysqli);
 ensureNewsSectionSchema($mysqli);
 ensureNewsSectionDraftSchema($mysqli);
 ensureNewsCommentSchema($mysqli);
+ensureQuestionReportsSchema($mysqli);
 seedDefaultNewsContent($mysqli);
 hydrateNewsDraftWorkspace($mysqli);
 bootstrapDefaultAdmin($mysqli);

@@ -211,6 +211,21 @@ export default function AdminQuestionEditor() {
     () => hasQuestionExtractContent(extractQuestionSource),
     [extractQuestionSource]
   );
+  const previewQuestion = useMemo(() => {
+    if (!selectedQuestion && !questionForm.question_id) {
+      return null;
+    }
+
+    return {
+      id: questionForm.question_id || selectedQuestion?.id || null,
+      question_text: questionForm.question_text,
+      question_image_url: questionForm.question_image_url,
+      explanation_notes: questionForm.explanation_notes,
+      section_name: activeSectionName || selectedQuestion?.section_name || '',
+      section_code: questionForm.section_code || selectedQuestion?.section_code || '',
+      options: questionForm.options || [],
+    };
+  }, [activeSectionName, questionForm, selectedQuestion]);
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0) {
@@ -554,14 +569,14 @@ export default function AdminQuestionEditor() {
             </div>
           </div>
 
-          {!isCreating && selectedQuestion && (
+          {!isCreating && previewQuestion && (
             <section className="admin-question-preview-shell">
               <div className="admin-question-preview-head">
                 <div>
                   <span className="admin-preview-eyebrow">Preview aktif</span>
-                  <h3>{truncateText(selectedQuestion.question_text || 'Soal berbasis gambar')}</h3>
+                  <h3>{truncateText(previewQuestion.question_text || 'Soal berbasis gambar')}</h3>
                   <p className="text-muted">
-                    {selectedQuestion.section_name || 'Bagian umum'} • {(selectedQuestion.options || []).length} opsi
+                    {previewQuestion.section_name || 'Bagian umum'} • {(previewQuestion.options || []).length} opsi
                   </p>
                 </div>
               </div>
@@ -570,27 +585,27 @@ export default function AdminQuestionEditor() {
                 <div className="admin-question-row-detail-main">
                   <div>
                     <LatexContent
-                      content={selectedQuestion.question_text}
+                      content={previewQuestion.question_text}
                       placeholder="Soal berbasis gambar"
                       className="admin-question-rich-title"
                     />
                     <p className="text-muted">
-                      {selectedQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
+                      {previewQuestion.question_image_url ? 'Ada gambar soal' : 'Tanpa gambar soal'}
                     </p>
                   </div>
                   <AdminImagePreview
-                    src={selectedQuestion.question_image_url}
-                    alt={`Preview soal ${selectedQuestion.id}`}
+                    src={previewQuestion.question_image_url}
+                    alt={`Preview soal ${previewQuestion.id || 'aktif'}`}
                     className="admin-question-preview-image"
                   />
                 </div>
 
                 <div className="admin-question-options-preview-grid">
-                  {(selectedQuestion.options || []).map((option) => (
-                    <div key={option.id || `${selectedQuestion.id}-${option.letter}`} className="admin-option-preview-card">
+                  {(previewQuestion.options || []).map((option, optionIndex) => (
+                    <div key={option.id || `${previewQuestion.id || 'active'}-${option.letter}-${optionIndex}`} className="admin-option-preview-card">
                       <div className="admin-option-preview-head">
                         <strong>{option.letter}.</strong>
-                        {isTkpSection(packageSections.find((section) => String(section.code) === String(selectedQuestion.section_code))) ? (
+                        {isTkpSection(packageSections.find((section) => String(section.code) === String(previewQuestion.section_code))) ? (
                           <span className="admin-correct-badge">{getOptionScoreWeight(option)} poin</span>
                         ) : Number(option.is_correct) > 0 && (
                           <span className="admin-correct-badge">Jawaban Benar</span>
@@ -609,15 +624,18 @@ export default function AdminQuestionEditor() {
                     </div>
                   ))}
                 </div>
-                {selectedQuestion.explanation_notes && (
-                  <div className="admin-inline-note">
-                    <strong>Pembahasan soal</strong>
+
+                <div className="admin-inline-note">
+                  <strong>Catatan pembahasan aktif</strong>
+                  {previewQuestion.explanation_notes ? (
                     <LatexContent
-                      content={selectedQuestion.explanation_notes}
+                      content={previewQuestion.explanation_notes}
                       className="admin-rich-note-text"
                     />
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-muted">Catatan pembahasan belum diisi.</p>
+                  )}
+                </div>
               </div>
             </section>
           )}

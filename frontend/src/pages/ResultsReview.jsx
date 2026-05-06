@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import LatexContent from '../components/LatexContent';
+import QuestionReportModal from '../components/QuestionReportModal';
 import apiClient from '../api';
 
 function parseScoreDetails(rawValue) {
@@ -77,6 +78,8 @@ export default function ResultsReview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [reportTarget, setReportTarget] = useState('');
+  const [reportFeedback, setReportFeedback] = useState('');
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -309,6 +312,35 @@ export default function ResultsReview() {
             />
           </div>
 
+          <div className="question-review-report-bar">
+            <div className="question-review-report-copy">
+              <strong>Temukan soal atau pembahasan yang keliru?</strong>
+              <span>Laporkan langsung ke admin beserta catatan dan screenshot bila perlu.</span>
+            </div>
+            <div className="question-review-report-actions">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setReportTarget('question')}
+              >
+                Laporkan Soal
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setReportTarget('explanation')}
+              >
+                Laporkan Pembahasan
+              </button>
+            </div>
+          </div>
+
+          {reportFeedback && (
+            <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">
+              {reportFeedback}
+            </div>
+          )}
+
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
             <button
               type="button"
@@ -329,6 +361,22 @@ export default function ResultsReview() {
           </div>
         </div>
       </div>
+
+      <QuestionReportModal
+        isOpen={Boolean(reportTarget)}
+        onClose={() => setReportTarget('')}
+        onSubmitted={(message) => setReportFeedback(message)}
+        assessmentType="tryout"
+        targetType={reportTarget || 'question'}
+        originContext="tryout_review"
+        packageId={results?.package_id}
+        questionId={activeItem.id}
+        attemptId={Number(attemptId)}
+        sectionLabel={activeItem.section_name || results?.package_name || 'Tryout'}
+        questionNumber={activeItem.number}
+        questionText={activeItem.question_text || ''}
+        questionImageUrl={activeItem.question_image_url || ''}
+      />
     </div>
   );
 }

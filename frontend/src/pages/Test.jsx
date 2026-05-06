@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../api';
 import FloatingTestDock, { useFloatingTestDock } from '../components/FloatingTestDock';
 import LatexContent from '../components/LatexContent';
+import QuestionReportModal from '../components/QuestionReportModal';
 import {
   clearActiveTryoutSession,
   persistActiveTryoutSession,
@@ -100,6 +101,8 @@ export default function Test() {
   const [isAdvancingSection, setIsAdvancingSection] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [reviewFlags, setReviewFlags] = useState({});
+  const [reportFeedback, setReportFeedback] = useState('');
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const {
     isCompactViewport,
     shouldShowDock: shouldShowFloatingDock,
@@ -766,6 +769,11 @@ export default function Test() {
             {saveMessage}
           </div>
         )}
+        {reportFeedback && (
+          <div className="test-feedback test-feedback-success">
+            {reportFeedback}
+          </div>
+        )}
 
         <FloatingTestDock
           ariaLabel={isUtbkMode ? 'Timer subtes mengambang' : 'Timer ujian mengambang'}
@@ -931,6 +939,14 @@ export default function Test() {
                     >
                       {isCurrentQuestionMarkedForReview ? 'Batalkan Ragu-ragu' : 'Tandai Ragu-ragu'}
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setReportModalOpen(true)}
+                      className="btn btn-outline test-action-button test-action-button-report"
+                    >
+                      Laporkan Soal
+                    </button>
                   </div>
 
                   {isUtbkMode && (
@@ -1010,6 +1026,24 @@ export default function Test() {
           )}
         </div>
       </div>
+
+      {currentQuestion && (
+        <QuestionReportModal
+          isOpen={reportModalOpen}
+          onClose={() => setReportModalOpen(false)}
+          onSubmitted={(message) => setReportFeedback(message)}
+          assessmentType="tryout"
+          targetType="question"
+          originContext="tryout_active"
+          packageId={numericPackageId}
+          questionId={currentQuestion.id}
+          attemptId={attemptId}
+          sectionLabel={currentQuestion.section_name || attemptState.activeSectionName || 'Tryout aktif'}
+          questionNumber={questionTitleNumber}
+          questionText={currentQuestion.question_text || ''}
+          questionImageUrl={currentQuestion.question_image_url || ''}
+        />
+      )}
     </div>
   );
 }

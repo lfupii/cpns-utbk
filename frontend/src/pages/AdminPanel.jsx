@@ -9,6 +9,13 @@ import {
   downloadQuestionExtractFile,
   hasQuestionExtractContent,
 } from '../utils/questionExtract';
+import {
+  formatQuestionReportAssessmentType,
+  formatQuestionReportOriginLabel,
+  formatQuestionReportStatusLabel,
+  formatQuestionReportTargetLabel,
+  truncateQuestionReportText,
+} from '../utils/questionReports';
 
 const CSV_HEADERS = [
   'section_code',
@@ -461,6 +468,25 @@ function AdminImagePreview({ src, alt, className = '' }) {
   );
 }
 
+function formatAdminReportTimestamp(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return String(value);
+  }
+
+  return parsedDate.toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function AdminPanel() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -503,6 +529,11 @@ export default function AdminPanel() {
   const [learningQuestionsSaving, setLearningQuestionsSaving] = useState(false);
   const [activeLearningQuestionIndex, setActiveLearningQuestionIndex] = useState(0);
   const [expandedLearningQuestionKey, setExpandedLearningQuestionKey] = useState('');
+  const [reports, setReports] = useState([]);
+  const [reportSummary, setReportSummary] = useState({ all: 0, open: 0, reviewed: 0, resolved: 0 });
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [reportStatusFilter, setReportStatusFilter] = useState('open');
+  const [reportStatusSavingId, setReportStatusSavingId] = useState(0);
   const [adminView, setAdminView] = useState('dashboard');
   const [savingWorkspaceDraft, setSavingWorkspaceDraft] = useState(false);
   const [publishingWorkspaceDraft, setPublishingWorkspaceDraft] = useState(false);
@@ -647,6 +678,29 @@ export default function AdminPanel() {
     const response = await apiClient.get(`/admin/learning-content?package_id=${packageId}&workspace=${adminWorkspace}&_=${Date.now()}`);
     return response.data.data?.sections || [];
   }, [adminWorkspace]);
+
+  const loadAdminReports = useCallback(async (packageId = selectedPackageId, status = reportStatusFilter) => {
+    setLoadingReports(true);
+
+    try {
+      const query = new URLSearchParams({
+        status: status || 'open',
+        limit: '120',
+      });
+      if (Number(packageId) > 0) {
+        query.set('package_id', String(Number(packageId)));
+      }
+
+      const response = await apiClient.get(`/reports/admin-list?${query.toString()}`);
+      const payload = response.data?.data || {};
+      setReports(Array.isArray(payload.items) ? payload.items : []);
+      setReportSummary(payload.summary || { all: 0, open: 0, reviewed: 0, resolved: 0 });
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal memuat laporan soal.');
+    } finally {
+      setLoadingReports(false);
+    }
+  }, [reportStatusFilter, selectedPackageId]);
 
   const fetchPackageTypes = useCallback(async () => {
     const response = await apiClient.get('/admin/package-types');
@@ -848,6 +902,14 @@ export default function AdminPanel() {
       packageTypes: packageWorkspaceData?.packageTypes || [],
     };
   };
+
+  useEffect(() => {
+    if (adminView !== 'laporan') {
+      return;
+    }
+
+    loadAdminReports(selectedPackageId, reportStatusFilter);
+  }, [adminView, loadAdminReports, reportStatusFilter, selectedPackageId]);
 
   const handleWorkspaceChange = (nextWorkspace) => {
     if (nextWorkspace === adminWorkspace) {
@@ -1054,7 +1116,7 @@ export default function AdminPanel() {
   }, [activeLearningSection]);
 
   useEffect(() => {
-    if (['dashboard', 'tipe-paket', 'edit-paket', 'rincian-paket', 'materi', 'soal'].includes(requestedAdminView)) {
+    if (['dashboard', 'tipe-paket', 'edit-paket', 'rincian-paket', 'materi', 'soal', 'laporan'].includes(requestedAdminView)) {
       setAdminView(requestedAdminView);
       return;
     }
@@ -1501,6 +1563,19 @@ export default function AdminPanel() {
     navigate(`/admin/mini-test-question-editor/${selectedPackageId}/${encodeURIComponent(sectionCode)}/${questionId}${query.toString() ? `?${query.toString()}` : ''}`);
   };
 
+  const handleCreateMiniTestQuestion = () => {
+    if (!selectedPackageId || !activeLearningSection?.code) {
+      return;
+    }
+
+    const firstDraftIndex = learningQuestionsForm.findIndex((question) => !Number(question.id || 0));
+    openMiniTestQuestionEditor(
+      activeLearningSection.code,
+      'new',
+      firstDraftIndex >= 0 ? { draftIndex: firstDraftIndex } : {}
+    );
+  };
+
   const handleQuestionDelete = async (questionId) => {
     const confirmed = window.confirm('Hapus soal ini? Semua opsi jawabannya juga akan dihapus.');
     if (!confirmed) return;
@@ -1854,6 +1929,35 @@ export default function AdminPanel() {
     setAdminView('soal');
     setLearningEditorMode('');
     setEditingSectionActionsCode('');
+  };
+
+  const openReportView = () => {
+    setAdminView('laporan');
+    setLearningEditorMode('');
+    setEditingSectionActionsCode('');
+  };
+
+  const handleReportStatusUpdate = async (reportId, status) => {
+    if (!reportId || !status) {
+      return;
+    }
+
+    setReportStatusSavingId(Number(reportId));
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await apiClient.put('/reports/admin-status', {
+        report_id: Number(reportId),
+        status,
+      });
+      await loadAdminReports(selectedPackageId, reportStatusFilter);
+      setSuccess(response.data?.message || 'Status laporan berhasil diperbarui.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal memperbarui status laporan.');
+    } finally {
+      setReportStatusSavingId(0);
+    }
   };
 
   const openMaterialTopicPreview = (sectionCode, topicIndex = 0) => {
@@ -2567,6 +2671,24 @@ export default function AdminPanel() {
                     {getMaterialStatusLabel(tryoutStatus)}
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  className={adminView === 'laporan' ? 'learning-sidebar-link learning-sidebar-link-active' : 'learning-sidebar-link'}
+                  onClick={openReportView}
+                >
+                  <span className="admin-sidebar-link-copy">
+                    <strong>Laporan Soal</strong>
+                    <small>
+                      {reportSummary.open > 0
+                        ? `${reportSummary.open} laporan baru menunggu review`
+                        : 'Pantau laporan user ke admin'}
+                    </small>
+                  </span>
+                  <span className={`admin-material-status-badge admin-material-status-badge-${reportSummary.open > 0 ? 'draft' : 'published'}`}>
+                    {reportSummary.open > 0 ? 'Baru' : 'Rapi'}
+                  </span>
+                </button>
               </div>
             </aside>
 
@@ -3137,14 +3259,7 @@ export default function AdminPanel() {
                                 <button
                                   type="button"
                                   className="btn btn-outline"
-                                  onClick={() => {
-                                    const firstDraftIndex = learningQuestionsForm.findIndex((question) => !Number(question.id || 0));
-                                    openMiniTestQuestionEditor(
-                                      activeLearningSection.code,
-                                      'new',
-                                      firstDraftIndex >= 0 ? { draftIndex: firstDraftIndex } : {}
-                                    );
-                                  }}
+                                  onClick={handleCreateMiniTestQuestion}
                                 >
                                   Tambah Soal
                                 </button>
@@ -3329,7 +3444,14 @@ export default function AdminPanel() {
                             </div>
 
                             {isDraftWorkspace && (
-                              <div className="account-form-actions">
+                              <div className="account-form-actions admin-question-list-footer-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline"
+                                  onClick={handleCreateMiniTestQuestion}
+                                >
+                                  Tambah Soal
+                                </button>
                                 <button
                                   type="button"
                                   className="btn btn-primary"
@@ -3693,8 +3815,188 @@ export default function AdminPanel() {
                         })}
                       </div>
                     )}
+
+                    {isDraftWorkspace && filteredQuestions.length > 0 && !loadingQuestions && (
+                      <div className="account-form-actions admin-question-list-footer-actions">
+                        <button type="button" className="btn btn-outline" onClick={handleCreateQuestion}>
+                          Tambah Soal
+                        </button>
+                      </div>
+                    )}
                   </section>
                 </div>
+              )}
+
+              {adminView === 'laporan' && (
+                <section className="account-card admin-main-card admin-panel-card admin-report-shell">
+                  <div className="admin-section-header admin-list-toolbar">
+                    <div>
+                      <h2>Laporan Soal User</h2>
+                      <p className="text-muted">
+                        {selectedPackage
+                          ? `Filter paket aktif: ${selectedPackage.name}`
+                          : 'Menampilkan laporan dari semua paket yang masuk ke admin.'}
+                      </p>
+                    </div>
+                    <div className="admin-list-toolbar-actions">
+                      <select
+                        name="report_status_filter"
+                        value={reportStatusFilter}
+                        onChange={(event) => setReportStatusFilter(event.target.value)}
+                        className="admin-search-input admin-section-filter"
+                      >
+                        <option value="open">Laporan Baru</option>
+                        <option value="reviewed">Sudah Ditinjau</option>
+                        <option value="resolved">Sudah Selesai</option>
+                        <option value="all">Semua Status</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => loadAdminReports(selectedPackageId, reportStatusFilter)}
+                        disabled={loadingReports}
+                      >
+                        {loadingReports ? 'Memuat...' : 'Refresh Laporan'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="admin-report-summary-grid">
+                    {[
+                      { key: 'all', label: 'Total', value: reportSummary.all },
+                      { key: 'open', label: 'Baru', value: reportSummary.open },
+                      { key: 'reviewed', label: 'Ditinjau', value: reportSummary.reviewed },
+                      { key: 'resolved', label: 'Selesai', value: reportSummary.resolved },
+                    ].map((item) => (
+                      <article key={item.key} className="admin-report-summary-card">
+                        <span>{item.label}</span>
+                        <strong>{item.value}</strong>
+                        <small>{item.key === 'all' ? 'Semua laporan paket terpilih' : `Status ${item.label.toLowerCase()}`}</small>
+                      </article>
+                    ))}
+                  </div>
+
+                  {loadingReports ? (
+                    <p>Memuat laporan soal...</p>
+                  ) : reports.length === 0 ? (
+                    <div className="admin-empty-state">
+                      <p className="text-muted">Belum ada laporan yang cocok dengan filter ini.</p>
+                    </div>
+                  ) : (
+                    <div className="admin-report-list">
+                      {reports.map((report) => (
+                        <article key={report.id} className="admin-report-card">
+                          <div className="admin-report-card-head">
+                            <div className="admin-report-badge-row">
+                              <span className={`admin-report-status admin-report-status-${report.status}`}>
+                                {formatQuestionReportStatusLabel(report.status)}
+                              </span>
+                              <span className="account-package-tag">{formatQuestionReportAssessmentType(report.assessment_type)}</span>
+                              <span className="account-package-tag">{formatQuestionReportTargetLabel(report.target_type)}</span>
+                              <span className="account-package-tag">{formatQuestionReportOriginLabel(report.origin_context)}</span>
+                            </div>
+                            <div className="admin-report-meta">
+                              <strong>{report.reporter?.full_name || 'User'}</strong>
+                              <span>{report.reporter?.email || '-'}</span>
+                              <small>{formatAdminReportTimestamp(report.created_at)}</small>
+                            </div>
+                          </div>
+
+                          <div className="admin-report-context">
+                            <h3>
+                              {report.section_label || report.package_name || 'Paket aktif'}
+                              {report.question_number > 0 ? ` • Soal ${report.question_number}` : ''}
+                            </h3>
+                            <p>{report.package_name || 'Paket tanpa nama'} • {report.category_name || 'Kategori umum'}</p>
+                            <small>{truncateQuestionReportText(report.current_question_text || report.reported_content_snapshot, 140) || 'Soal berbasis gambar atau konten kosong.'}</small>
+                          </div>
+
+                          <div className="admin-inline-note admin-report-snapshot">
+                            <strong>
+                              {report.target_type === 'explanation'
+                                ? 'Snapshot pembahasan saat dilaporkan'
+                                : 'Snapshot soal saat dilaporkan'}
+                            </strong>
+                            <LatexContent
+                              content={report.reported_content_snapshot || report.current_question_text}
+                              placeholder="Konten snapshot kosong, kemungkinan soal berbasis gambar."
+                              className="admin-rich-note-text"
+                            />
+                            {report.current_question_image_url && (
+                              <AdminImagePreview
+                                src={report.current_question_image_url}
+                                alt={`Lampiran konteks soal ${report.id}`}
+                                className="admin-report-image"
+                              />
+                            )}
+                          </div>
+
+                          {report.target_type === 'explanation' && report.current_explanation_notes && (
+                            <div className="admin-inline-note">
+                              <strong>Pembahasan aktif sekarang</strong>
+                              <LatexContent
+                                content={report.current_explanation_notes}
+                                className="admin-rich-note-text"
+                              />
+                            </div>
+                          )}
+
+                          <div className="admin-inline-note admin-report-user-note">
+                            <strong>Catatan user</strong>
+                            <p className="admin-rich-note-text">
+                              {report.message || 'User hanya mengirim lampiran gambar tanpa catatan teks.'}
+                            </p>
+                            {report.image_url && (
+                              <div className="admin-report-attachment">
+                                <a href={report.image_url} target="_blank" rel="noreferrer" className="btn btn-outline">
+                                  Buka Lampiran
+                                </a>
+                                <AdminImagePreview
+                                  src={report.image_url}
+                                  alt={`Lampiran laporan ${report.id}`}
+                                  className="admin-report-image"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="admin-report-actions">
+                            {report.status !== 'open' && (
+                              <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={() => handleReportStatusUpdate(report.id, 'open')}
+                                disabled={reportStatusSavingId === Number(report.id)}
+                              >
+                                {reportStatusSavingId === Number(report.id) ? 'Menyimpan...' : 'Buka Lagi'}
+                              </button>
+                            )}
+                            {report.status !== 'reviewed' && (
+                              <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={() => handleReportStatusUpdate(report.id, 'reviewed')}
+                                disabled={reportStatusSavingId === Number(report.id)}
+                              >
+                                {reportStatusSavingId === Number(report.id) ? 'Menyimpan...' : 'Tandai Ditinjau'}
+                              </button>
+                            )}
+                            {report.status !== 'resolved' && (
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={() => handleReportStatusUpdate(report.id, 'resolved')}
+                                disabled={reportStatusSavingId === Number(report.id)}
+                              >
+                                {reportStatusSavingId === Number(report.id) ? 'Menyimpan...' : 'Tandai Selesai'}
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
               )}
             </div>
           </section>

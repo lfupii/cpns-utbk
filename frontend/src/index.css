@@ -5581,6 +5581,27 @@ html[data-theme='dark'] .theme-toggle-thumb {
   max-width: 720px;
 }
 
+.learning-tryout-primary {
+  margin-top: 1.45rem;
+}
+
+.learning-tryout-primary-list {
+  margin-top: 0;
+}
+
+.learning-tryout-primary-card {
+  min-height: 0;
+  gap: 0.6rem;
+  padding: 1.1rem 1.1rem 1.15rem;
+}
+
+.learning-tryout-primary-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.15rem;
+}
+
 .learning-tryout-actions {
   justify-content: flex-start;
   margin-top: 1.35rem;
@@ -13011,6 +13032,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   .learning-tabs,
   .learning-tab,
   .learning-section-actions .btn,
+  .learning-tryout-primary-card-actions .btn,
   .learning-tryout-actions .btn,
   .learning-hero-actions .btn {
     width: 100%;

@@ -694,7 +694,9 @@ export default function Learning() {
     value: formatTime(currentSectionTest.remainingSeconds),
     tone: Number(currentSectionTest.remainingSeconds || 0) < 60 ? 'danger' : 'success',
   }), [currentSectionTest.remainingSeconds]);
-  const notificationCount = Math.max(0, Number(summary.ongoing_attempts || 0) + (hasOngoingSectionAttempt ? 1 : 0));
+  const ongoingTryoutAttempts = Math.max(0, Number(summary.ongoing_attempts || 0));
+  const hasOngoingTryoutAttempt = ongoingTryoutAttempts > 0;
+  const notificationCount = ongoingTryoutAttempts + (hasOngoingSectionAttempt ? 1 : 0);
   const hasPreviousTopic = activeSectionView === 'material' && activeTopicIndex > 0;
   const hasNextTopic = activeSectionView === 'material' && activeTopicIndex < activeSectionTopics.length - 1;
   const isLastTopic = activeSectionView === 'material' && activeSectionTopics.length > 0 && activeTopicIndex === activeSectionTopics.length - 1;
@@ -1680,6 +1682,36 @@ export default function Learning() {
       label: 'Tryout selesai',
     },
   ];
+  const tryoutPrimaryStatusLabel = hasAccess
+    ? summary.can_start_tryout
+      ? hasOngoingTryoutAttempt
+        ? 'Sedang berjalan'
+        : completedTryout
+        ? 'Siap diulang'
+        : 'Siap dimulai'
+      : 'Percobaan habis'
+    : viewerIsAuthenticated
+    ? 'Paket belum aktif'
+    : 'Login diperlukan';
+  const tryoutAttemptSummaryLabel = summary.remaining_attempts == null
+    ? 'Akses admin'
+    : `${summary.remaining_attempts} kesempatan tersisa`;
+  const tryoutPrimaryActionLabel = hasAccess
+    ? summary.can_start_tryout
+      ? hasOngoingTryoutAttempt
+        ? 'Lanjutkan Tryout Utama'
+        : completedTryout
+        ? 'Ulangi Tryout Utama'
+        : 'Mulai Tryout Utama'
+      : 'Percobaan Habis'
+    : viewerIsAuthenticated
+    ? 'Aktifkan Paket untuk Tryout'
+    : 'Login untuk Buka Tryout';
+  const tryoutPrimaryDescription = hasAccess
+    ? 'Kerjakan simulasi penuh seluruh paket dalam satu sesi supaya opsi tryout utamanya langsung kelihatan jelas.'
+    : viewerIsAuthenticated
+    ? 'Aktifkan paket dulu untuk membuka simulasi penuh dan menyimpan hasil tryout utama.'
+    : 'Login dulu untuk membuka simulasi penuh dan menyimpan hasil tryout utama.';
   const miniTestWorkspace = activeSectionView === 'mini-test' && activeSection ? (
     <>
       {!hasAccess && (
@@ -3064,6 +3096,52 @@ export default function Learning() {
                     </div>
                   </div>
 
+                  <div className="learning-tryout-primary">
+                    <div className="learning-tryout-subtests-head">
+                      <span className="account-package-tag">Tryout utama</span>
+                      <h3>Masuk ke simulasi penuh paket</h3>
+                      <p>{tryoutPrimaryDescription}</p>
+                    </div>
+
+                    <div className="learning-topic-list learning-tryout-primary-list">
+                      <div className="learning-topic-button learning-topic-button-active learning-tryout-primary-card">
+                        <strong>{packageData.name}</strong>
+                        <small>
+                          {packageData.question_count} soal • {packageData.time_limit} menit
+                        </small>
+                        <span className="learning-section-button-progress">
+                          <span className={`learning-section-chip ${hasAccess && summary.can_start_tryout ? 'learning-section-chip-done' : ''}`}>
+                            {tryoutPrimaryStatusLabel}
+                          </span>
+                          <span className="learning-section-chip">{tryoutAttemptSummaryLabel}</span>
+                          {completedTryout ? (
+                            <span className="learning-section-chip learning-section-chip-done">
+                              {Number(summary.completed_attempts || 0)} selesai
+                            </span>
+                          ) : null}
+                        </span>
+
+                        <div className="learning-tryout-primary-card-actions">
+                          {hasAccess ? (
+                            summary.can_start_tryout ? (
+                              <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
+                                {tryoutPrimaryActionLabel}
+                              </Link>
+                            ) : (
+                              <button type="button" className="btn btn-outline" disabled>
+                                {tryoutPrimaryActionLabel}
+                              </button>
+                            )
+                          ) : (
+                            <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
+                              {tryoutPrimaryActionLabel}
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="learning-tryout-subtests">
                     <div className="learning-tryout-subtests-head">
                       <span className="account-package-tag">Mini test per subtest</span>
@@ -3108,16 +3186,16 @@ export default function Learning() {
                     {hasAccess ? (
                       summary.can_start_tryout ? (
                         <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
-                          Mulai Tryout
+                          {tryoutPrimaryActionLabel}
                         </Link>
                       ) : (
                         <button type="button" className="btn btn-outline" disabled>
-                          Percobaan Habis
+                          {tryoutPrimaryActionLabel}
                         </button>
                       )
                     ) : (
                       <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
-                        {viewerIsAuthenticated ? 'Aktifkan Paket untuk Tryout' : 'Login untuk Buka Tryout'}
+                        {tryoutPrimaryActionLabel}
                       </Link>
                     )}
                     <button type="button" className="btn btn-outline" onClick={openDashboardView}>

@@ -924,6 +924,30 @@ function ensureNewsArticleDraftSchema(mysqli $mysqli): void {
     }
 }
 
+function backfillPublishedNewsArticleStatus(mysqli $mysqli): void {
+    if (!databaseTableExists($mysqli, 'news_articles')) {
+        return;
+    }
+
+    $schemaVersion = '20260507_news_live_status_backfill_v1';
+    if (getSystemSetting($mysqli, 'news_live_status_backfill_version') === $schemaVersion) {
+        return;
+    }
+
+    $mysqli->query("UPDATE news_articles SET status = 'published' WHERE status <> 'published' OR status IS NULL");
+    if (databaseTableExists($mysqli, 'news_article_drafts')) {
+        $mysqli->query(
+            "UPDATE news_article_drafts
+             SET status = 'published'
+             WHERE article_id IS NOT NULL
+               AND article_id > 0
+               AND (last_published_at IS NOT NULL OR status <> 'published')"
+        );
+    }
+
+    setSystemSetting($mysqli, 'news_live_status_backfill_version', $schemaVersion);
+}
+
 function ensureNewsSectionSchema(mysqli $mysqli): void {
     $mysqli->query(
         "CREATE TABLE IF NOT EXISTS news_sections (
@@ -2055,6 +2079,7 @@ ensureQuestionOptionScoreWeightSchema($mysqli);
 backfillQuestionOrderData($mysqli);
 ensureNewsArticleSchema($mysqli);
 ensureNewsArticleDraftSchema($mysqli);
+backfillPublishedNewsArticleStatus($mysqli);
 ensureNewsSectionSchema($mysqli);
 ensureNewsSectionDraftSchema($mysqli);
 ensureNewsCommentSchema($mysqli);

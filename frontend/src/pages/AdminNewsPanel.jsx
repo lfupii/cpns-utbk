@@ -2122,8 +2122,8 @@ export default function AdminNewsPanel() {
               </div>
 
               <div className="admin-news-section-edit-note">
-                <strong>{isDraftWorkspace ? 'Status otomatis: Draft' : 'Status live: Terbit'}</strong>
-                <p>{isDraftWorkspace ? 'Publish artikel dilakukan dari daftar artikel di dalam menu Kelola section.' : 'Versi ini adalah artikel yang sudah tayang di publik.'}</p>
+                <strong>{isDraftWorkspace ? 'Mode edit draft' : 'Status live: Terbit'}</strong>
+                <p>{isDraftWorkspace ? 'Simpan perubahan di draft dulu, lalu publish untuk memperbarui artikel yang tayang ke user.' : 'Versi ini adalah artikel yang sudah tayang di publik.'}</p>
               </div>
 
               <label className="admin-news-field">

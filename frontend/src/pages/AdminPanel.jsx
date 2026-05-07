@@ -495,16 +495,6 @@ function reorderLearningQuestionCollection(questionList, draggedRowKey, targetRo
   return reindexLearningQuestionCollection(normalizedQuestions);
 }
 
-function isSameLearningQuestionSequence(currentQuestions, nextQuestions) {
-  if (currentQuestions.length !== nextQuestions.length) {
-    return false;
-  }
-
-  return currentQuestions.every((question, index) => (
-    getLearningQuestionRowKey(question, index) === getLearningQuestionRowKey(nextQuestions[index], index)
-  ));
-}
-
 function reindexTryoutQuestionCollection(questionList) {
   const nextOrderBySection = new Map();
 
@@ -543,20 +533,6 @@ function reorderTryoutQuestionCollection(questionList, draggedQuestionId, target
   normalizedQuestions.splice(insertIndex, 0, movedQuestion);
 
   return reindexTryoutQuestionCollection(normalizedQuestions);
-}
-
-function isSameTryoutQuestionSequence(currentQuestions, nextQuestions) {
-  if (currentQuestions.length !== nextQuestions.length) {
-    return false;
-  }
-
-  return currentQuestions.every((question, index) => Number(question.id) === Number(nextQuestions[index]?.id));
-}
-
-function getQuestionDropPlacement(event) {
-  const bounds = event.currentTarget.getBoundingClientRect();
-  const pointerY = Number(event.clientY || 0);
-  return pointerY >= bounds.top + (bounds.height / 2) ? 'after' : 'before';
 }
 
 function AdminImagePreview({ src, alt, className = '' }) {
@@ -635,12 +611,6 @@ export default function AdminPanel() {
   const [learningQuestionsSaving, setLearningQuestionsSaving] = useState(false);
   const [activeLearningQuestionIndex, setActiveLearningQuestionIndex] = useState(0);
   const [expandedLearningQuestionKey, setExpandedLearningQuestionKey] = useState('');
-  const [draggedLearningQuestionKey, setDraggedLearningQuestionKey] = useState('');
-  const [dragOverLearningQuestionKey, setDragOverLearningQuestionKey] = useState('');
-  const [dragOverLearningQuestionPlacement, setDragOverLearningQuestionPlacement] = useState('before');
-  const [draggedQuestionId, setDraggedQuestionId] = useState(0);
-  const [dragOverQuestionId, setDragOverQuestionId] = useState(0);
-  const [dragOverQuestionPlacement, setDragOverQuestionPlacement] = useState('before');
   const [questionOrderSaving, setQuestionOrderSaving] = useState(false);
   const [reports, setReports] = useState([]);
   const [reportSummary, setReportSummary] = useState({ all: 0, open: 0, reviewed: 0, resolved: 0 });
@@ -1018,18 +988,6 @@ export default function AdminPanel() {
     };
   };
 
-  const clearLearningQuestionDragState = useCallback(() => {
-    setDraggedLearningQuestionKey('');
-    setDragOverLearningQuestionKey('');
-    setDragOverLearningQuestionPlacement('before');
-  }, []);
-
-  const clearTryoutQuestionDragState = useCallback(() => {
-    setDraggedQuestionId(0);
-    setDragOverQuestionId(0);
-    setDragOverQuestionPlacement('before');
-  }, []);
-
   const persistLearningQuestions = async (
     nextQuestions,
     successMessage = isDraftWorkspace ? 'Soal mini test draft berhasil disimpan.' : 'Soal mini test subtest berhasil disimpan.'
@@ -1130,118 +1088,66 @@ export default function AdminPanel() {
     }
   };
 
-  const handleLearningQuestionDragStart = (rowKey, event) => {
-    if (learningQuestionOrderLocked || !rowKey) {
-      event.preventDefault();
+  const handleMoveLearningQuestion = async (questionIndex, direction) => {
+    if (learningQuestionOrderLocked) {
       return;
     }
 
-    setDraggedLearningQuestionKey(rowKey);
-    setDragOverLearningQuestionKey(rowKey);
-    setDragOverLearningQuestionPlacement('before');
-
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', rowKey);
-    }
-  };
-
-  const handleLearningQuestionDragOver = (rowKey, event) => {
-    if (learningQuestionOrderLocked || !draggedLearningQuestionKey) {
+    const targetIndex = questionIndex + direction;
+    if (targetIndex < 0 || targetIndex >= learningQuestionsForm.length) {
       return;
     }
 
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
-    }
-
-    setDragOverLearningQuestionKey(rowKey);
-    setDragOverLearningQuestionPlacement(getQuestionDropPlacement(event));
-  };
-
-  const handleLearningQuestionDrop = async (rowKey, event) => {
-    if (learningQuestionOrderLocked || !draggedLearningQuestionKey) {
-      clearLearningQuestionDragState();
+    const sourceQuestion = learningQuestionsForm[questionIndex];
+    const targetQuestion = learningQuestionsForm[targetIndex];
+    if (!sourceQuestion || !targetQuestion) {
       return;
     }
 
-    event.preventDefault();
-    const nextPlacement = getQuestionDropPlacement(event);
-    const nextQuestions = reorderLearningQuestionCollection(learningQuestionsForm, draggedLearningQuestionKey, rowKey, nextPlacement);
-    const hasChanged = !isSameLearningQuestionSequence(learningQuestionsForm, nextQuestions);
-
-    clearLearningQuestionDragState();
-    if (!hasChanged) {
-      return;
-    }
+    const nextQuestions = reorderLearningQuestionCollection(
+      learningQuestionsForm,
+      getLearningQuestionRowKey(sourceQuestion, questionIndex),
+      getLearningQuestionRowKey(targetQuestion, targetIndex),
+      direction > 0 ? 'after' : 'before'
+    );
 
     setLearningQuestionsForm(nextQuestions);
     await persistLearningQuestions(nextQuestions, 'Urutan soal mini test draft berhasil diperbarui.');
   };
 
-  const handleTryoutQuestionDragStart = (questionId, event) => {
-    if (tryoutQuestionOrderLocked || Number(questionId || 0) <= 0) {
-      event.preventDefault();
+  const handleMoveTryoutQuestion = async (questionId, direction) => {
+    if (tryoutQuestionOrderLocked) {
       return;
     }
 
-    const numericQuestionId = Number(questionId || 0);
-    setDraggedQuestionId(numericQuestionId);
-    setDragOverQuestionId(numericQuestionId);
-    setDragOverQuestionPlacement('before');
-
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', String(numericQuestionId));
-    }
-  };
-
-  const handleTryoutQuestionDragOver = (questionId, event) => {
-    if (tryoutQuestionOrderLocked || Number(draggedQuestionId || 0) <= 0) {
+    const currentQuestion = questions.find((question) => Number(question.id) === Number(questionId));
+    if (!currentQuestion) {
       return;
     }
 
-    const draggedQuestion = questions.find((question) => Number(question.id) === Number(draggedQuestionId));
-    const targetQuestion = questions.find((question) => Number(question.id) === Number(questionId));
-    if (!draggedQuestion || !targetQuestion || String(draggedQuestion.section_code || '') !== String(targetQuestion.section_code || '')) {
+    const siblingQuestions = questions.filter(
+      (question) => String(question.section_code || '') === String(currentQuestion.section_code || '')
+    );
+    const currentSectionIndex = siblingQuestions.findIndex((question) => Number(question.id) === Number(questionId));
+    const targetSectionIndex = currentSectionIndex + direction;
+    if (currentSectionIndex < 0 || targetSectionIndex < 0 || targetSectionIndex >= siblingQuestions.length) {
       return;
     }
 
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
-    }
-
-    setDragOverQuestionId(Number(questionId || 0));
-    setDragOverQuestionPlacement(getQuestionDropPlacement(event));
-  };
-
-  const handleTryoutQuestionDrop = async (questionId, event) => {
-    if (tryoutQuestionOrderLocked || Number(draggedQuestionId || 0) <= 0) {
-      clearTryoutQuestionDragState();
+    const targetQuestion = siblingQuestions[targetSectionIndex];
+    if (!targetQuestion) {
       return;
     }
 
-    const draggedQuestion = questions.find((question) => Number(question.id) === Number(draggedQuestionId));
-    const targetQuestion = questions.find((question) => Number(question.id) === Number(questionId));
-    if (!draggedQuestion || !targetQuestion || String(draggedQuestion.section_code || '') !== String(targetQuestion.section_code || '')) {
-      clearTryoutQuestionDragState();
-      return;
-    }
-
-    event.preventDefault();
-    const nextPlacement = getQuestionDropPlacement(event);
-    const nextQuestions = reorderTryoutQuestionCollection(questions, draggedQuestionId, questionId, nextPlacement);
-    const hasChanged = !isSameTryoutQuestionSequence(questions, nextQuestions);
-
-    clearTryoutQuestionDragState();
-    if (!hasChanged) {
-      return;
-    }
+    const nextQuestions = reorderTryoutQuestionCollection(
+      questions,
+      Number(questionId),
+      Number(targetQuestion.id),
+      direction > 0 ? 'after' : 'before'
+    );
 
     setQuestions(nextQuestions);
-    await persistTryoutQuestionOrder(nextQuestions, draggedQuestionId);
+    await persistTryoutQuestionOrder(nextQuestions, Number(questionId));
   };
 
   useEffect(() => {
@@ -1400,9 +1306,6 @@ export default function AdminPanel() {
     }))));
     setActiveLearningQuestionIndex(0);
     setExpandedLearningQuestionKey('');
-    setDraggedLearningQuestionKey('');
-    setDragOverLearningQuestionKey('');
-    setDragOverLearningQuestionPlacement('before');
   }, [activeLearningSection, usesLearningPointScoring]);
 
   useEffect(() => {
@@ -1519,14 +1422,6 @@ export default function AdminPanel() {
       setExpandedQuestionId(requestedPreviewId);
     }
   }, [questions, requestedPreviewId]);
-
-  useEffect(() => {
-    clearTryoutQuestionDragState();
-  }, [clearTryoutQuestionDragState, selectedPackageId]);
-
-  useEffect(() => {
-    clearLearningQuestionDragState();
-  }, [clearLearningQuestionDragState, learningSectionCode]);
 
   const resetQuestionForm = () => {
     const preferredSection = packageSections.find((section) => String(section.code) === String(preferredSectionCode));
@@ -3571,7 +3466,7 @@ export default function AdminPanel() {
                               </p>
                               <p className="text-muted">
                                 {isDraftWorkspace
-                                  ? 'Geser handle titik di kanan row untuk mengubah urutan soal seperti kelola section berita.'
+                                  ? 'Gunakan tombol panah di kiri nomor soal untuk menaikkan atau menurunkan urutannya.'
                                   : 'Urutan mini test ditampilkan sesuai draft terbaru. Pindah urutan dilakukan dari workspace draft.'}
                               </p>
                             </div>
@@ -3611,7 +3506,7 @@ export default function AdminPanel() {
 
                             <div className="admin-question-table admin-question-table-modern">
                               <div className="admin-question-table-head">
-                                <span />
+                                <span>#</span>
                                 <span>Pertanyaan</span>
                                 <span>Kategori</span>
                                 <span>Opsi</span>
@@ -3623,6 +3518,8 @@ export default function AdminPanel() {
                                 const editorTargetId = Number(question.id || 0) > 0 ? String(question.id) : 'new';
                                 const editorOptions = Number(question.id || 0) > 0 ? {} : { draftIndex: questionIndex };
                                 const learningQuestionStatus = normalizeMaterialStatus(question.status);
+                                const canMoveLearningUp = questionIndex > 0;
+                                const canMoveLearningDown = questionIndex < learningQuestionsForm.length - 1;
 
                                 return (
                                   <div
@@ -3631,31 +3528,34 @@ export default function AdminPanel() {
                                       'admin-question-row-wrap',
                                       'admin-question-row-wrap-modern',
                                       isExpanded ? 'admin-question-row-wrap-expanded' : '',
-                                      draggedLearningQuestionKey === rowKey ? 'admin-question-row-wrap-dragging' : '',
-                                      dragOverLearningQuestionKey === rowKey && dragOverLearningQuestionPlacement === 'before'
-                                        ? 'admin-question-row-wrap-drop-before'
-                                        : '',
-                                      dragOverLearningQuestionKey === rowKey && dragOverLearningQuestionPlacement === 'after'
-                                        ? 'admin-question-row-wrap-drop-after'
-                                        : '',
                                     ].filter(Boolean).join(' ')}
-                                    onDragOver={isDraftWorkspace ? (event) => handleLearningQuestionDragOver(rowKey, event) : undefined}
-                                    onDrop={isDraftWorkspace ? (event) => handleLearningQuestionDrop(rowKey, event) : undefined}
                                   >
                                     <div className="admin-question-row">
-                                      <button
-                                        type="button"
-                                        className="admin-question-expand"
-                                        onClick={() => setExpandedLearningQuestionKey(isExpanded ? '' : rowKey)}
-                                        aria-label={isExpanded ? `Tutup detail soal ${questionIndex + 1}` : `Buka detail soal ${questionIndex + 1}`}
-                                      >
-                                        {isExpanded ? '−' : '+'}
-                                      </button>
+                                      <div className="admin-question-order-controls">
+                                        <button
+                                          type="button"
+                                          className="admin-question-order-move"
+                                          onClick={() => handleMoveLearningQuestion(questionIndex, -1)}
+                                          disabled={learningQuestionOrderLocked || !canMoveLearningUp}
+                                          aria-label={`Naikkan urutan soal mini test ${Number(question.question_order || questionIndex + 1)}`}
+                                        >
+                                          ↑
+                                        </button>
+                                        <div className="admin-question-order-index">
+                                          {Number(question.question_order || questionIndex + 1)}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          className="admin-question-order-move"
+                                          onClick={() => handleMoveLearningQuestion(questionIndex, 1)}
+                                          disabled={learningQuestionOrderLocked || !canMoveLearningDown}
+                                          aria-label={`Turunkan urutan soal mini test ${Number(question.question_order || questionIndex + 1)}`}
+                                        >
+                                          ↓
+                                        </button>
+                                      </div>
 
                                       <div className="admin-question-row-main">
-                                        <span className="account-package-tag admin-question-order-tag">
-                                          Soal No. {Number(question.question_order || questionIndex + 1)}
-                                        </span>
                                         <LatexContent
                                           content={question.question_text}
                                           placeholder={`Soal ${questionIndex + 1}`}
@@ -3678,19 +3578,6 @@ export default function AdminPanel() {
                                       </div>
 
                                       <div className="admin-question-row-actions">
-                                        <button
-                                          type="button"
-                                          className="admin-question-row-handle"
-                                          draggable={!learningQuestionOrderLocked}
-                                          onDragStart={(event) => handleLearningQuestionDragStart(rowKey, event)}
-                                          onDragEnd={clearLearningQuestionDragState}
-                                          disabled={learningQuestionOrderLocked}
-                                          aria-label={`Geser untuk mengubah urutan soal mini test ${Number(question.question_order || questionIndex + 1)}`}
-                                          title={isDraftWorkspace ? 'Drag untuk ubah urutan soal mini test' : 'Urutan hanya bisa diubah di draft'}
-                                        >
-                                          <span />
-                                          <span />
-                                        </button>
                                         <button
                                           type="button"
                                           className="btn btn-outline"
@@ -3900,7 +3787,7 @@ export default function AdminPanel() {
                         </p>
                         <p className="text-muted">
                           {isDraftWorkspace
-                            ? 'Geser handle titik di kanan row untuk memindahkan urutan soal dalam subtes yang sama.'
+                            ? 'Gunakan tombol panah di kiri nomor soal untuk memindahkan urutan dalam subtes yang sama.'
                             : 'Nomor soal mengikuti urutan live. Ubah urutan dari workspace draft jika perlu.'}
                         </p>
                         {selectedPackage && (
@@ -4036,7 +3923,7 @@ export default function AdminPanel() {
                     ) : (
                       <div className="admin-question-table admin-question-table-modern">
                         <div className="admin-question-table-head">
-                          <span />
+                          <span>#</span>
                           <span>Pertanyaan</span>
                           <span>Section</span>
                           <span>Opsi</span>
@@ -4045,6 +3932,14 @@ export default function AdminPanel() {
                         {filteredQuestions.map((question) => {
                           const isExpanded = Number(expandedQuestionId) === Number(question.id);
                           const tryoutQuestionStatus = normalizeMaterialStatus(question.status);
+                          const sectionSiblingQuestions = questions.filter(
+                            (item) => String(item.section_code || '') === String(question.section_code || '')
+                          );
+                          const sectionSiblingIndex = sectionSiblingQuestions.findIndex(
+                            (item) => Number(item.id) === Number(question.id)
+                          );
+                          const canMoveTryoutUp = sectionSiblingIndex > 0;
+                          const canMoveTryoutDown = sectionSiblingIndex >= 0 && sectionSiblingIndex < sectionSiblingQuestions.length - 1;
                           return (
                             <div
                               key={question.id}
@@ -4052,31 +3947,34 @@ export default function AdminPanel() {
                                 'admin-question-row-wrap',
                                 'admin-question-row-wrap-modern',
                                 isExpanded ? 'admin-question-row-wrap-expanded' : '',
-                                Number(draggedQuestionId) === Number(question.id) ? 'admin-question-row-wrap-dragging' : '',
-                                Number(dragOverQuestionId) === Number(question.id) && dragOverQuestionPlacement === 'before'
-                                  ? 'admin-question-row-wrap-drop-before'
-                                  : '',
-                                Number(dragOverQuestionId) === Number(question.id) && dragOverQuestionPlacement === 'after'
-                                  ? 'admin-question-row-wrap-drop-after'
-                                  : '',
                               ].filter(Boolean).join(' ')}
-                              onDragOver={isDraftWorkspace ? (event) => handleTryoutQuestionDragOver(question.id, event) : undefined}
-                              onDrop={isDraftWorkspace ? (event) => handleTryoutQuestionDrop(question.id, event) : undefined}
                             >
                               <div className="admin-question-row">
-                                <button
-                                  type="button"
-                                  className="admin-question-expand"
-                                  onClick={() => setExpandedQuestionId(isExpanded ? null : Number(question.id))}
-                                  aria-label={isExpanded ? 'Tutup detail soal' : 'Buka detail soal'}
-                                >
-                                  {isExpanded ? '−' : '+'}
-                                </button>
+                                <div className="admin-question-order-controls">
+                                  <button
+                                    type="button"
+                                    className="admin-question-order-move"
+                                    onClick={() => handleMoveTryoutQuestion(question.id, -1)}
+                                    disabled={tryoutQuestionOrderLocked || !canMoveTryoutUp}
+                                    aria-label={`Naikkan urutan soal ${Number(question.question_order || 1)}`}
+                                  >
+                                    ↑
+                                  </button>
+                                  <div className="admin-question-order-index">
+                                    {Number(question.question_order || 1)}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="admin-question-order-move"
+                                    onClick={() => handleMoveTryoutQuestion(question.id, 1)}
+                                    disabled={tryoutQuestionOrderLocked || !canMoveTryoutDown}
+                                    aria-label={`Turunkan urutan soal ${Number(question.question_order || 1)}`}
+                                  >
+                                    ↓
+                                  </button>
+                                </div>
 
                                 <div className="admin-question-row-main">
-                                  <span className="account-package-tag admin-question-order-tag">
-                                    Soal No. {Number(question.question_order || 1)}
-                                  </span>
                                   <LatexContent
                                     content={question.question_text}
                                     placeholder="Soal berbasis gambar"
@@ -4099,19 +3997,6 @@ export default function AdminPanel() {
                                 </div>
 
                                 <div className="admin-question-row-actions">
-                                  <button
-                                    type="button"
-                                    className="admin-question-row-handle"
-                                    draggable={!tryoutQuestionOrderLocked}
-                                    onDragStart={(event) => handleTryoutQuestionDragStart(question.id, event)}
-                                    onDragEnd={clearTryoutQuestionDragState}
-                                    disabled={tryoutQuestionOrderLocked}
-                                    aria-label={`Geser untuk mengubah urutan soal ${Number(question.question_order || 1)}`}
-                                    title={isDraftWorkspace ? 'Drag untuk ubah urutan soal' : 'Urutan hanya bisa diubah di draft'}
-                                  >
-                                    <span />
-                                    <span />
-                                  </button>
                                   <button type="button" className="btn btn-outline" onClick={() => handleQuestionEdit(question)}>
                                     {isDraftWorkspace ? (isExpanded ? 'Aktif' : 'Edit') : 'Lihat'}
                                   </button>

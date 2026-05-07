@@ -2985,6 +2985,10 @@ class AdminController {
 
         $linkedArticleId = (int) ($draftArticle['article_id'] ?? 0);
         $publishedPayload = $this->normalizeNewsPayload($draftArticle, self::WORKSPACE_PUBLISHED, $linkedArticleId);
+        $publishedPayload['status'] = 'published';
+        if (!$publishedPayload['published_at']) {
+            $publishedPayload['published_at'] = date('Y-m-d H:i:s');
+        }
         $publishedArticle = $linkedArticleId > 0
             ? $this->getNewsArticleById($linkedArticleId, self::WORKSPACE_PUBLISHED)
             : null;
@@ -3067,13 +3071,14 @@ class AdminController {
 
             $syncDraft = $this->mysqli->prepare(
                 'UPDATE news_article_drafts
-                 SET article_id = ?, slug = ?, published_at = ?, last_published_at = CURRENT_TIMESTAMP
+                 SET article_id = ?, slug = ?, status = ?, published_at = ?, last_published_at = CURRENT_TIMESTAMP
                  WHERE id = ?'
             );
             $syncDraft->bind_param(
-                'issi',
+                'isssi',
                 $linkedArticleId,
                 $publishedPayload['slug'],
+                $publishedPayload['status'],
                 $publishedPayload['published_at'],
                 $draftId
             );

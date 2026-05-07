@@ -158,6 +158,79 @@ function setSystemSetting(mysqli $mysqli, string $settingKey, string $settingVal
     $stmt->execute();
 }
 
+function resequenceQuestionOrderTable(mysqli $mysqli, string $tableName, string $groupOrderSql, string $rowOrderSql): void {
+    if (!databaseTableExists($mysqli, $tableName) || !databaseColumnExists($mysqli, $tableName, 'question_order')) {
+        return;
+    }
+
+    $query = sprintf(
+        'SELECT id, package_id, COALESCE(section_code, \'\') AS section_code FROM %s ORDER BY %s, %s',
+        $tableName,
+        $groupOrderSql,
+        $rowOrderSql
+    );
+    $result = $mysqli->query($query);
+    if (!$result) {
+        return;
+    }
+
+    $updateStmt = $mysqli->prepare(sprintf('UPDATE %s SET question_order = ? WHERE id = ?', $tableName));
+    if (!$updateStmt) {
+        return;
+    }
+
+    $currentGroupKey = null;
+    $nextOrder = 0;
+
+    while ($row = $result->fetch_assoc()) {
+        $groupKey = sprintf('%d::%s', (int) ($row['package_id'] ?? 0), (string) ($row['section_code'] ?? ''));
+        if ($groupKey !== $currentGroupKey) {
+            $currentGroupKey = $groupKey;
+            $nextOrder = 1;
+        } else {
+            $nextOrder += 1;
+        }
+
+        $questionId = (int) ($row['id'] ?? 0);
+        $updateStmt->bind_param('ii', $nextOrder, $questionId);
+        $updateStmt->execute();
+    }
+}
+
+function backfillQuestionOrderData(mysqli $mysqli): void {
+    $schemaVersion = '20260507_question_order_backfill_v1';
+    if (getSystemSetting($mysqli, 'question_order_backfill_version') === $schemaVersion) {
+        return;
+    }
+
+    resequenceQuestionOrderTable(
+        $mysqli,
+        'questions',
+        "package_id ASC, section_order ASC, section_code ASC",
+        "question_order ASC, id ASC"
+    );
+    resequenceQuestionOrderTable(
+        $mysqli,
+        'question_drafts',
+        "package_id ASC, section_order ASC, section_code ASC",
+        "question_order ASC, id ASC"
+    );
+    resequenceQuestionOrderTable(
+        $mysqli,
+        'learning_section_questions',
+        "package_id ASC, section_code ASC",
+        "question_order ASC, id ASC"
+    );
+    resequenceQuestionOrderTable(
+        $mysqli,
+        'learning_section_question_drafts',
+        "package_id ASC, section_code ASC",
+        "question_order ASC, id ASC"
+    );
+
+    setSystemSetting($mysqli, 'question_order_backfill_version', $schemaVersion);
+}
+
 function ensureEmailVerificationSchema(mysqli $mysqli): void {
     if (!databaseTableExists($mysqli, 'users')) {
         return;
@@ -1979,6 +2052,7 @@ ensureAttemptQuestionFlagsSchema($mysqli);
 ensureTryoutScoringSchema($mysqli);
 ensureLearningProgressSchema($mysqli);
 ensureQuestionOptionScoreWeightSchema($mysqli);
+backfillQuestionOrderData($mysqli);
 ensureNewsArticleSchema($mysqli);
 ensureNewsArticleDraftSchema($mysqli);
 ensureNewsSectionSchema($mysqli);

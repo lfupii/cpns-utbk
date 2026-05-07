@@ -5,9 +5,9 @@ backend/vendor/
 
 # Environment
 .env
-.env.production
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # Build outputs
 /dist
@@ -51,6 +51,16 @@ temp/
 # Database
 *.sql.bak
 .mysql_history
+
+# Secrets & certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
 
 # Misc
 .cache/

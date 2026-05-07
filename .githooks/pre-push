@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REMOTE_NAME="${1:-origin}"
+exec "$HOOK_DIR/secret-guard" pre-push "$REMOTE_NAME"

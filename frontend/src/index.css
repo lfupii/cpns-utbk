@@ -4968,6 +4968,11 @@ html[data-theme='dark'] .theme-toggle-thumb {
   color: #047857;
 }
 
+.learning-section-chip-current {
+  background: rgba(45, 140, 255, 0.12);
+  color: #1d4ed8;
+}
+
 .learning-section-button-active {
   border-color: rgba(45, 140, 255, 0.42);
   background: linear-gradient(180deg, rgba(240, 247, 255, 1) 0%, rgba(230, 241, 255, 1) 100%);
@@ -5638,6 +5643,143 @@ html[data-theme='dark'] .theme-toggle-thumb {
 
 .learning-tryout-subtest-list {
   margin-top: 0;
+}
+
+.learning-tryout-selection-note {
+  margin: 0.9rem 0 0;
+  color: #52647f;
+  font-size: 0.94rem;
+}
+
+.learning-tryout-selection-note strong {
+  color: #172033;
+}
+
+.tryout-start-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.1rem;
+  background: rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(10px);
+}
+
+.tryout-start-modal {
+  width: min(100%, 760px);
+  border-radius: 30px;
+  border: 1px solid rgba(173, 197, 229, 0.5);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(244, 249, 255, 0.98) 100%);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
+  padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.tryout-start-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tryout-start-modal-head h3 {
+  margin: 0.3rem 0 0;
+  color: #172033;
+  font-size: clamp(1.55rem, 3vw, 2rem);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+  font-weight: 900;
+}
+
+.tryout-start-modal-head p {
+  margin: 0.6rem 0 0;
+  color: #60728d;
+  max-width: 56ch;
+}
+
+.tryout-start-modal-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  background: rgba(45, 140, 255, 0.12);
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tryout-start-modal-close {
+  border: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(236, 244, 255, 0.98);
+  color: #48607e;
+  font-size: 1.55rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tryout-start-modal-warning {
+  padding: 1rem 1.05rem;
+  border-radius: 22px;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  background: rgba(235, 245, 255, 0.88);
+  color: #20456f;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
+.tryout-start-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.tryout-start-modal-card {
+  display: grid;
+  gap: 0.4rem;
+  min-height: 140px;
+  padding: 1rem;
+  border-radius: 24px;
+  border: 1px solid rgba(189, 208, 232, 0.65);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.tryout-start-modal-card span {
+  color: #7a8da9;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tryout-start-modal-card strong {
+  color: #172033;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  font-weight: 900;
+}
+
+.tryout-start-modal-card small {
+  color: #60728d;
+  line-height: 1.6;
+}
+
+.tryout-start-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.85rem;
 }
 
 .account-history-list {
@@ -13060,6 +13202,7 @@ html[data-theme='dark'] .theme-toggle-thumb {
   .learning-section-actions .btn,
   .learning-tryout-primary-card-actions .btn,
   .learning-tryout-actions .btn,
+  .tryout-start-modal-actions .btn,
   .learning-hero-actions .btn {
     width: 100%;
   }
@@ -19365,6 +19508,27 @@ html[data-theme='dark'] .admin-news-tag-pill {
 }
 
 @media (max-width: 720px) {
+  .tryout-start-modal-overlay {
+    padding: 0.85rem;
+  }
+
+  .tryout-start-modal {
+    padding: 1rem;
+    border-radius: 24px;
+  }
+
+  .tryout-start-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tryout-start-modal-card {
+    min-height: 0;
+  }
+
+  .tryout-start-modal-actions {
+    width: 100%;
+  }
+
   .question-report-modal-overlay {
     padding: 0.85rem;
   }
@@ -19402,11 +19566,24 @@ html[data-theme='dark'] .question-report-modal {
   background: rgba(17, 24, 39, 0.98);
 }
 
+html[data-theme='dark'] .tryout-start-modal {
+  border-color: rgba(88, 114, 156, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 30%),
+    rgba(17, 24, 39, 0.98);
+}
+
+html[data-theme='dark'] .tryout-start-modal-close {
+  background: rgba(30, 41, 59, 0.96);
+  color: #dce6f5;
+}
+
 html[data-theme='dark'] .question-report-modal-close {
   background: rgba(30, 41, 59, 0.96);
   color: #dce6f5;
 }
 
+html[data-theme='dark'] .tryout-start-modal-head h3,
 html[data-theme='dark'] .question-report-modal-head h3,
 html[data-theme='dark'] .question-report-field span,
 html[data-theme='dark'] .admin-report-summary-card strong,
@@ -19415,6 +19592,7 @@ html[data-theme='dark'] .admin-report-context h3 {
   color: #eef4ff;
 }
 
+html[data-theme='dark'] .tryout-start-modal-head p,
 html[data-theme='dark'] .question-report-modal-head p,
 html[data-theme='dark'] .question-report-modal-context-meta span,
 html[data-theme='dark'] .question-report-modal-context p,
@@ -19425,10 +19603,13 @@ html[data-theme='dark'] .admin-report-summary-card small,
 html[data-theme='dark'] .admin-report-meta span,
 html[data-theme='dark'] .admin-report-meta small,
 html[data-theme='dark'] .admin-report-context p,
+html[data-theme='dark'] .tryout-start-modal-card small,
+html[data-theme='dark'] .learning-tryout-selection-note,
 html[data-theme='dark'] .admin-report-context small {
   color: #9fb0c7;
 }
 
+html[data-theme='dark'] .tryout-start-modal-card,
 html[data-theme='dark'] .question-report-modal-context,
 html[data-theme='dark'] .question-review-report-bar,
 html[data-theme='dark'] .admin-report-summary-card,
@@ -19448,6 +19629,23 @@ html[data-theme='dark'] .question-report-upload-row input {
 html[data-theme='dark'] .question-report-modal-eyebrow {
   background: rgba(59, 130, 246, 0.2);
   color: #cfe1ff;
+}
+
+html[data-theme='dark'] .tryout-start-modal-eyebrow,
+html[data-theme='dark'] .learning-section-chip-current {
+  background: rgba(59, 130, 246, 0.2);
+  color: #cfe1ff;
+}
+
+html[data-theme='dark'] .tryout-start-modal-warning {
+  border-color: rgba(96, 165, 250, 0.26);
+  background: rgba(30, 41, 59, 0.9);
+  color: #dce6f5;
+}
+
+html[data-theme='dark'] .tryout-start-modal-card strong,
+html[data-theme='dark'] .learning-tryout-selection-note strong {
+  color: #eef4ff;
 }
 
 html[data-theme='dark'] .question-review-report-copy strong {

@@ -324,6 +324,109 @@ function buildMiniTestPath(packageId, sectionCode) {
   return `/learning/${Number(packageId)}/mini-test/${encodeURIComponent(String(sectionCode || '').trim())}`;
 }
 
+function TryoutStartModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  actionLabel,
+  packageName,
+  questionCount,
+  durationMinutes,
+  hasOngoingAttempt,
+}) {
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onClose?.();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const safeQuestionCount = Math.max(0, Number(questionCount || 0));
+  const safeDurationMinutes = Math.max(0, Number(durationMinutes || 0));
+
+  return (
+    <div className="tryout-start-modal-overlay" role="presentation" onClick={() => onClose?.()}>
+      <div
+        className="tryout-start-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tryout-start-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="tryout-start-modal-head">
+          <div>
+            <span className="tryout-start-modal-eyebrow">Tryout Utama</span>
+            <h3 id="tryout-start-modal-title">Siap masuk ke sesi tryout?</h3>
+            <p>
+              {hasOngoingAttempt
+                ? 'Sesi tryout aktif akan dilanjutkan dari progres dan waktu terakhir.'
+                : 'Timer akan mulai begitu halaman soal terbuka, jadi pastikan kamu sudah siap fokus.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="tryout-start-modal-close"
+            onClick={() => onClose?.()}
+            aria-label="Tutup popup mulai tryout"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="tryout-start-modal-warning">
+          Setelah masuk ke halaman soal, kamu tidak bisa kembali santai ke menu tryout sebelum sesi selesai.
+          Jika keluar dari halaman, sistem akan mengembalikanmu ke tryout aktif yang sama.
+        </div>
+
+        <div className="tryout-start-modal-grid">
+          <div className="tryout-start-modal-card">
+            <span>Paket</span>
+            <strong>{packageName || 'Tryout aktif'}</strong>
+            <small>Sesi penuh untuk seluruh subtest.</small>
+          </div>
+          <div className="tryout-start-modal-card">
+            <span>Jumlah soal</span>
+            <strong>{safeQuestionCount.toLocaleString('id-ID')} soal</strong>
+            <small>Semua soal dikerjakan dalam satu attempt.</small>
+          </div>
+          <div className="tryout-start-modal-card">
+            <span>Waktu</span>
+            <strong>{safeDurationMinutes.toLocaleString('id-ID')} menit</strong>
+            <small>Gunakan waktumu dengan ritme yang stabil.</small>
+          </div>
+        </div>
+
+        <div className="tryout-start-modal-actions">
+          <button type="button" className="btn btn-outline" onClick={() => onClose?.()}>
+            Batal
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => onConfirm?.()}>
+            {actionLabel || 'Masuk Tryout'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Learning() {
   const { packageId, miniTestSectionCode } = useParams();
   const location = useLocation();
@@ -374,6 +477,7 @@ export default function Learning() {
   const [successMessage, setSuccessMessage] = useState('');
   const [miniTestReportFeedback, setMiniTestReportFeedback] = useState('');
   const [miniTestReportModalOpen, setMiniTestReportModalOpen] = useState(false);
+  const [tryoutStartModalOpen, setTryoutStartModalOpen] = useState(false);
   const [learningSearch, setLearningSearch] = useState('');
   const sectionTestSavingRef = useRef({});
   const sectionTestPendingSaveRef = useRef({});
@@ -945,6 +1049,22 @@ export default function Learning() {
       topicIndex: safeTopicIndex,
     });
   }, [syncLearningUrl]);
+
+  const selectTryoutSubtest = useCallback((sectionCode) => {
+    if (!sectionCode) {
+      return;
+    }
+
+    pendingMaterialScrollBehaviorRef.current = 'auto';
+    setContentView('tryout');
+    setActiveSectionView('material');
+    setActiveSectionCode(sectionCode);
+    syncLearningUrl({
+      view: LEARNING_VIEW_TRYOUT,
+      sectionCode,
+      topicIndex: activeTopicIndex,
+    });
+  }, [activeTopicIndex, syncLearningUrl]);
 
   const openSectionTestView = useCallback((sectionCode) => {
     if (!sectionCode) {
@@ -1548,6 +1668,11 @@ export default function Learning() {
     });
   };
 
+  const handleTryoutPrimaryConfirm = useCallback(() => {
+    setTryoutStartModalOpen(false);
+    navigate(`/test/${numericPackageId}`, { replace: true });
+  }, [navigate, numericPackageId]);
+
   const openDashboardView = () => {
     pendingMaterialScrollBehaviorRef.current = 'auto';
     setContentView('dashboard');
@@ -1654,7 +1779,7 @@ export default function Learning() {
       title: `Mini Test ${resumeSection.name}`,
       meta: `${Math.max(0, Number(resumeSection.mini_test_question_count || 0))} soal • ${formatDurationMinutesLabel(computeMiniTestDurationSeconds(resumeSection, Number(resumeSection.mini_test_question_count || 0)))}`,
       actionLabel: 'Kerjakan',
-      onClick: () => openSectionTestView(resumeSection.code),
+      onClick: () => selectTryoutSubtest(resumeSection.code),
     },
     summary.can_start_tryout && {
       key: 'package-tryout',
@@ -1715,6 +1840,13 @@ export default function Learning() {
     : viewerIsAuthenticated
     ? 'Aktifkan paket dulu untuk membuka simulasi penuh dan menyimpan hasil tryout utama.'
     : 'Login dulu untuk membuka simulasi penuh dan menyimpan hasil tryout utama.';
+  const selectedMiniTestActionLabel = hasAccess
+    ? activeSection?.name
+      ? `Masuk Mini Test ${activeSection.name}`
+      : 'Pilih Subtest Dulu'
+    : viewerIsAuthenticated
+    ? 'Aktifkan Paket untuk Mini Test'
+    : 'Login untuk Buka Mini Test';
   const miniTestWorkspace = activeSectionView === 'mini-test' && activeSection ? (
     <>
       {!hasAccess && (
@@ -3054,7 +3186,7 @@ export default function Learning() {
                     <button
                       type="button"
                       className="learning-material-flow-button"
-                      onClick={() => openSectionTestView(activeSection.code)}
+                      onClick={() => selectTryoutSubtest(activeSection.code)}
                     >
                       <span>Buka Mini Test {activeSection.name} di Menu Tryout</span>
                       <span className="learning-material-flow-icon" aria-hidden="true">→</span>
@@ -3158,9 +3290,13 @@ export default function Learning() {
                         <div className="learning-tryout-primary-card-actions">
                           {hasAccess ? (
                             summary.can_start_tryout ? (
-                              <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={() => setTryoutStartModalOpen(true)}
+                              >
                                 {tryoutPrimaryActionLabel}
-                              </Link>
+                              </button>
                             ) : (
                               <button type="button" className="btn btn-outline" disabled>
                                 {tryoutPrimaryActionLabel}
@@ -3180,7 +3316,7 @@ export default function Learning() {
                     <div className="learning-tryout-subtests-head">
                       <span className="account-package-tag">Mini test per subtest</span>
                       <h3>Pilih subtest untuk latihan singkat</h3>
-                      <p>Mini test sekarang dipindahkan ke menu tryout supaya materi tetap fokus untuk membaca topik.</p>
+                      <p>Pilih satu subtest dulu, lalu masuk ke preview mini test dari tombol di bawah sebelum mulai mengerjakan soal.</p>
                     </div>
 
                     <div className="learning-topic-list learning-tryout-subtest-list">
@@ -3196,7 +3332,8 @@ export default function Learning() {
                             key={`tryout-mini-test-${section.code}`}
                             type="button"
                             className={isSectionMiniTestActive ? 'learning-topic-button learning-topic-button-active' : 'learning-topic-button'}
-                            onClick={() => openSectionTestView(section.code)}
+                            onClick={() => selectTryoutSubtest(section.code)}
+                            aria-pressed={isSectionMiniTestActive}
                           >
                             <strong>{section.name}</strong>
                             <small>
@@ -3209,27 +3346,36 @@ export default function Learning() {
                               <span className="learning-section-chip">
                                 {section.session_name || 'Subtest'}
                               </span>
+                              {isSectionMiniTestActive ? (
+                                <span className="learning-section-chip learning-section-chip-current">
+                                  Dipilih
+                                </span>
+                              ) : null}
                             </span>
                           </button>
                         );
                       })}
                     </div>
+                    {activeSection?.name ? (
+                      <p className="learning-tryout-selection-note">
+                        Subtest terpilih: <strong>{activeSection.name}</strong>. Buka dulu preview mini testnya, lalu mulai dari sana.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="learning-tryout-actions">
                     {hasAccess ? (
-                      summary.can_start_tryout ? (
-                        <Link to={`/test/${numericPackageId}`} className="btn btn-primary">
-                          {tryoutPrimaryActionLabel}
-                        </Link>
-                      ) : (
-                        <button type="button" className="btn btn-outline" disabled>
-                          {tryoutPrimaryActionLabel}
-                        </button>
-                      )
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => openSectionTestView(activeSection?.code)}
+                        disabled={!activeSection?.code}
+                      >
+                        {selectedMiniTestActionLabel}
+                      </button>
                     ) : (
                       <Link to={viewerIsAuthenticated ? `/payment/${numericPackageId}` : '/login'} className="btn btn-primary">
-                        {tryoutPrimaryActionLabel}
+                        {selectedMiniTestActionLabel}
                       </Link>
                     )}
                     <button type="button" className="btn btn-outline" onClick={openDashboardView}>
@@ -3242,6 +3388,16 @@ export default function Learning() {
           )}
         </div>
       </section>
+      <TryoutStartModal
+        isOpen={tryoutStartModalOpen}
+        onClose={() => setTryoutStartModalOpen(false)}
+        onConfirm={handleTryoutPrimaryConfirm}
+        actionLabel={tryoutPrimaryActionLabel}
+        packageName={packageData?.name}
+        questionCount={packageData?.question_count}
+        durationMinutes={packageData?.time_limit}
+        hasOngoingAttempt={hasOngoingTryoutAttempt}
+      />
     </AccountShell>
   );
 }

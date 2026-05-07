@@ -3311,6 +3311,9 @@ export default function AdminPanel() {
                                       </button>
 
                                       <div className="admin-question-row-main">
+                                        <span className="account-package-tag admin-question-order-tag">
+                                          Soal No. {Number(question.question_order || questionIndex + 1)}
+                                        </span>
                                         <LatexContent
                                           content={question.question_text}
                                           placeholder={`Soal ${questionIndex + 1}`}
@@ -3364,8 +3367,8 @@ export default function AdminPanel() {
                                             />
                                             <p className="text-muted">
                                               {question.material_topic
-                                                ? `${activeLearningSection.name} • ${question.material_topic}`
-                                                : activeLearningSection.name}
+                                                ? `Soal No. ${Number(question.question_order || questionIndex + 1)} • ${activeLearningSection.name} • ${question.material_topic}`
+                                                : `Soal No. ${Number(question.question_order || questionIndex + 1)} • ${activeLearningSection.name}`}
                                             </p>
                                           </div>
                                           <AdminImagePreview
@@ -3695,6 +3698,9 @@ export default function AdminPanel() {
                                 </button>
 
                                 <div className="admin-question-row-main">
+                                  <span className="account-package-tag admin-question-order-tag">
+                                    Soal No. {Number(question.question_order || 1)}
+                                  </span>
                                   <LatexContent
                                     content={question.question_text}
                                     placeholder="Soal berbasis gambar"
@@ -3738,7 +3744,7 @@ export default function AdminPanel() {
                                         className="admin-question-rich-title"
                                       />
                                       <p className="text-muted">
-                                        {question.section_name || 'Bagian umum'}
+                                        Soal No. {Number(question.question_order || 1)} • {question.section_name || 'Bagian umum'}
                                       </p>
                                     </div>
                                     <AdminImagePreview
@@ -4313,6 +4319,9 @@ export default function AdminPanel() {
                           </button>
 
                           <div className="admin-question-row-main">
+                            <span className="account-package-tag admin-question-order-tag">
+                              Soal No. {Number(question.question_order || 1)}
+                            </span>
                             <LatexContent
                               content={question.question_text}
                               placeholder="Soal berbasis gambar"

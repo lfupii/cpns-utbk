@@ -128,7 +128,7 @@ class AdminController {
                   LEFT JOIN question_options qo ON qo.question_id = q.id
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.section_order ASC, q.id ASC";
+                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -145,6 +145,7 @@ class AdminController {
                 'section_code' => (string) ($row['section_code'] ?? ''),
                 'section_name' => (string) ($row['section_name'] ?? ''),
                 'section_order' => (int) ($row['section_order'] ?? 1),
+                'question_order' => (int) ($row['question_order'] ?? 1),
                 'options' => $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [],
             ];
             $this->insertQuestionWithOptions($packageId, $payload, self::WORKSPACE_DRAFT);
@@ -893,6 +894,7 @@ class AdminController {
             'section_code' => trim((string) ($question['section_code'] ?? '')),
             'section_name' => trim((string) ($question['section_name'] ?? '')),
             'section_order' => (int) ($question['section_order'] ?? 0),
+            'question_order' => (int) ($question['question_order'] ?? 0),
             'options' => $options,
         ];
     }
@@ -1222,8 +1224,88 @@ class AdminController {
             'section_code' => $sectionCode,
             'section_name' => (string) $sectionLookup[$sectionCode]['name'],
             'section_order' => (int) ($sectionLookup[$sectionCode]['order'] ?? 1),
+            'question_order' => max(1, (int) ($data['question_order'] ?? 1)),
             'options' => $normalizedOptions,
         ];
+    }
+
+    private function getTryoutQuestionRecord(int $questionId, int $packageId, string $workspace): ?array {
+        $tables = $this->getWorkspaceTables($workspace);
+        $stmt = $this->mysqli->prepare(
+            sprintf(
+                'SELECT id, section_code, question_order FROM %s WHERE id = ? AND package_id = ? LIMIT 1',
+                $tables['questions']
+            )
+        );
+        $stmt->bind_param('ii', $questionId, $packageId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+
+        if (!$row) {
+            return null;
+        }
+
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'section_code' => (string) ($row['section_code'] ?? ''),
+            'question_order' => (int) ($row['question_order'] ?? 1),
+        ];
+    }
+
+    private function getTryoutSectionQuestionIds(
+        int $packageId,
+        string $sectionCode,
+        string $workspace,
+        int $excludeQuestionId = 0
+    ): array {
+        $tables = $this->getWorkspaceTables($workspace);
+        $query = sprintf(
+            'SELECT id FROM %s WHERE package_id = ? AND section_code = ? %s ORDER BY question_order ASC, id ASC',
+            $tables['questions'],
+            $excludeQuestionId > 0 ? 'AND id <> ?' : ''
+        );
+        $stmt = $this->mysqli->prepare($query);
+
+        if ($excludeQuestionId > 0) {
+            $stmt->bind_param('isi', $packageId, $sectionCode, $excludeQuestionId);
+        } else {
+            $stmt->bind_param('is', $packageId, $sectionCode);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $questionIds = [];
+
+        while ($row = $result->fetch_assoc()) {
+            $questionId = (int) ($row['id'] ?? 0);
+            if ($questionId > 0) {
+                $questionIds[] = $questionId;
+            }
+        }
+
+        return $questionIds;
+    }
+
+    private function normalizeTryoutQuestionOrder(int $requestedOrder, int $maxOrder): int {
+        return max(1, min(max(1, $maxOrder), $requestedOrder));
+    }
+
+    private function persistTryoutQuestionOrder(int $packageId, string $workspace, array $questionIds): void {
+        if (count($questionIds) === 0) {
+            return;
+        }
+
+        $tables = $this->getWorkspaceTables($workspace);
+        $stmt = $this->mysqli->prepare(
+            sprintf('UPDATE %s SET question_order = ? WHERE id = ? AND package_id = ?', $tables['questions'])
+        );
+
+        foreach ($questionIds as $index => $questionId) {
+            $order = $index + 1;
+            $normalizedQuestionId = (int) $questionId;
+            $stmt->bind_param('iii', $order, $normalizedQuestionId, $packageId);
+            $stmt->execute();
+        }
     }
 
     private function insertQuestionWithOptions(int $packageId, array $payload, string $workspace = self::WORKSPACE_PUBLISHED): int {
@@ -1240,13 +1322,14 @@ class AdminController {
                 explanation_notes,
                 section_code,
                 section_name,
-                section_order
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                section_order,
+                question_order
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 $tables['questions']
             )
         );
         $insertQuestion->bind_param(
-            'issssssssi',
+            'issssssssii',
             $packageId,
             $payload['question_text'],
             $payload['question_image_url'],
@@ -1256,7 +1339,8 @@ class AdminController {
             $payload['explanation_notes'],
             $payload['section_code'],
             $payload['section_name'],
-            $payload['section_order']
+            $payload['section_order'],
+            $payload['question_order']
         );
         $insertQuestion->execute();
         $questionId = (int) $insertQuestion->insert_id;
@@ -1615,7 +1699,7 @@ class AdminController {
                   LEFT JOIN %s qo ON qo.question_id = q.id
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.section_order ASC, q.id ASC", $tables['questions'], $tables['question_options']);
+                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC", $tables['questions'], $tables['question_options']);
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -1623,6 +1707,7 @@ class AdminController {
 
         $questions = [];
         while ($row = $result->fetch_assoc()) {
+            $row['question_order'] = (int) ($row['question_order'] ?? 1);
             $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
             $questions[] = $row;
         }
@@ -1642,12 +1727,13 @@ class AdminController {
                   LEFT JOIN question_options qo ON qo.question_id = q.id
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.section_order ASC, q.id ASC";
+                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
         $publishedStmt = $this->mysqli->prepare($publishedQuery);
         $publishedStmt->bind_param('i', $packageId);
         $publishedStmt->execute();
         $publishedResult = $publishedStmt->get_result();
         while ($row = $publishedResult->fetch_assoc()) {
+            $row['question_order'] = (int) ($row['question_order'] ?? 1);
             $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
             $publishedQuestions[] = $row;
         }
@@ -1667,12 +1753,13 @@ class AdminController {
                   LEFT JOIN question_option_drafts qo ON qo.question_id = q.id
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.section_order ASC, q.id ASC";
+                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
         $draftStmt = $this->mysqli->prepare($draftQuery);
         $draftStmt->bind_param('i', $packageId);
         $draftStmt->execute();
         $draftResult = $draftStmt->get_result();
         while ($row = $draftResult->fetch_assoc()) {
+            $row['question_order'] = (int) ($row['question_order'] ?? 1);
             $row['options'] = $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [];
             $draftQuestions[] = $row;
         }
@@ -1701,7 +1788,15 @@ class AdminController {
             $payload = $this->normalizeQuestionPayload($packageId, $data, $workspace);
             $this->mysqli->begin_transaction();
             $transactionStarted = true;
+            $targetSectionIds = $this->getTryoutSectionQuestionIds($packageId, (string) $payload['section_code'], $workspace);
+            $targetOrder = $this->normalizeTryoutQuestionOrder(
+                (int) ($payload['question_order'] ?? count($targetSectionIds) + 1),
+                count($targetSectionIds) + 1
+            );
+            $payload['question_order'] = $targetOrder;
             $questionId = $this->insertQuestionWithOptions($packageId, $payload, $workspace);
+            array_splice($targetSectionIds, $targetOrder - 1, 0, [$questionId]);
+            $this->persistTryoutQuestionOrder($packageId, $workspace, $targetSectionIds);
 
             $this->syncQuestionCount($packageId, $workspace);
             $this->mysqli->commit();
@@ -1741,6 +1836,19 @@ class AdminController {
             $payload = $this->normalizeQuestionPayload($packageId, $data, $workspace);
             $this->mysqli->begin_transaction();
             $transactionStarted = true;
+            $existingQuestion = $this->getTryoutQuestionRecord($questionId, $packageId, $workspace);
+            if (!$existingQuestion) {
+                throw new RuntimeException('Soal yang ingin diperbarui tidak ditemukan', 404);
+            }
+
+            $sourceSectionCode = (string) ($existingQuestion['section_code'] ?? '');
+            $targetSectionCode = (string) ($payload['section_code'] ?? $sourceSectionCode);
+            $targetSectionIds = $this->getTryoutSectionQuestionIds($packageId, $targetSectionCode, $workspace, $questionId);
+            $targetOrder = $this->normalizeTryoutQuestionOrder(
+                (int) ($payload['question_order'] ?? count($targetSectionIds) + 1),
+                count($targetSectionIds) + 1
+            );
+            $payload['question_order'] = $targetOrder;
             $tables = $this->getWorkspaceTables($workspace);
             $updateQuestion = $this->mysqli->prepare(
                 sprintf('UPDATE %s
@@ -1752,11 +1860,12 @@ class AdminController {
                      explanation_notes = ?,
                      section_code = ?,
                      section_name = ?,
-                     section_order = ?
+                     section_order = ?,
+                     question_order = ?
                  WHERE id = ? AND package_id = ?', $tables['questions'])
             );
             $updateQuestion->bind_param(
-                'ssssssssiii',
+                'ssssssssiiii',
                 $payload['question_text'],
                 $payload['question_image_url'],
                 $payload['question_image_layout'],
@@ -1766,6 +1875,7 @@ class AdminController {
                 $payload['section_code'],
                 $payload['section_name'],
                 $payload['section_order'],
+                $payload['question_order'],
                 $questionId,
                 $packageId
             );
@@ -1791,6 +1901,14 @@ class AdminController {
                 );
                 $insertOption->execute();
             }
+
+            if ($sourceSectionCode !== '' && $sourceSectionCode !== $targetSectionCode) {
+                $sourceSectionIds = $this->getTryoutSectionQuestionIds($packageId, $sourceSectionCode, $workspace, $questionId);
+                $this->persistTryoutQuestionOrder($packageId, $workspace, $sourceSectionIds);
+            }
+
+            array_splice($targetSectionIds, $targetOrder - 1, 0, [$questionId]);
+            $this->persistTryoutQuestionOrder($packageId, $workspace, $targetSectionIds);
 
             $this->syncQuestionCount($packageId, $workspace);
             $this->mysqli->commit();
@@ -2302,7 +2420,7 @@ class AdminController {
                   LEFT JOIN question_option_drafts qo ON qo.question_id = q.id
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.section_order ASC, q.id ASC";
+                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('i', $packageId);
         $stmt->execute();
@@ -2319,6 +2437,7 @@ class AdminController {
                 'section_code' => (string) ($row['section_code'] ?? ''),
                 'section_name' => (string) ($row['section_name'] ?? ''),
                 'section_order' => (int) ($row['section_order'] ?? 1),
+                'question_order' => (int) ($row['question_order'] ?? 1),
                 'options' => $row['options'] ? json_decode('[' . $row['options'] . ']', true) : [],
             ], self::WORKSPACE_PUBLISHED);
         }

@@ -165,6 +165,17 @@ function questionToForm(question, fallbackOrder = 1) {
   };
 }
 
+function clampQuestionOrder(value, maxOrder, fallback = 1) {
+  const numericValue = Number(value);
+  const safeMaxOrder = Math.max(1, Number(maxOrder) || 1);
+
+  if (!Number.isFinite(numericValue)) {
+    return Math.min(safeMaxOrder, Math.max(1, Number(fallback) || 1));
+  }
+
+  return Math.min(safeMaxOrder, Math.max(1, Math.round(numericValue)));
+}
+
 export default function AdminMiniTestQuestionEditor() {
   const { packageId, sectionCode, questionId } = useParams();
   const navigate = useNavigate();
@@ -233,6 +244,17 @@ export default function AdminMiniTestQuestionEditor() {
       options: questionForm.options || [],
     };
   }, [questionForm, selectedQuestion]);
+  const maxQuestionOrder = useMemo(() => {
+    const questionCount = sectionQuestions.length;
+    const isReplacingExistingSlot = Number(questionForm.id || 0) > 0
+      || (draftIndex >= 0 && draftIndex < questionCount);
+
+    if (!isDraftWorkspace) {
+      return Math.max(1, Number(questionForm.question_order || questionCount || 1));
+    }
+
+    return Math.max(1, isReplacingExistingSlot ? questionCount : questionCount + 1);
+  }, [draftIndex, isDraftWorkspace, questionForm.id, questionForm.question_order, sectionQuestions.length]);
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0 || !sectionCode) {
@@ -325,7 +347,20 @@ export default function AdminMiniTestQuestionEditor() {
     const { name, value } = event.target;
     setQuestionForm((current) => ({
       ...current,
-      [name]: value,
+      [name]: name === 'question_order'
+        ? clampQuestionOrder(value, maxQuestionOrder, current.question_order)
+        : value,
+    }));
+  };
+
+  const handleQuestionOrderStep = (direction) => {
+    setQuestionForm((current) => ({
+      ...current,
+      question_order: clampQuestionOrder(
+        Number(current.question_order || 1) + direction,
+        maxQuestionOrder,
+        current.question_order
+      ),
     }));
   };
 
@@ -501,6 +536,7 @@ export default function AdminMiniTestQuestionEditor() {
 
     const normalizedFormQuestion = {
       ...questionForm,
+      question_order: clampQuestionOrder(questionForm.question_order, maxQuestionOrder, questionForm.question_order),
       options: questionForm.options.map((option, index) => ({
         letter: option.letter || String.fromCharCode(65 + index),
         text: option.text,
@@ -514,36 +550,35 @@ export default function AdminMiniTestQuestionEditor() {
       ...questionToForm(question, index + 1),
       question_order: index + 1,
     }));
+    const currentQuestionIndex = nextQuestions.findIndex((question) => Number(question.id) === Number(questionForm.id));
+    const fallbackDraftIndex = draftIndex >= 0 && draftIndex < nextQuestions.length ? draftIndex : -1;
+    const removableIndex = currentQuestionIndex >= 0 ? currentQuestionIndex : fallbackDraftIndex;
+    const questionPool = removableIndex >= 0
+      ? nextQuestions.filter((_, index) => index !== removableIndex)
+      : [...nextQuestions];
+    const targetOrder = clampQuestionOrder(
+      normalizedFormQuestion.question_order,
+      questionPool.length + 1,
+      removableIndex >= 0 ? removableIndex + 1 : questionPool.length + 1
+    );
+    const targetIndex = targetOrder - 1;
 
-    let targetIndex = nextQuestions.findIndex((question) => Number(question.id) === Number(questionForm.id));
-    if (targetIndex >= 0) {
-      nextQuestions[targetIndex] = {
-        ...normalizedFormQuestion,
-        question_order: targetIndex + 1,
-      };
-    } else if (draftIndex >= 0 && draftIndex < nextQuestions.length) {
-      targetIndex = draftIndex;
-      nextQuestions[targetIndex] = {
-        ...normalizedFormQuestion,
-        question_order: targetIndex + 1,
-      };
-    } else {
-      targetIndex = nextQuestions.length;
-      nextQuestions.push({
-        ...normalizedFormQuestion,
-        question_order: targetIndex + 1,
-      });
-    }
+    questionPool.splice(targetIndex, 0, {
+      ...normalizedFormQuestion,
+      question_order: targetOrder,
+    });
+
+    const reorderedQuestions = questionPool.map((question, index) => ({
+      ...question,
+      question_order: index + 1,
+    }));
 
     try {
       const response = await apiClient.put('/admin/learning-section-questions', {
         package_id: numericPackageId,
         section_code: activeSection.code,
         workspace,
-        questions: nextQuestions.map((question, index) => ({
-          ...question,
-          question_order: index + 1,
-        })),
+        questions: reorderedQuestions,
       });
       const savedQuestions = response.data?.data?.questions || [];
       setSectionQuestions(savedQuestions);
@@ -728,6 +763,39 @@ export default function AdminMiniTestQuestionEditor() {
                     <small className="text-muted">
                       Dropdown ini mengambil topik materi aktif dari subtest {activeSection?.name || 'ini'} agar admin bisa menandai soal mini test masuk ke topik mana.
                     </small>
+                  </div>
+                  <div className="form-group">
+                    <label>Urutan Soal</label>
+                    <input
+                      type="number"
+                      name="question_order"
+                      min="1"
+                      max={maxQuestionOrder}
+                      value={questionForm.question_order}
+                      onChange={handleQuestionChange}
+                      disabled={!isDraftWorkspace}
+                    />
+                    <small className="text-muted">
+                      Posisi soal di subtest ini. Maksimal {maxQuestionOrder} soal untuk posisi saat ini.
+                    </small>
+                    <div className="admin-option-inline-actions">
+                      <button
+                        type="button"
+                        className="btn btn-outline admin-option-inline-button"
+                        onClick={() => handleQuestionOrderStep(-1)}
+                        disabled={!isDraftWorkspace || Number(questionForm.question_order || 1) <= 1}
+                      >
+                        Naik
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline admin-option-inline-button"
+                        onClick={() => handleQuestionOrderStep(1)}
+                        disabled={!isDraftWorkspace || Number(questionForm.question_order || 1) >= maxQuestionOrder}
+                      >
+                        Turun
+                      </button>
+                    </div>
                   </div>
                   <div className="form-group">
                     <label>Catatan Pembahasan</label>

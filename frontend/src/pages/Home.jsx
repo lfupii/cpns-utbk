@@ -5,6 +5,8 @@ import apiClient from '../api';
 import ProfileDropdown from '../components/ProfileDropdown';
 import BrandLogo from '../components/BrandLogo';
 import ThemeToggle from '../components/ThemeToggle';
+import { normalizeNewsFeed } from '../components/NewsSectionsPreview';
+import { FALLBACK_NEWS_FEED } from '../data/newsFallback';
 import { businessProfile } from '../siteContent';
 
 function FeatureIcon({ name }) {
@@ -128,6 +130,32 @@ function FeatureIcon({ name }) {
   }
 }
 
+function matchesLatestNewsSection(section) {
+  const safeSlug = String(section?.slug || '').trim().toLowerCase();
+  const safeTitle = String(section?.title || '').trim().toLowerCase();
+
+  return safeSlug === 'berita-terbaru'
+    || safeSlug.includes('berita-terbaru')
+    || safeTitle === 'berita terbaru'
+    || safeTitle.includes('terbaru');
+}
+
+function resolveLatestNewsSection(feed) {
+  const normalizedFeed = normalizeNewsFeed(feed);
+  const matchingSection = normalizedFeed.sections.find(matchesLatestNewsSection);
+
+  if (!matchingSection) {
+    return null;
+  }
+
+  return {
+    ...matchingSection,
+    items: matchingSection.items.slice(0, 5),
+  };
+}
+
+const fallbackLatestNewsSection = resolveLatestNewsSection(FALLBACK_NEWS_FEED);
+
 export default function Home() {
   const location = useLocation();
   const { user, logout, isAdmin } = useAuth();
@@ -138,6 +166,7 @@ export default function Home() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [activeLandingSection, setActiveLandingSection] = useState('tentang');
+  const [latestNewsSection, setLatestNewsSection] = useState(fallbackLatestNewsSection);
 
   const displayName = user?.full_name || 'Pejuang ASN';
   const isHomePage = location.pathname === '/';
@@ -179,6 +208,29 @@ export default function Home() {
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadLatestNewsSection = async () => {
+      try {
+        const response = await apiClient.get('/news/feed');
+        const nextSection = resolveLatestNewsSection(response.data?.data);
+
+        if (!ignore && nextSection?.items?.length > 0) {
+          setLatestNewsSection(nextSection);
+        }
+      } catch {
+        // Keep fallback latest news cards on the landing page when feed is unavailable.
+      }
+    };
+
+    loadLatestNewsSection();
+
+    return () => {
+      ignore = true;
     };
   }, []);
 
@@ -641,6 +693,45 @@ export default function Home() {
             </article>
           </div>
         </section>
+
+        {latestNewsSection?.items?.length > 0 && (
+          <section className="landing-section landing-section-muted" id="berita-terbaru">
+            <div className="container">
+              <div className="news-block-head news-block-head-spaced">
+                <div>
+                  <span className="landing-kicker">Update terbaru</span>
+                  <h2>{latestNewsSection.title}</h2>
+                  {latestNewsSection.description && (
+                    <p className="news-section-description">{latestNewsSection.description}</p>
+                  )}
+                </div>
+
+                <Link to="/news?view=list" className="news-inline-link news-section-more-link">
+                  Lihat berita selengkapnya
+                </Link>
+              </div>
+
+              <div className="news-editorial-grid">
+                {latestNewsSection.items.map((story, index) => (
+                  <Link
+                    key={story.id || story.slug || `${story.title}-${index}`}
+                    to={`/news/${story.slug}`}
+                    className="policy-card news-editorial-card news-story-link"
+                  >
+                    <div className="news-story-cover">
+                      <img src={story.image} alt={story.title} className="news-story-cover-image" />
+                    </div>
+                    <div className="news-card-copy">
+                      <span className="news-story-tag">{story.category}</span>
+                      <h3>{story.title}</h3>
+                      <small>{story.age}</small>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
       </main>
 
       <footer className="landing-footer-note">

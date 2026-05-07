@@ -11098,6 +11098,10 @@ html[data-theme='dark'] .theme-toggle-thumb {
   min-width: 0;
 }
 
+.admin-question-order-tag {
+  margin-bottom: 0.45rem;
+}
+
 .admin-question-row-main strong {
   display: block;
   color: #192741;

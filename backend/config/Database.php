@@ -240,8 +240,8 @@ function ensureTestWorkflowSchema(mysqli $mysqli): void {
         $schemaChanged = true;
     }
 
-    if (databaseColumnExists($mysqli, 'questions', 'question_order')) {
-        $mysqli->query("ALTER TABLE questions DROP COLUMN question_order");
+    if (!databaseColumnExists($mysqli, 'questions', 'question_order')) {
+        $mysqli->query("ALTER TABLE questions ADD COLUMN question_order INT NOT NULL DEFAULT 1 AFTER section_order");
         $schemaChanged = true;
     }
 
@@ -250,7 +250,7 @@ function ensureTestWorkflowSchema(mysqli $mysqli): void {
         $schemaChanged = true;
     }
 
-    $workflowSchemaVersion = '20260415_test_workflow_modes_v4';
+    $workflowSchemaVersion = '20260507_test_workflow_modes_v5';
     $appliedWorkflowSchemaVersion = getSystemSetting($mysqli, 'test_workflow_schema_version');
     if ($schemaChanged || $appliedWorkflowSchemaVersion !== $workflowSchemaVersion) {
         backfillTestWorkflowData($mysqli);
@@ -500,6 +500,7 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
             section_code VARCHAR(100) DEFAULT NULL,
             section_name VARCHAR(255) DEFAULT NULL,
             section_order INT NOT NULL DEFAULT 1,
+            question_order INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (package_id) REFERENCES test_packages(id) ON DELETE CASCADE,
@@ -519,6 +520,13 @@ function ensureLearningProgressSchema(mysqli $mysqli): void {
         $mysqli->query(
             "ALTER TABLE question_drafts
              ADD COLUMN explanation_notes LONGTEXT NULL AFTER difficulty"
+        );
+    }
+
+    if (!databaseColumnExists($mysqli, 'question_drafts', 'question_order')) {
+        $mysqli->query(
+            "ALTER TABLE question_drafts
+             ADD COLUMN question_order INT NOT NULL DEFAULT 1 AFTER section_order"
         );
     }
 

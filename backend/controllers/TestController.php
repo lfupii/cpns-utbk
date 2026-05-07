@@ -318,7 +318,7 @@ class TestController {
                   LEFT JOIN question_options qo ON qo.question_id = q.id
                   LEFT JOIN user_answers ua ON ua.question_id = q.id AND ua.attempt_id = ?
                   WHERE q.package_id = ?
-                  ORDER BY q.section_order ASC, q.id ASC, qo.id ASC";
+                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC, qo.id ASC";
         $stmt = $this->mysqli->prepare($query);
         $stmt->bind_param('ii', $attemptId, $packageId);
         $stmt->execute();
@@ -481,7 +481,7 @@ class TestController {
                   LEFT JOIN user_answers ua ON ua.question_id = q.id AND ua.attempt_id = ?
                   WHERE q.package_id = ?
                   GROUP BY q.id
-                  ORDER BY q.section_order ASC, q.id ASC";
+                  ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
         $stmt = $this->mysqli->prepare($query);
         $packageId = (int) ($attempt['package_id'] ?? 0);
         $stmt->bind_param('ii', $attemptId, $packageId);

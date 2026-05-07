@@ -214,7 +214,7 @@ class QuestionController {
                       LEFT JOIN question_options qo ON qo.question_id = q.id
                       WHERE q.package_id = ? AND q.section_code = ?
                       GROUP BY q.id
-                      ORDER BY q.section_order ASC, q.id ASC";
+                      ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
             $stmt = $this->mysqli->prepare($query);
             $stmt->bind_param('is', $packageId, $activeSectionCode);
         } else {
@@ -232,7 +232,7 @@ class QuestionController {
                       LEFT JOIN question_options qo ON qo.question_id = q.id
                       WHERE q.package_id = ?
                       GROUP BY q.id
-                      ORDER BY q.section_order ASC, q.id ASC";
+                      ORDER BY q.section_order ASC, q.question_order ASC, q.id ASC";
             $stmt = $this->mysqli->prepare($query);
             $stmt->bind_param('i', $packageId);
         }

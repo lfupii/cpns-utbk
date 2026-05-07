@@ -31,6 +31,7 @@ const createEmptyQuestionForm = (sectionCode = '') => ({
   difficulty: 'medium',
   question_type: 'single_choice',
   section_code: sectionCode,
+  question_order: 1,
   options: [
     createOption(0),
     createOption(1),
@@ -146,8 +147,20 @@ function questionToForm(question, fallbackSectionCode = '') {
     difficulty: question?.difficulty || 'medium',
     question_type: question?.question_type || 'single_choice',
     section_code: question?.section_code || fallbackSectionCode,
+    question_order: Number(question?.question_order || 1),
     options,
   };
+}
+
+function clampQuestionOrder(value, maxOrder, fallback = 1) {
+  const numericValue = Number(value);
+  const safeMaxOrder = Math.max(1, Number(maxOrder) || 1);
+
+  if (!Number.isFinite(numericValue)) {
+    return Math.min(safeMaxOrder, Math.max(1, Number(fallback) || 1));
+  }
+
+  return Math.min(safeMaxOrder, Math.max(1, Math.round(numericValue)));
 }
 
 export default function AdminQuestionEditor() {
@@ -191,6 +204,14 @@ export default function AdminQuestionEditor() {
     () => questions.find((question) => Number(question.id) === numericQuestionId) || null,
     [numericQuestionId, questions]
   );
+  const sectionQuestionCounts = useMemo(
+    () => questions.reduce((accumulator, question) => {
+      const sectionKey = String(question?.section_code || '');
+      accumulator[sectionKey] = (accumulator[sectionKey] || 0) + 1;
+      return accumulator;
+    }, {}),
+    [questions]
+  );
   const activeSection = useMemo(
     () => packageSections.find((section) => String(section.code) === String(questionForm.section_code)) || null,
     [packageSections, questionForm.section_code]
@@ -223,9 +244,18 @@ export default function AdminQuestionEditor() {
       explanation_notes: questionForm.explanation_notes,
       section_name: activeSectionName || selectedQuestion?.section_name || '',
       section_code: questionForm.section_code || selectedQuestion?.section_code || '',
+      question_order: questionForm.question_order,
       options: questionForm.options || [],
     };
   }, [activeSectionName, questionForm, selectedQuestion]);
+  const maxQuestionOrder = useMemo(() => {
+    const sectionCode = String(questionForm.section_code || '');
+    const questionCountInSection = Number(sectionQuestionCounts[sectionCode] || 0);
+    const isEditingCurrentSection = Number(questionForm.question_id || 0) > 0
+      && String(selectedQuestion?.section_code || '') === sectionCode;
+
+    return Math.max(1, isEditingCurrentSection ? questionCountInSection : questionCountInSection + 1);
+  }, [questionForm.question_id, questionForm.section_code, sectionQuestionCounts, selectedQuestion?.section_code]);
 
   const fetchEditorData = useCallback(async () => {
     if (!Number.isInteger(numericPackageId) || numericPackageId <= 0) {
@@ -272,6 +302,7 @@ export default function AdminQuestionEditor() {
       const nextForm = createEmptyQuestionForm(defaultSectionCode);
       setQuestionForm({
         ...nextForm,
+        question_order: Math.max(1, Number(sectionQuestionCounts[defaultSectionCode] || 0) + 1),
         options: normalizeOptionsForScoringMode(nextForm.options, isTkpSection(defaultSection)),
       });
       setShowQuestionImageTools(false);
@@ -297,7 +328,7 @@ export default function AdminQuestionEditor() {
       }
       return accumulator;
     }, {}));
-  }, [defaultSectionCode, isCreating, loading, packageSections, selectedQuestion]);
+  }, [defaultSectionCode, isCreating, loading, packageSections, sectionQuestionCounts, selectedQuestion]);
 
   const handleExtractDownload = () => {
     if (!canExtractQuestion) {
@@ -321,12 +352,40 @@ export default function AdminQuestionEditor() {
       [name]: value,
       ...(name === 'section_code'
         ? {
+            question_order: (() => {
+              const nextSectionCode = String(value || '');
+              const nextSectionCount = Number(sectionQuestionCounts[nextSectionCode] || 0);
+              const isEditingCurrentSection = Number(current.question_id || 0) > 0
+                && String(selectedQuestion?.section_code || '') === nextSectionCode;
+              const nextMaxOrder = Math.max(1, isEditingCurrentSection ? nextSectionCount : nextSectionCount + 1);
+
+              if (isEditingCurrentSection) {
+                return clampQuestionOrder(current.question_order, nextMaxOrder, current.question_order);
+              }
+
+              return nextMaxOrder;
+            })(),
             options: normalizeOptionsForScoringMode(
               current.options,
               isTkpSection(packageSections.find((section) => String(section.code) === String(value)))
             ),
           }
-        : {}),
+        : name === 'question_order'
+          ? {
+              question_order: clampQuestionOrder(value, maxQuestionOrder, current.question_order),
+            }
+          : {}),
+    }));
+  };
+
+  const handleQuestionOrderStep = (direction) => {
+    setQuestionForm((current) => ({
+      ...current,
+      question_order: clampQuestionOrder(
+        Number(current.question_order || 1) + direction,
+        maxQuestionOrder,
+        current.question_order
+      ),
     }));
   };
 
@@ -502,6 +561,7 @@ export default function AdminQuestionEditor() {
       ...questionForm,
       package_id: numericPackageId,
       workspace,
+      question_order: clampQuestionOrder(questionForm.question_order, maxQuestionOrder, questionForm.question_order),
       options: questionForm.options
         .filter((option) => option.text.trim() !== '' || option.image_url.trim() !== '')
         .map((option, index) => ({
@@ -676,6 +736,39 @@ export default function AdminQuestionEditor() {
                 </div>
 
                 <div className="account-form-grid">
+                  <div className="form-group">
+                    <label>Urutan Soal</label>
+                    <input
+                      type="number"
+                      name="question_order"
+                      min="1"
+                      max={maxQuestionOrder}
+                      value={questionForm.question_order}
+                      onChange={handleQuestionChange}
+                      disabled={!isDraftWorkspace}
+                    />
+                    <small className="text-muted">
+                      Posisi soal di subtes yang dipilih. Maksimal {maxQuestionOrder} soal untuk posisi saat ini.
+                    </small>
+                    <div className="admin-option-inline-actions">
+                      <button
+                        type="button"
+                        className="btn btn-outline admin-option-inline-button"
+                        onClick={() => handleQuestionOrderStep(-1)}
+                        disabled={!isDraftWorkspace || Number(questionForm.question_order || 1) <= 1}
+                      >
+                        Naik
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline admin-option-inline-button"
+                        onClick={() => handleQuestionOrderStep(1)}
+                        disabled={!isDraftWorkspace || Number(questionForm.question_order || 1) >= maxQuestionOrder}
+                      >
+                        Turun
+                      </button>
+                    </div>
+                  </div>
                   <div className="form-group">
                     <label>Catatan Pembahasan</label>
                     <textarea
